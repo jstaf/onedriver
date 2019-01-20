@@ -1,4 +1,4 @@
-package main
+package onedriver
 
 import (
 	"encoding/json"
@@ -45,7 +45,7 @@ func (a *Auth) FromFile(file string) error {
 func (a *Auth) Refresh() {
 	if a.ExpiresAt <= time.Now().Unix() {
 		log.Println("Auth tokens expired, attempting renewal...")
-        oldTime := a.ExpiresAt
+		oldTime := a.ExpiresAt
 
 		postData := strings.NewReader("client_id=" + authClientID +
 			"&redirect_uri= " + authRedirectURL +
@@ -59,12 +59,12 @@ func (a *Auth) Refresh() {
 		}
 		defer resp.Body.Close()
 
-        body, _ := ioutil.ReadAll(resp.Body)
-        json.Unmarshal(body, &a)
-	    if a.ExpiresAt == oldTime {
-            a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
-        }
-        a.ToFile(authFile)
+		body, _ := ioutil.ReadAll(resp.Body)
+		json.Unmarshal(body, &a)
+		if a.ExpiresAt == oldTime {
+			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
+		}
+		a.ToFile(authFile)
 	}
 }
 
@@ -119,7 +119,7 @@ func getAuthTokens(authCode string) Auth {
 }
 
 // InitialAuth performs first-time authentication to Graph
-func InitialAuth() Auth {
+func Authenticate() Auth {
 	var auth Auth
 	_, err := os.Stat(authFile)
 	if os.IsNotExist(err) {
@@ -132,9 +132,4 @@ func InitialAuth() Auth {
 		auth.Refresh()
 	}
 	return auth
-}
-
-func main() {
-	auth := InitialAuth()
-	fmt.Printf("%+v\n", auth)
 }
