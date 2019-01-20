@@ -18,7 +18,7 @@ go build -o main/onedriver ./main
 ```bash
 # generate the initial auth tokens and symlink to test directory
 go run main/onedriver.go
-ln -s auth_tokens onedriver/
+ln -s ../auth_tokens.json onedriver/  # yes, this is a hack
 
 # run tests
 go test ./onedriver

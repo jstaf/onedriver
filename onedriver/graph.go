@@ -107,7 +107,7 @@ func GetChildren(path string, auth Auth) ([]DriveItem, error) {
 	} else {
 		path = resourcePath(path) + ":/children"
 	}
-	body, err := Get(resourcePath(path), auth)
+	body, err := Get(path, auth)
 	var children driveChildren
 	if err != nil {
 		return children.Children, err

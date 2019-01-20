@@ -2,14 +2,19 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/jstaf/onedriver/onedriver"
 )
 
 func main() {
 	auth := onedriver.Authenticate()
-	item, err := onedriver.GetItem("/kdfslkdsjlf", auth)
-	fmt.Printf("%+v\n", item)
-	fmt.Printf("%s\n", err)
-	fmt.Println(err == nil)
+	children, err := onedriver.GetChildren("/", auth)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, item := range children {
+		fmt.Println(item.Name)
+	}
+
 }
