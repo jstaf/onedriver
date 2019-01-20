@@ -8,6 +8,8 @@ import (
 
 func main() {
 	auth := onedriver.Authenticate()
-	resp, err := onedriver.Request("/me/drive/root", auth, "GET", nil)
-	fmt.Printf("%s\n%v\n", resp, err)
+	item, err := onedriver.GetItem("/kdfslkdsjlf", auth)
+	fmt.Printf("%+v\n", item)
+	fmt.Printf("%s\n", err)
+	fmt.Println(err == nil)
 }

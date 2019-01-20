@@ -118,11 +118,12 @@ func getAuthTokens(authCode string) Auth {
 	return auth
 }
 
-// InitialAuth performs first-time authentication to Graph
+// Authenticate performs first-time authentication to Graph
 func Authenticate() Auth {
 	var auth Auth
 	_, err := os.Stat(authFile)
 	if os.IsNotExist(err) {
+		// no tokens found, gotta start oauth flow from beginning
 		code := getAuthCode()
 		auth = getAuthTokens(code)
 		auth.ToFile(authFile)
