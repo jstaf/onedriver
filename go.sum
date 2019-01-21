@@ -1,0 +1,4 @@
+github.com/hanwen/go-fuse v0.0.0-20190111173210-425e8d5301f6 h1:tS7rIYOq1UkeH2eCa0ShovjqYa/7+NYAIxspqA9gkOU=
+github.com/hanwen/go-fuse v0.0.0-20190111173210-425e8d5301f6/go.mod h1:unqXarDXqzAk0rt98O2tVndEPIpUgLD9+rwFisZH3Ok=
+golang.org/x/sys v0.0.0-20180830151530-49385e6e1522 h1:Ve1ORMCxvRmSXBwJK+t3Oy+V2vRW2OetUQBq4rJIkZE=
+golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
