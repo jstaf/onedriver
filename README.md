@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jstaf/onedriver.svg?branch=master)](https://travis-ci.org/jstaf/onedriver)
+
 onedriver
 ======================================
 
