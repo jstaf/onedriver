@@ -1,13 +1,15 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	"github.com/jstaf/onedriver/graph"
+	flag "github.com/spf13/pflag"
 )
 
 var auth graph.Auth
@@ -49,10 +51,38 @@ func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	return nil, fuse.ENOENT
 }
 
+func usage() {
+	fmt.Printf(`onedriver - A Linux client for Onedrive. 
+	
+This program will mount your Onedrive account as a Linux filesystem at the 
+specified mountpoint. Note that this is not a sync client - files are fetched 
+on-demand and cached locally. Only files you actually use will be downloaded.
+
+Usage: onedriver [options] <mountpoint>
+
+Valid options:
+`)
+	flag.PrintDefaults()
+}
+
 func main() {
+	authOnly := flag.BoolP("auth-only", "a", false,
+		"Authenticate to Onedrive and then exit. Useful for running tests.")
+	version := flag.BoolP("version", "v", false, "Display program version.")
+	flag.BoolP("help", "h", false, "Display usage and help.")
+	flag.Usage = usage
 	flag.Parse()
+	if *version {
+		fmt.Println("onedriver v0.1")
+		os.Exit(1)
+	}
+	if *authOnly {
+		graph.Authenticate()
+		os.Exit(0)
+	}
 	if len(flag.Args()) < 1 {
-		log.Fatal("Usage:\n  onedriver <mountPoint>")
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	auth = graph.Authenticate()
