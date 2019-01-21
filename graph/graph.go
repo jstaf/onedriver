@@ -1,3 +1,4 @@
+// Package graph provides APIs to interact with Microsoft Graph
 package graph
 
 import (
@@ -6,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"time"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -17,31 +17,6 @@ type graphError struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
-}
-
-// DriveItem represents a drive item's worth of info fetched from the Graph API
-type DriveItem struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Size       int       `json:"size"`
-	ModifyTime time.Time `json:"lastModifiedDatetime"` // a string timestamp
-	Parent     struct {
-		ID   string `json:"id"`
-		Path string `json:"path"`
-	} `json:"parentReference"`
-	Folder struct {
-		ChildCount int `json:"childCount"`
-	} `json:"folder,omitempty"`
-	File struct {
-		Hashes struct {
-			Sha1Hash string `json:"sha1Hash"`
-		} `json:"hashes"`
-	} `json:"file,omitempty"`
-}
-
-// IsDir returns if it is a directory (true) or file (false).
-func (d DriveItem) IsDir() bool {
-	return d.File.Hashes.Sha1Hash == ""
 }
 
 // Request performs an authenticated request to Microsoft Graph
