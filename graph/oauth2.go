@@ -1,7 +1,7 @@
 package graph
 
 /*
-#cgo pkg-config: gtk+-3.0 webkit2gtk-4.0
+#cgo pkg-config: webkit2gtk-4.0
 #include "stdlib.h"
 #include "oauth2_gtk.h"
 */
@@ -80,7 +80,7 @@ func (a *Auth) Refresh() {
 func getAuthCode() string {
 	authURL := authCodeURL +
 		"?client_id=" + authClientID +
-		"&scope=files.readwrite files.readwrite.all offine_access" +
+		"&scope=" + "files.readwrite files.readwrite.all offline_access" +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
 

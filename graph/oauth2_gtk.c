@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
 
@@ -40,5 +41,9 @@ char *auth_window(char *auth_url) {
     gtk_widget_show_all(auth_window);
     gtk_main();
 
+    // go will explode if you return a null pointer
+    if (!auth_redirect_value) {
+        auth_redirect_value = "";
+    }
     return auth_redirect_value;
 }
