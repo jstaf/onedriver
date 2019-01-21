@@ -1,4 +1,5 @@
+.vscode/
+mount/
 *.json
 *.bak
 onedriver
-mount/

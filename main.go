@@ -66,7 +66,7 @@ func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	log.Printf("OpenDir(\"%s\")", name)
 	children, err := graph.GetChildren(name, auth)
 	if err != nil {
-		// that directory probably doesn't exists. silly human.
+		// that directory probably doesn't exist. silly human.
 		return nil, fuse.ENOENT
 	}
 	for _, child := range children {

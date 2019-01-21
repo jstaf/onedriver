@@ -1,5 +1,12 @@
 package graph
 
+/*
+#cgo pkg-config: gtk+-3.0 webkit2gtk-4.0
+#include "stdlib.h"
+#include "oauth2_gtk.h"
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -10,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 const authCodeURL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
@@ -72,17 +80,15 @@ func (a *Auth) Refresh() {
 func getAuthCode() string {
 	authURL := authCodeURL +
 		"?client_id=" + authClientID +
-		"&scope=" + "files.readwrite files.readwrite.all offline_access" +
+		"&scope=files.readwrite files.readwrite.all offine_access" +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
 
-	//TODO create gtk web browser to authenticate... will need to use CGo here
-	fmt.Println("Please visit the following URL:")
-	fmt.Println(authURL)
-
-	fmt.Println("\nEnter the address of the page you are redirected to when done:")
-	var response string
-	fmt.Scanln(&response)
+	cAuthURL := C.CString(authURL)
+	defer C.free(unsafe.Pointer(cAuthURL))
+	responseC := C.auth_window(cAuthURL)
+	defer C.free(unsafe.Pointer(responseC))
+	response := C.GoString(responseC)
 
 	rexp := regexp.MustCompile("code=([a-zA-Z0-9-])+")
 	code := rexp.FindString(response)
