@@ -7,7 +7,9 @@ Onedriver is a native Linux client for Microsoft Onedrive.
 
 Note that in addition to the traditional Go tooling, you will need a C
 compiler and development headers for `webkit2gtk-4.0`. On Fedora, these can be
-obtained with `dnf install gcc webkit2gtk3-devel`.
+obtained with `dnf install gcc pkg-config webkit2gtk3-devel`. On Ubuntu, these
+dependencies can be installed with 
+`apt install gcc pkg-config libwebkit2gtk-4.0-dev`.
 
 ```bash
 # to build and run the binary

@@ -1,0 +1,12 @@
+language: go
+go:
+  - "1.11"
+script:
+  - go build
+dist: xenial
+addons:
+  apt:
+    packages:
+      - gcc
+      - pkg-config
+      - libwebkit2gtk-4.0-dev
