@@ -7,9 +7,9 @@ Onedriver is a native Linux client for Microsoft Onedrive.
 
 ```bash
 # to build and run the binary
-go build -o main/onedriver ./main
+go build
 mkdir mount
-main/onedriver mount/
+./onedriver mount/
 
 # in new window, check out the mounted filesystem
 ls -l mount 
@@ -22,9 +22,10 @@ fusermount -u mount
 
 ```bash
 # generate the initial auth tokens and symlink to test directory
-go run main/authenticate.go
-ln -s ../auth_tokens.json onedriver/  # yes, this is a hack
+go build
+./onedriver -a
+ln -s ../auth_tokens.json graph/  # yes, this is a hack
 
 # run tests
-go test ./onedriver
+go test ./graph
 ```
