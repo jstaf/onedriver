@@ -61,7 +61,7 @@ func resourcePath(path string) string {
 
 // GetItem fetches a DriveItem by path
 func GetItem(path string, auth Auth) (DriveItem, error) {
-	body, err := Get(resourcePath(path), auth)
+	body, err := CachedGet(resourcePath(path), auth)
 	var item DriveItem
 	if err != nil {
 		return item, err
@@ -82,7 +82,7 @@ func GetChildren(path string, auth Auth) ([]DriveItem, error) {
 	} else {
 		path = resourcePath(path) + ":/children"
 	}
-	body, err := Get(path, auth)
+	body, err := CachedGet(path, auth)
 	var children driveChildren
 	if err != nil {
 		return children.Children, err
