@@ -111,6 +111,7 @@ func main() {
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to Onedrive and then exit. Useful for running tests.")
 	version := flag.BoolP("version", "v", false, "Display program version.")
+	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
 	flag.BoolP("help", "h", false, "Display usage and help.")
 	flag.Usage = usage
 	flag.Parse()
@@ -132,10 +133,11 @@ func main() {
 	auth = graph.Authenticate()
 
 	// setup filesystem
-	fs := pathfs.NewPathNodeFs(&fuseFs{
-		FileSystem: pathfs.NewDefaultFileSystem(),
-	}, nil)
+	fs := pathfs.NewPathNodeFs(
+		&fuseFs{FileSystem: pathfs.NewDefaultFileSystem()},
+		nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
+	server.SetDebug(*debugOn)
 	if err != nil {
 		log.Fatalf("Mount failed: %v\n", err)
 	}
