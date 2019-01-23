@@ -81,6 +81,29 @@ func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	return c, fuse.OK
 }
 
+func (fs *fuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+	name = "/" + name
+	item, err := graph.GetItem(name, auth)
+	if err != nil {
+		// doesn't exist or internet is out - either way, no files for you!
+		return nil, fuse.ENOENT
+	}
+
+	//TODO deny write permissions until uploads/writes are implemented
+	if flags&fuse.O_ANYWRITE != 0 {
+		return nil, fuse.EPERM
+	}
+
+	body, err := graph.Get("/me/drive/items/"+item.ID+"/content", auth)
+	if err != nil {
+		log.Printf("Failed to fetch content for '%s': %s\n", item.ID, err)
+		return nil, fuse.ENOENT
+	}
+	//TODO this is a read-only file - will need to implement our own version of
+	// the File interface for write functionality
+	return nodefs.NewDataFile(body), fuse.OK
+}
+
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Onedrive. 
 	
@@ -96,14 +119,22 @@ Valid options:
 }
 
 // A goroutine that will handle sigint then exit gracefully
-func sigintHandler(signal <-chan os.Signal, server *fuse.Server) {
-	<-signal // block until sigint
-	log.Println("SIGINT received, unmounting filesystem...")
+func unmountHandler(signal <-chan os.Signal, server *fuse.Server) {
+	sig := <-signal // block until sigint
+	log.Println(sig, "received, unmounting filesystem...")
 	err := server.Unmount()
 	if err != nil {
 		log.Println(err)
 	}
-	os.Exit(128 + int(syscall.SIGINT))
+
+	var code int
+	if sig == syscall.SIGINT {
+		code = int(syscall.SIGINT)
+	} else {
+		code = int(syscall.SIGTERM)
+	}
+	// convention when exiting via signal is 128 + signal value
+	os.Exit(128 + int(code))
 }
 
 func main() {
@@ -119,7 +150,7 @@ func main() {
 	// act on flags
 	if *version {
 		fmt.Println("onedriver v0.1")
-		os.Exit(1)
+		os.Exit(0)
 	}
 	if *authOnly {
 		graph.Authenticate()
@@ -143,9 +174,9 @@ func main() {
 	}
 
 	// setup sigint handler for graceful unmount on interrupt
-	sigintChan := make(chan os.Signal, 1)
-	signal.Notify(sigintChan)
-	go sigintHandler(sigintChan, server)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go unmountHandler(sigChan, server)
 
 	// serve filesystem
 	server.Serve()
