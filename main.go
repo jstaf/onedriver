@@ -121,18 +121,23 @@ Valid options:
 // A goroutine that will handle sigint then exit gracefully
 func unmountHandler(signal <-chan os.Signal, server *fuse.Server) {
 	sig := <-signal // block until sigint
-	log.Println(sig, "received, unmounting filesystem...")
+
+	// signals don't automatically format well
+	var code int
+	var text string
+	if sig == syscall.SIGINT {
+		text = "SIGINT"
+		code = int(syscall.SIGINT)
+	} else {
+		text = "SIGTERM"
+		code = int(syscall.SIGTERM)
+	}
+	log.Println(text, "received, unmounting filesystem...")
 	err := server.Unmount()
 	if err != nil {
 		log.Println(err)
 	}
 
-	var code int
-	if sig == syscall.SIGINT {
-		code = int(syscall.SIGINT)
-	} else {
-		code = int(syscall.SIGTERM)
-	}
 	// convention when exiting via signal is 128 + signal value
 	os.Exit(128 + int(code))
 }
@@ -147,31 +152,32 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	// act on flags
 	if *version {
 		fmt.Println("onedriver v0.1")
 		os.Exit(0)
 	}
+
+	auth = graph.Authenticate()
 	if *authOnly {
-		graph.Authenticate()
+		// early quit if all we wanted to do was authenticate
 		os.Exit(0)
 	}
-	if len(flag.Args()) < 1 {
+
+	if len(flag.Args()) != 1 {
+		// no mountpoint provided
 		flag.Usage()
 		os.Exit(1)
 	}
-
-	auth = graph.Authenticate()
 
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(
 		&fuseFs{FileSystem: pathfs.NewDefaultFileSystem()},
 		nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
-	server.SetDebug(*debugOn)
 	if err != nil {
-		log.Fatalf("Mount failed: %v\n", err)
+		log.Fatalf("Mount failed. Is the mountpoint already in use?\n%v", err)
 	}
+	server.SetDebug(*debugOn)
 
 	// setup sigint handler for graceful unmount on interrupt
 	sigChan := make(chan os.Signal, 1)
