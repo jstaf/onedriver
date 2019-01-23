@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -93,6 +95,17 @@ Valid options:
 	flag.PrintDefaults()
 }
 
+// A goroutine that will handle sigint then exit gracefully
+func sigintHandler(signal <-chan os.Signal, server *fuse.Server) {
+	<-signal // block until sigint
+	log.Println("SIGINT received, unmounting filesystem...")
+	err := server.Unmount()
+	if err != nil {
+		log.Println(err)
+	}
+	os.Exit(128 + int(syscall.SIGINT))
+}
+
 func main() {
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
@@ -118,6 +131,7 @@ func main() {
 
 	auth = graph.Authenticate()
 
+	// setup filesystem
 	fs := pathfs.NewPathNodeFs(&fuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 	}, nil)
@@ -125,5 +139,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Mount failed: %v\n", err)
 	}
+
+	// setup sigint handler for graceful unmount on interrupt
+	sigintChan := make(chan os.Signal, 1)
+	signal.Notify(sigintChan)
+	go sigintHandler(sigintChan, server)
+
+	// serve filesystem
 	server.Serve()
 }
