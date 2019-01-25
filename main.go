@@ -28,6 +28,10 @@ func ignore(path string) bool {
 		"/.Trash-1000",
 		"/.xdg-volume-info",
 		"/autorun.inf",
+		"/.localized",
+		"/.DS_Store",
+		"/._.",
+		"/.hidden",
 	}
 	for _, ignore := range ignoredFiles {
 		if path == ignore {
@@ -105,10 +109,10 @@ func (fs *fuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 }
 
 func usage() {
-	fmt.Printf(`onedriver - A Linux client for Onedrive. 
-	
-This program will mount your Onedrive account as a Linux filesystem at the 
-specified mountpoint. Note that this is not a sync client - files are fetched 
+	fmt.Printf(`onedriver - A Linux client for Onedrive.
+
+This program will mount your Onedrive account as a Linux filesystem at the
+specified mountpoint. Note that this is not a sync client - files are fetched
 on-demand and cached locally. Only files you actually use will be downloaded.
 
 Usage: onedriver [options] <mountpoint>
@@ -157,9 +161,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	auth = graph.Authenticate()
 	if *authOnly {
 		// early quit if all we wanted to do was authenticate
+		graph.Authenticate()
 		os.Exit(0)
 	}
 
@@ -168,6 +172,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	auth = graph.Authenticate()
 
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(

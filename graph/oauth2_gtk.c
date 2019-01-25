@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <string.h>
+
+#if defined(__linux__)
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
+#else
+#include <stdlib.h>
+#endif
 
+#if defined(__linux__)
 static WebKitWebView *web_view_static = NULL;
 static char *auth_redirect_value = NULL;
-
 
 /**
  * Called when user closes the window, grabs the auth URL for us to use.
@@ -20,11 +25,14 @@ static gboolean close_web_view_cb(WebKitWebView* web_view, GtkWidget* window) {
     gtk_widget_destroy(window);
     return TRUE;
 }
+#endif
 
 /**
  * Open a popup GTK auth window and return the final redirect location.
  */
 char *auth_window(char *auth_url) {
+    #if defined(__linux__)
+    // linux - hooray, we can auth via an embedded browser!
     gtk_init(NULL, NULL);
     GtkWidget *auth_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(auth_window), 400, 600);
@@ -46,5 +54,14 @@ char *auth_window(char *auth_url) {
     if (!auth_redirect_value) {
         auth_redirect_value = "";
     }
+    #else
+    // unfortunately on windows or mac... CLI only
+    printf("Please visit the following url:\n%s\n\n", auth_url);
+
+    char *auth_redirect_value = malloc(128);
+    printf("Please enter the redirect URL:\n");
+    fgets(auth_redirect_value, 128, stdin);
+    #endif
+
     return auth_redirect_value;
 }
