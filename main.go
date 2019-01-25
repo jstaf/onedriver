@@ -66,6 +66,16 @@ func (fs *fuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	return &attr, fuse.OK
 }
 
+// not a valid option, since fuse is single-user anyways
+func (fs *fuseFs) Chown(name string, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
+	return fuse.EPERM
+}
+
+// no way to change mode yet
+func (fs *fuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code fuse.Status) {
+	return fuse.EPERM
+}
+
 func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = "/" + name
 	log.Printf("OpenDir(\"%s\")", name)
