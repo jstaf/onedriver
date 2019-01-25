@@ -14,10 +14,9 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-var auth graph.Auth
-
 type fuseFs struct {
 	pathfs.FileSystem
+	Auth graph.Auth
 }
 
 // these files will never exist, and we should ignore them
@@ -47,7 +46,7 @@ func (fs *fuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 		return nil, fuse.ENOENT
 	}
 	log.Printf("GetAttr(\"%s\")", name)
-	item, err := graph.GetItem(name, auth)
+	item, err := graph.GetItem(name, fs.Auth)
 	if err != nil {
 		return nil, fuse.ENOENT
 	}
@@ -70,7 +69,7 @@ func (fs *fuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = "/" + name
 	log.Printf("OpenDir(\"%s\")", name)
-	children, err := graph.GetChildren(name, auth)
+	children, err := graph.GetChildren(name, fs.Auth)
 	if err != nil {
 		// that directory probably doesn't exist. silly human.
 		return nil, fuse.ENOENT
@@ -87,7 +86,7 @@ func (fs *fuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 
 func (fs *fuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = "/" + name
-	item, err := graph.GetItem(name, auth)
+	item, err := graph.GetItem(name, fs.Auth)
 	if err != nil {
 		// doesn't exist or internet is out - either way, no files for you!
 		return nil, fuse.ENOENT
@@ -98,7 +97,7 @@ func (fs *fuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		return nil, fuse.EPERM
 	}
 
-	body, err := graph.Get("/me/drive/items/"+item.ID+"/content", auth)
+	body, err := graph.Get("/me/drive/items/"+item.ID+"/content", fs.Auth)
 	if err != nil {
 		log.Printf("Failed to fetch content for '%s': %s\n", item.ID, err)
 		return nil, fuse.ENOENT
@@ -172,11 +171,13 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	auth = graph.Authenticate()
 
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(
-		&fuseFs{FileSystem: pathfs.NewDefaultFileSystem()},
+		&fuseFs{
+			FileSystem: pathfs.NewDefaultFileSystem(),
+			Auth:       graph.Authenticate(),
+		},
 		nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
 	if err != nil {
