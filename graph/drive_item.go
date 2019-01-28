@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 // DriveItem represents a file or folder fetched from the Graph API
 type DriveItem struct {
 	nodefs.File
-	data       []byte
+	Data       []byte    // empty by default
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
 	Size       uint64    `json:"size"`
@@ -31,30 +32,22 @@ type DriveItem struct {
 	} `json:"file,omitempty"`
 }
 
-// NewDriveItem creates a new DriveItem
-func NewDriveItem(data []byte) DriveItem {
-	item := new(DriveItem)
-	item.data = data
-	item.Size = uint64(len(data))
-	item.File = nodefs.NewDefaultFile()
-	return *item
-}
-
 func (d DriveItem) String() string {
 	l := d.Size
 	if l > 10 {
 		l = 10
 	}
-	return fmt.Sprintf("DriveItem(%x)", d.data[:l])
+	return fmt.Sprintf("DriveItem(%x)", d.Data[:l])
 }
 
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.Status) {
 	end := int(off) + int(len(buf))
-	if end > len(d.data) {
-		end = len(d.data)
+	if end > len(d.Data) {
+		end = len(d.Data)
 	}
-	return fuse.ReadResultData(d.data[off:end]), fuse.OK
+	log.Printf("Read(\"%s\"): %d bytes at offset %d\n", d.Name, int64(end)-off, off)
+	return fuse.ReadResultData(d.Data[off:end]), fuse.OK
 }
 
 /*

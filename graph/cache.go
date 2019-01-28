@@ -37,3 +37,8 @@ func CachedGet(resource string, auth Auth) ([]byte, error) {
 	}
 	return body, nil
 }
+
+// CacheClear deletes a file from the cache to force a refresh from the server
+func CacheClear(resource string) {
+	delete(cache, resource)
+}

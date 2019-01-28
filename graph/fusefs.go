@@ -90,6 +90,7 @@ type newFolderPost struct {
 }
 
 // Mkdir creates a directory, mode is ignored
+//TODO fix "File exists" case when folder is created, deleted, then created again
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = "/" + name
 	log.Printf("Mkdir(\"%s\")\n", name)
@@ -120,10 +121,11 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 		log.Println(err)
 		return fuse.EREMOTEIO
 	}
+	CacheClear(name)
 	return fuse.OK
 }
 
-// Open returns a file that can be read and written to
+// Open populates a DriveItem's Data field with actual data
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = "/" + name
 	log.Printf("Open(\"%s\")\n", name)
@@ -133,17 +135,13 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		return nil, fuse.ENOENT
 	}
 
-	//TODO deny write permissions until uploads/writes are implemented
-	if flags&fuse.O_ANYWRITE != 0 {
-		return nil, fuse.EPERM
-	}
-
+	//TODO ad a check for if file has already been populated
 	body, err := Get("/me/drive/items/"+item.ID+"/content", fs.Auth)
 	if err != nil {
 		log.Printf("Failed to fetch content for '%s': %s\n", item.ID, err)
-		return nil, fuse.ENOENT
+		return nil, fuse.EREMOTEIO
 	}
-	//TODO this is a read-only file - will need to implement our own version of
-	// the File interface for write functionality
-	return NewDriveItem(body), fuse.OK
+	item.Data = body
+	item.File = nodefs.NewDefaultFile()
+	return &item, fuse.OK
 }
