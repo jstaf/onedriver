@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"os"
 	"regexp"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -48,22 +47,12 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	log.Printf("GetAttr(\"%s\")\n", name)
 	item, err := GetItem(name, fs.Auth)
 	if err != nil {
+		log.Println(err)
 		return nil, fuse.ENOENT
 	}
-
-	// convert to UNIX struct stat
-	attr := fuse.Attr{
-		Size:  item.FakeSize(),
-		Atime: item.MTime(),
-		Mtime: item.MTime(),
-		Ctime: item.MTime(),
-		Mode:  item.Mode(),
-		Owner: fuse.Owner{
-			Uid: uint32(os.Getuid()),
-			Gid: uint32(os.Getgid()),
-		},
-	}
-	return &attr, fuse.OK
+	attr := fuse.Attr{}
+	status := item.GetAttr(&attr)
+	return &attr, status
 }
 
 // Chown currently does nothing - it is not a valid option, since fuse is single-user anyways
@@ -124,15 +113,9 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 
 // Rmdir removes a directory
 func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
-	//TODO use as a general delete item method?
 	name = "/" + name
 	log.Printf("Rmdir(\"%s\")\n", name)
-	item, err := GetItem(name, fs.Auth)
-	if err != nil {
-		log.Println(err)
-		return fuse.EREMOTEIO
-	}
-	err = Delete("/me/drive/items/"+item.ID, fs.Auth)
+	err := Delete(ResourcePath(name), fs.Auth)
 	if err != nil {
 		log.Println(err)
 		return fuse.EREMOTEIO
@@ -162,5 +145,5 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	}
 	//TODO this is a read-only file - will need to implement our own version of
 	// the File interface for write functionality
-	return nodefs.NewDataFile(body), fuse.OK
+	return NewDriveItem(body), fuse.OK
 }
