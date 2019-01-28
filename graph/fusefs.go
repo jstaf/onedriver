@@ -1,19 +1,16 @@
 package graph
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 )
-
-// FuseFs is a memory-backed filesystem for Microsoft Graph
-type FuseFs struct {
-	pathfs.FileSystem
-	Auth Auth
-}
 
 // these files will never exist, and we should ignore them
 func ignore(path string) bool {
@@ -36,13 +33,19 @@ func ignore(path string) bool {
 	return false
 }
 
+// FuseFs is a memory-backed filesystem for Microsoft Graph
+type FuseFs struct {
+	pathfs.FileSystem
+	Auth Auth
+}
+
 // GetAttr returns a stat structure for the specified file
 func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
 	name = "/" + name
 	if ignore(name) {
 		return nil, fuse.ENOENT
 	}
-	log.Printf("GetAttr(\"%s\")", name)
+	log.Printf("GetAttr(\"%s\")\n", name)
 	item, err := GetItem(name, fs.Auth)
 	if err != nil {
 		return nil, fuse.ENOENT
@@ -73,10 +76,10 @@ func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code f
 	return fuse.EPERM
 }
 
-// Return a
+// OpenDir returns a list of directory entries
 func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = "/" + name
-	log.Printf("OpenDir(\"%s\")", name)
+	log.Printf("OpenDir(\"%s\")\n", name)
 	children, err := GetChildren(name, fs.Auth)
 	if err != nil {
 		// that directory probably doesn't exist. silly human.
@@ -92,9 +95,55 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	return c, fuse.OK
 }
 
+type newFolderPost struct {
+	Name   string   `json:"name"`
+	Folder struct{} `json:"folder"`
+}
+
+// Mkdir creates a directory, mode is ignored
+func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
+	name = "/" + name
+	log.Printf("Mkdir(\"%s\")\n", name)
+	if name[len(name)-1] == '/' {
+		// remove trailing slash (if) exists for easier parsing later
+		name = name[:len(name)-1]
+	}
+	re := regexp.MustCompile(`\w+$`)
+	split := re.FindStringIndex(name)[0]
+	parent, child := name[:split], name[split:]
+
+	bytePayload, _ := json.Marshal(newFolderPost{Name: child})
+	resp, err := Post(ChildrenPath(parent), fs.Auth, bytes.NewReader(bytePayload))
+	if err != nil {
+		log.Println(string(resp))
+		log.Println(err)
+		return fuse.EREMOTEIO
+	}
+	return fuse.OK
+}
+
+// Rmdir removes a directory
+func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
+	//TODO use as a general delete item method?
+	name = "/" + name
+	log.Printf("Rmdir(\"%s\")\n", name)
+	item, err := GetItem(name, fs.Auth)
+	if err != nil {
+		log.Println(err)
+		return fuse.EREMOTEIO
+	}
+	err = Delete("/me/drive/items/"+item.ID, fs.Auth)
+	if err != nil {
+		log.Println(err)
+		return fuse.EREMOTEIO
+	}
+	return fuse.OK
+}
+
 // Open returns a file that can be read and written to
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = "/" + name
+	log.Printf("Open(\"%s\")\n", name)
 	item, err := GetItem(name, fs.Auth)
 	if err != nil {
 		// doesn't exist or internet is out - either way, no files for you!

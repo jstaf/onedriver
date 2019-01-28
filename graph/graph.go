@@ -22,9 +22,14 @@ type graphError struct {
 // Request performs an authenticated request to Microsoft Graph
 func Request(resource string, auth Auth, method string, content io.Reader) ([]byte, error) {
 	auth.Refresh()
+
 	client := &http.Client{}
-	request, _ := http.NewRequest("GET", graphURL+resource, content)
+	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
+	if method == "POST" {
+		request.Header.Add("Content-Type", "application/json")
+	}
+
 	response, err := client.Do(request)
 	if err != nil {
 		// the actual request failed
@@ -48,20 +53,34 @@ func Get(resource string, auth Auth) ([]byte, error) {
 
 // Post is a convenience wrapper around Request
 func Post(resource string, auth Auth, content io.Reader) ([]byte, error) {
-	return Request(resource, auth, "Post", content)
+	return Request(resource, auth, "POST", content)
 }
 
-// Translate's an item's path to the proper path used by Graph
-func resourcePath(path string) string {
+// Delete performs an HTTP delete
+func Delete(resource string, auth Auth) error {
+	_, err := Request(resource, auth, "DELETE", nil)
+	return err
+}
+
+// ResourcePath translates an item's path to the proper path used by Graph
+func ResourcePath(path string) string {
 	if path == "/" {
 		return "/me/drive/root"
 	}
 	return "/me/drive/root:" + path
 }
 
+// ChildrenPath returns the path to an item's children
+func ChildrenPath(path string) string {
+	if path == "/" {
+		return ResourcePath(path) + "/children"
+	}
+	return ResourcePath(path) + ":/children"
+}
+
 // GetItem fetches a DriveItem by path
 func GetItem(path string, auth Auth) (DriveItem, error) {
-	body, err := CachedGet(resourcePath(path), auth)
+	body, err := CachedGet(ResourcePath(path), auth)
 	var item DriveItem
 	if err != nil {
 		return item, err
@@ -77,12 +96,7 @@ type driveChildren struct {
 
 // GetChildren fetches all DriveItems that are children of resource at path
 func GetChildren(path string, auth Auth) ([]DriveItem, error) {
-	if path == "/" {
-		path = resourcePath(path) + "/children"
-	} else {
-		path = resourcePath(path) + ":/children"
-	}
-	body, err := CachedGet(path, auth)
+	body, err := CachedGet(ChildrenPath(path), auth)
 	var children driveChildren
 	if err != nil {
 		return children.Children, err
