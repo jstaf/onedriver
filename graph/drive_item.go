@@ -13,12 +13,13 @@ import (
 // DriveItem represents a file or folder fetched from the Graph API
 type DriveItem struct {
 	nodefs.File
-	Data       []byte    // empty by default
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Size       uint64    `json:"size"`
-	ModifyTime time.Time `json:"lastModifiedDatetime"` // a string timestamp
-	Parent     struct {
+	Data         []byte // empty by default
+	LocalChanges bool
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Size         uint64    `json:"size"`
+	ModifyTime   time.Time `json:"lastModifiedDatetime"` // a string timestamp
+	Parent       struct {
 		ID   string `json:"id"`
 		Path string `json:"path"`
 	} `json:"parentReference"`
@@ -50,13 +51,25 @@ func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.S
 	return fuse.ReadResultData(d.Data[off:end]), fuse.OK
 }
 
-/*
-// Write to a DriveItem like a file
-func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
+// Write to a DriveItem like a file. Note that changes are 100% local.
+func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	n := len(data)
+	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, n, off)
+	//offset := int(off)
+	for i := 0; i < n; i++ {
+		// the file is not long enough, append to it
+		d.Data = append(d.Data, data[i])
+		d.Size++
+	}
+	d.LocalChanges = true
 	return uint32(n), fuse.OK
 }
-*/
+
+// Flush is called when a file descriptor is closed, and is responsible fo upload
+func (d DriveItem) Flush() fuse.Status {
+	log.Printf("Flush(\"%s\")\n", d.Name)
+	return fuse.OK
+}
 
 // GetAttr returns a the DriveItem as a UNIX stat
 func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
