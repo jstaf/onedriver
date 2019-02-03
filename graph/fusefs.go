@@ -136,7 +136,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	}
 
 	// check for if file has already been populated
-	if !item.LocalChanges {
+	if len(item.Data) > 0 {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)
 		body, err := Get("/me/drive/items/"+item.ID+"/content", fs.Auth)
@@ -146,7 +146,6 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		}
 		item.Data = body
 		item.File = nodefs.NewDefaultFile()
-		item.LocalChanges = false
 	}
 	return &item, fuse.OK
 }

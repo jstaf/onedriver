@@ -13,13 +13,12 @@ import (
 // DriveItem represents a file or folder fetched from the Graph API
 type DriveItem struct {
 	nodefs.File
-	Data         []byte // empty by default
-	LocalChanges bool
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Size         uint64    `json:"size"`
-	ModifyTime   time.Time `json:"lastModifiedDatetime"` // a string timestamp
-	Parent       struct {
+	Data       []byte    // empty by default
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Size       uint64    `json:"size"`
+	ModifyTime time.Time `json:"lastModifiedDatetime"` // a string timestamp
+	Parent     struct {
 		ID   string `json:"id"`
 		Path string `json:"path"`
 	} `json:"parentReference"`
@@ -61,7 +60,6 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 		d.Data = append(d.Data, data[i])
 		d.Size++
 	}
-	d.LocalChanges = true
 	return uint32(n), fuse.OK
 }
 

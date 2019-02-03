@@ -86,7 +86,6 @@ func GetItem(path string, auth Auth) (DriveItem, error) {
 		return item, err
 	}
 	json.Unmarshal(body, &item)
-	item.LocalChanges = false
 	return item, nil
 }
 
