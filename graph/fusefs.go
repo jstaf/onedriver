@@ -129,14 +129,14 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = "/" + name
 	log.Printf("Open(\"%s\")\n", name)
-	item, err := GetItem(name, fs.Auth)
+	item, err := CacheGetItem(name, fs.Auth)
 	if err != nil {
 		// doesn't exist or internet is out - either way, no files for you!
 		return nil, fuse.ENOENT
 	}
 
 	// check for if file has already been populated
-	if len(item.Data) > 0 {
+	if len(item.Data) == 0 {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)
 		body, err := Get("/me/drive/items/"+item.ID+"/content", fs.Auth)

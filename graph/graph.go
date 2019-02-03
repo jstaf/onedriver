@@ -80,7 +80,7 @@ func ChildrenPath(path string) string {
 
 // GetItem fetches a DriveItem by path
 func GetItem(path string, auth Auth) (DriveItem, error) {
-	body, err := CachedGet(ResourcePath(path), auth)
+	body, err := Get(ResourcePath(path), auth)
 	var item DriveItem
 	if err != nil {
 		return item, err
@@ -96,7 +96,7 @@ type driveChildren struct {
 
 // GetChildren fetches all DriveItems that are children of resource at path
 func GetChildren(path string, auth Auth) ([]DriveItem, error) {
-	body, err := CachedGet(ChildrenPath(path), auth)
+	body, err := CacheGet(ChildrenPath(path), auth)
 	var children driveChildren
 	if err != nil {
 		return children.Children, err
