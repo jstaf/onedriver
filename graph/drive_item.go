@@ -13,7 +13,7 @@ import (
 // DriveItem represents a file or folder fetched from the Graph API
 type DriveItem struct {
 	nodefs.File
-	Data       []byte    // empty by default
+	Data       *[]byte   // empty by default
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
 	Size       uint64    `json:"size"`
@@ -37,27 +37,28 @@ func (d DriveItem) String() string {
 	if l > 10 {
 		l = 10
 	}
-	return fmt.Sprintf("DriveItem(%x)", d.Data[:l])
+	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
 }
 
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.Status) {
 	end := int(off) + int(len(buf))
-	if end > len(d.Data) {
-		end = len(d.Data)
+	if end > len(*d.Data) {
+		end = len(*d.Data)
 	}
 	log.Printf("Read(\"%s\"): %d bytes at offset %d\n", d.Name, int64(end)-off, off)
-	return fuse.ReadResultData(d.Data[off:end]), fuse.OK
+	return fuse.ReadResultData((*d.Data)[off:end]), fuse.OK
 }
 
 // Write to a DriveItem like a file. Note that changes are 100% local.
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	n := len(data)
 	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, n, off)
+	log.Printf("Writing to %p\n", &d)
 	//offset := int(off)
 	for i := 0; i < n; i++ {
 		// the file is not long enough, append to it
-		d.Data = append(d.Data, data[i])
+		*d.Data = append(*d.Data, data[i])
 		d.Size++
 	}
 	return uint32(n), fuse.OK

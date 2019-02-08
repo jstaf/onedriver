@@ -45,7 +45,7 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 		return nil, fuse.ENOENT
 	}
 	log.Printf("GetAttr(\"%s\")\n", name)
-	item, err := GetItem(name, fs.Auth)
+	item, err := CacheGetItem(name, fs.Auth)
 	if err != nil {
 		log.Println(err)
 		return nil, fuse.ENOENT
@@ -136,7 +136,8 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	}
 
 	// check for if file has already been populated
-	if len(item.Data) == 0 {
+	log.Printf("Pointer to DriveItem: %p\n", &item)
+	if item.Data == nil {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)
 		body, err := Get("/me/drive/items/"+item.ID+"/content", fs.Auth)
@@ -144,8 +145,8 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 			log.Printf("Failed to fetch content for '%s': %s\n", item.ID, err)
 			return nil, fuse.EREMOTEIO
 		}
-		item.Data = body
+		item.Data = &body
 		item.File = nodefs.NewDefaultFile()
 	}
-	return &item, fuse.OK
+	return item, fuse.OK
 }

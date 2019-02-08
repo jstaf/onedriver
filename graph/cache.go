@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"log"
 	"time"
 )
 
@@ -41,16 +42,17 @@ func CacheGet(resource string, auth Auth) ([]byte, error) {
 
 // CacheGetItem fetches an item from the cache. This cache never expires. This
 // allows local changes to persist.
-func CacheGetItem(resource string, auth Auth) (DriveItem, error) {
+func CacheGetItem(resource string, auth Auth) (*DriveItem, error) {
 	last, exists := itemCache[resource]
 	if exists {
-		return last, nil
+		return &last, nil
 	}
 	item, err := GetItem(resource, auth)
 	if err == nil {
+		log.Printf("Inserting %s into cache.\n", resource)
 		itemCache[resource] = item
 	}
-	return item, err
+	return &item, err
 }
 
 // CacheClear deletes a file from the requestCache to force a refresh from the server
