@@ -136,7 +136,6 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	}
 
 	// check for if file has already been populated
-	log.Printf("Pointer to DriveItem: %p\n", &item)
 	if item.Data == nil {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)

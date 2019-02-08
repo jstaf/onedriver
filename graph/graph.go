@@ -79,14 +79,14 @@ func ChildrenPath(path string) string {
 }
 
 // GetItem fetches a DriveItem by path
-func GetItem(path string, auth Auth) (DriveItem, error) {
+func GetItem(path string, auth Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
-	var item DriveItem
+	item := new(DriveItem)
 	if err != nil {
 		return item, err
 	}
-	json.Unmarshal(body, &item)
-	return item, nil
+	err = json.Unmarshal(body, item)
+	return item, err
 }
 
 // only used for parsing

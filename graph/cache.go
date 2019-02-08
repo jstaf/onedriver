@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"log"
 	"time"
 )
 
@@ -12,7 +11,9 @@ type expiringRequest struct {
 
 // requestCache is a map of past responses that we can check against
 var requestCache = make(map[string]expiringRequest)
-var itemCache = make(map[string]DriveItem)
+
+// must be a map of pointers or writes don't get stored
+var itemCache = make(map[string]*DriveItem)
 
 // CacheGet performs a get request - if it's been performed in the last 10s it
 // will just use the last response. Used to avoid swamping the API with useless
@@ -45,14 +46,13 @@ func CacheGet(resource string, auth Auth) ([]byte, error) {
 func CacheGetItem(resource string, auth Auth) (*DriveItem, error) {
 	last, exists := itemCache[resource]
 	if exists {
-		return &last, nil
+		return last, nil
 	}
 	item, err := GetItem(resource, auth)
 	if err == nil {
-		log.Printf("Inserting %s into cache.\n", resource)
 		itemCache[resource] = item
 	}
-	return &item, err
+	return item, err
 }
 
 // CacheClear deletes a file from the requestCache to force a refresh from the server
