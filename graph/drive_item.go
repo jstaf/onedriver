@@ -50,21 +50,27 @@ func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.S
 	return fuse.ReadResultData((*d.Data)[off:end]), fuse.OK
 }
 
-// Write to a DriveItem like a file. Note that changes are 100% local.
+// Write to a DriveItem like a file. Note that changes are 100% local until
+// Flush() is called.
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
-	n := len(data)
-	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, n, off)
-	log.Printf("Writing to %p\n", &d)
-	//offset := int(off)
-	for i := 0; i < n; i++ {
-		// the file is not long enough, append to it
-		*d.Data = append(*d.Data, data[i])
-		d.Size++
+	nWrite := len(data)
+	offset := int(off)
+	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)
+
+	if offset+nWrite > int(d.Size)-1 {
+		// we've exceeded the file size, overwrite via append
+		*d.Data = append((*d.Data)[:offset], data...)
+	} else {
+		// writing inside the current file, overwrite in place
+		copy((*d.Data)[offset:], data)
 	}
-	return uint32(n), fuse.OK
+	// probably a better way to do this, but whatever
+	d.Size = uint64(len(*d.Data))
+
+	return uint32(nWrite), fuse.OK
 }
 
-// Flush is called when a file descriptor is closed, and is responsible fo upload
+// Flush is called when a file descriptor is closed, and is responsible for upload
 func (d DriveItem) Flush() fuse.Status {
 	log.Printf("Flush(\"%s\")\n", d.Name)
 	return fuse.OK
