@@ -83,6 +83,8 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	log.Printf("GetAttr(\"%s\")\n", name)
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
+		// this is where non-existent files are caught - called before any other
+		// method when accessing a file
 		log.Println(err)
 		return nil, fuse.ENOENT
 	}
@@ -109,7 +111,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection
-		log.Println(err)
+		log.Println("Error during OpenDir()", err)
 		return nil, fuse.EREMOTEIO
 	}
 	for _, child := range children {
@@ -136,8 +138,8 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	bytePayload, _ := json.Marshal(newFolderPost{Name: basename(name)})
 	resp, err := Post(ChildrenPath(dirname(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
+		log.Println("Error during directory creation", err)
 		log.Println(string(resp))
-		log.Println(err)
 		return fuse.EREMOTEIO
 	}
 	return fuse.OK
@@ -149,7 +151,7 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	log.Printf("Rmdir(\"%s\")\n", name)
 	err := Delete(ResourcePath(name), fs.Auth)
 	if err != nil {
-		log.Println(err)
+		log.Println("Error during delete:", err)
 		return fuse.EREMOTEIO
 	}
 	fs.reqCache.Delete(ChildrenPath(dirname(name)))
@@ -163,8 +165,9 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	log.Printf("Open(\"%s\")\n", name)
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
-		// doesn't exist or internet is out - either way, no files for you!
-		return nil, fuse.ENOENT
+		// We know the file exists, GetAttr() has already been called
+		log.Println("Error while getting item", err)
+		return nil, fuse.EREMOTEIO
 	}
 
 	// check for if file has already been populated
@@ -189,6 +192,7 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	parentPath := dirname(name)
 	parent, err := fs.items.Get(parentPath, fs.Auth)
 	if err != nil {
+		log.Println("Error while fetching parent:", err)
 		return nil, fuse.EREMOTEIO
 	}
 
