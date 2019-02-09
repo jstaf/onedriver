@@ -10,19 +10,23 @@ import (
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 )
 
+// DriveItemParent describes a DriveItem's parent in the Graph API (just another
+// DriveItem's ID and its path)
+type DriveItemParent struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+}
+
 // DriveItem represents a file or folder fetched from the Graph API
 type DriveItem struct {
 	nodefs.File
-	Data       *[]byte   // empty by default
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Size       uint64    `json:"size"`
-	ModifyTime time.Time `json:"lastModifiedDatetime"` // a string timestamp
-	Parent     struct {
-		ID   string `json:"id"`
-		Path string `json:"path"`
-	} `json:"parentReference"`
-	Folder struct {
+	Data       *[]byte         // empty by default
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Size       uint64          `json:"size"`
+	ModifyTime time.Time       `json:"lastModifiedDatetime"` // a string timestamp
+	Parent     DriveItemParent `json:"parentReference"`
+	Folder     struct {
 		ChildCount uint32 `json:"childCount"`
 	} `json:"folder,omitempty"`
 	FileAPI struct { // renamed to avoid conflict with nodefs.File interface
@@ -52,7 +56,7 @@ func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.S
 
 // Write to a DriveItem like a file. Note that changes are 100% local until
 // Flush() is called.
-func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
+func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
 	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)

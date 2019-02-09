@@ -38,7 +38,8 @@ func TestGetItem(t *testing.T) {
 }
 
 func TestGetChildren(t *testing.T) {
-	items, err := GetChildren("/", auth)
+	reqCache := NewRequestCache()
+	items, err := GetChildren("/", auth, reqCache)
 	var success bool
 	for _, item := range items {
 		if item.Name == "Documents" {
@@ -50,7 +51,7 @@ func TestGetChildren(t *testing.T) {
 		t.Fatal("Could not find the '/Documents' folder as a child of '/'!")
 	}
 
-	items, err = GetChildren("/lkdsjflkdjsfl", auth)
+	items, err = GetChildren("/lkdsjflkdjsfl", auth, reqCache)
 	if err == nil {
 		t.Fatal("GetChildren() for a non-existent directory did not throw an error")
 	}

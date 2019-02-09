@@ -95,8 +95,8 @@ type driveChildren struct {
 }
 
 // GetChildren fetches all DriveItems that are children of resource at path
-func GetChildren(path string, auth Auth) ([]DriveItem, error) {
-	body, err := CacheGet(ChildrenPath(path), auth)
+func GetChildren(path string, auth Auth, cache *RequestCache) ([]DriveItem, error) {
+	body, err := cache.Get(ChildrenPath(path), auth)
 	var children driveChildren
 	if err != nil {
 		return children.Children, err

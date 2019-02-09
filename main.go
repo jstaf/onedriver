@@ -80,12 +80,7 @@ func main() {
 	}
 
 	// setup filesystem
-	fs := pathfs.NewPathNodeFs(
-		&graph.FuseFs{
-			FileSystem: pathfs.NewDefaultFileSystem(),
-			Auth:       graph.Authenticate(),
-		},
-		nil)
+	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
 	if err != nil {
 		log.Fatalf("Mount failed. Is the mountpoint already in use?\n%v", err)
