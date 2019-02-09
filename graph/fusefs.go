@@ -197,5 +197,6 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 			Path: parentPath,
 		},
 	}
+	fs.items.Insert(name, &item)
 	return item, fuse.OK
 }

@@ -23,7 +23,7 @@ type DriveItem struct {
 	Data       *[]byte         // empty by default
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
-	Size       uint64          `json:"size"`
+	Size       *uint64         `json:"size"`                 // must be a pointer or cannot be modified during write
 	ModifyTime time.Time       `json:"lastModifiedDatetime"` // a string timestamp
 	Parent     DriveItemParent `json:"parentReference"`
 	Folder     struct {
@@ -37,7 +37,7 @@ type DriveItem struct {
 }
 
 func (d DriveItem) String() string {
-	l := d.Size
+	l := *d.Size
 	if l > 10 {
 		l = 10
 	}
@@ -72,7 +72,7 @@ func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	offset := int(off)
 	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)
 
-	if offset+nWrite > int(d.Size)-1 {
+	if offset+nWrite > int(*d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
 		*d.Data = append((*d.Data)[:offset], data...)
 	} else {
@@ -80,7 +80,7 @@ func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 		copy((*d.Data)[offset:], data)
 	}
 	// probably a better way to do this, but whatever
-	d.Size = uint64(len(*d.Data))
+	*d.Size = uint64(len(*d.Data))
 
 	return uint32(nWrite), fuse.OK
 }
@@ -112,7 +112,6 @@ func (d DriveItem) IsDir() bool {
 
 // Mode returns the permissions/mode of the file.
 func (d DriveItem) Mode() uint32 {
-	//TODO change when filesystem is writeable
 	if d.IsDir() {
 		return fuse.S_IFDIR | 0755 // bitwise op: dir + rwx
 	}
@@ -139,5 +138,5 @@ func (d DriveItem) FakeSize() uint64 {
 	if d.IsDir() {
 		return 4096
 	}
-	return d.Size
+	return *d.Size
 }
