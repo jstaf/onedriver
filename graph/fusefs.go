@@ -107,8 +107,10 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	log.Printf("OpenDir(\"%s\")\n", name)
 	children, err := GetChildren(name, fs.Auth, fs.reqCache)
 	if err != nil {
-		// that directory probably doesn't exist. silly human.
-		return nil, fuse.ENOENT
+		// not an item not found error (GetAttr() will always be called before
+		// OpenDir()), something has happened to our connection
+		log.Println(err)
+		return nil, fuse.EREMOTEIO
 	}
 	for _, child := range children {
 		entry := fuse.DirEntry{
