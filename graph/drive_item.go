@@ -36,6 +36,20 @@ type DriveItem struct {
 	} `json:"file,omitempty"`
 }
 
+// NewDriveItem initializes a new DriveItem
+func NewDriveItem(name string, parent *DriveItem) *DriveItem {
+	empty := make([]byte, 0)
+	return &DriveItem{
+		File: nodefs.NewDefaultFile(),
+		Name: name,
+		Parent: DriveItemParent{
+			ID:   parent.ID,
+			Path: parent.Parent.Path + "/" + parent.Name,
+		},
+		Data: &empty,
+	}
+}
+
 func (d DriveItem) String() string {
 	l := *d.Size
 	if l > 10 {
