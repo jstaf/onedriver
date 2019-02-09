@@ -86,7 +86,7 @@ func getAuthCode() string {
 
 	cAuthURL := C.CString(authURL)
 	defer C.free(unsafe.Pointer(cAuthURL))
-	responseC := C.auth_window(cAuthURL)
+	responseC := C.webkit_auth_window(cAuthURL)
 	defer C.free(unsafe.Pointer(responseC))
 	response := C.GoString(responseC)
 

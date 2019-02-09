@@ -30,7 +30,7 @@ static gboolean close_web_view_cb(WebKitWebView* web_view, GtkWidget* window) {
 /**
  * Open a popup GTK auth window and return the final redirect location.
  */
-char *auth_window(char *auth_url) {
+char *webkit_auth_window(char *auth_url) {
     #if defined(__linux__)
     // linux - hooray, we can auth via an embedded browser!
     gtk_init(NULL, NULL);
