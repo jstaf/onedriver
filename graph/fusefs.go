@@ -169,13 +169,11 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	if item.Data == nil {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)
-		body, err := Get("/me/drive/items/"+item.ID+"/content", fs.Auth)
+		err = item.FetchContent(fs.Auth)
 		if err != nil {
 			log.Printf("Failed to fetch content for '%s': %s\n", item.ID, err)
 			return nil, fuse.EREMOTEIO
 		}
-		item.Data = &body
-		item.File = nodefs.NewDefaultFile()
 	}
 	return item, fuse.OK
 }

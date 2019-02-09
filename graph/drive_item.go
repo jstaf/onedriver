@@ -44,6 +44,17 @@ func (d DriveItem) String() string {
 	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
 }
 
+// FetchContent fetches a DriveItem's content and initializes the .Data field.
+func (d *DriveItem) FetchContent(auth Auth) error {
+	body, err := Get("/me/drive/items/"+d.ID+"/content", auth)
+	if err != nil {
+		return err
+	}
+	d.Data = &body
+	d.File = nodefs.NewDefaultFile()
+	return nil
+}
+
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.Status) {
 	end := int(off) + int(len(buf))
