@@ -196,7 +196,7 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 		return nil, fuse.EREMOTEIO
 	}
 
-	item := NewDriveItem(basename(name), parent)
+	item := NewDriveItem(basename(name), mode, parent)
 	fs.items.Insert(name, item)
 	return item, fuse.OK
 }

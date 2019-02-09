@@ -23,8 +23,9 @@ type DriveItem struct {
 	Data       *[]byte         // empty by default
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
-	Size       *uint64         `json:"size"`                 // must be a pointer or cannot be modified during write
-	ModifyTime time.Time       `json:"lastModifiedDatetime"` // a string timestamp
+	Size       *uint64         `json:"size"` // must be a pointer or cannot be modified during write
+	ModifyTime time.Time       `json:"lastModifiedDatetime"`
+	mode       uint32          // do not set manually
 	Parent     DriveItemParent `json:"parentReference"`
 	Folder     struct {
 		ChildCount uint32 `json:"childCount"`
@@ -37,8 +38,9 @@ type DriveItem struct {
 }
 
 // NewDriveItem initializes a new DriveItem
-func NewDriveItem(name string, parent *DriveItem) *DriveItem {
+func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	empty := make([]byte, 0)
+	var size uint64
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
 		Name: name,
@@ -46,7 +48,10 @@ func NewDriveItem(name string, parent *DriveItem) *DriveItem {
 			ID:   parent.ID,
 			Path: parent.Parent.Path + "/" + parent.Name,
 		},
-		Data: &empty,
+		Data:       &empty,
+		Size:       &size,
+		ModifyTime: time.Now(),
+		mode:       mode,
 	}
 }
 
@@ -121,15 +126,21 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // IsDir returns if it is a directory (true) or file (false).
 func (d DriveItem) IsDir() bool {
-	return d.FileAPI.Hashes.Sha1Hash == ""
+	// following statement returns 0 if the dir bit is not set
+	return d.Mode()&fuse.S_IFDIR > 0
 }
 
-// Mode returns the permissions/mode of the file.
-func (d DriveItem) Mode() uint32 {
-	if d.IsDir() {
-		return fuse.S_IFDIR | 0755 // bitwise op: dir + rwx
+// Mode returns the permissions/mode of the file. Lazily initializes the
+// underlying mode field.
+func (d *DriveItem) Mode() uint32 {
+	if d.mode == 0 { // only 0 if fetched from Graph API
+		if d.FileAPI.Hashes.Sha1Hash == "" { // blank if a folder
+			d.mode = fuse.S_IFDIR | 0755
+		} else {
+			d.mode = fuse.S_IFREG | 0644
+		}
 	}
-	return fuse.S_IFREG | 0644 // bitwise op: file + rw-
+	return d.mode
 }
 
 // MTime returns the Unix timestamp of last modification
