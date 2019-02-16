@@ -3,14 +3,14 @@
 onedriver
 ======================================
 
-Onedriver is a native Linux client for Microsoft Onedrive. 
+Onedriver is a native Linux client for Microsoft Onedrive.
 
 ## Building / running
 
 Note that in addition to the traditional Go tooling, you will need a C
 compiler and development headers for `webkit2gtk-4.0`. On Fedora, these can be
 obtained with `dnf install gcc pkg-config webkit2gtk3-devel`. On Ubuntu, these
-dependencies can be installed with 
+dependencies can be installed with
 `apt install gcc pkg-config libwebkit2gtk-4.0-dev`.
 
 ```bash
@@ -20,7 +20,7 @@ mkdir mount
 ./onedriver mount/
 
 # in new window, check out the mounted filesystem
-ls -l mount 
+ls -l mount
 
 # unmount the filesystem
 fusermount -u mount
@@ -29,11 +29,5 @@ fusermount -u mount
 ## Running tests
 
 ```bash
-# generate the initial auth tokens and symlink to test directory
-go build
-./onedriver -a
-ln -s ../auth_tokens.json graph/  # yes, this is a hack
-
-# run tests
-go test ./graph
+make test
 ```
