@@ -72,6 +72,12 @@ func (a *Auth) Refresh() {
 		if a.ExpiresAt == oldTime {
 			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
 		}
+		if a.AccessToken == "" || a.RefreshToken == "" {
+			os.Remove(authFile)
+			log.Println("Failed to renew access tokens. Response from server:")
+			fmt.Println(string(body))
+			os.Exit(1)
+		}
 		a.ToFile(authFile)
 	}
 }
@@ -120,6 +126,11 @@ func getAuthTokens(authCode string) Auth {
 	json.Unmarshal(body, &auth)
 	if auth.ExpiresAt == 0 {
 		auth.ExpiresAt = time.Now().Unix() + auth.ExpiresIn
+	}
+	if auth.AccessToken == "" || auth.RefreshToken == "" {
+		log.Println("Failed to retrieve access tokens. Response from server:")
+		fmt.Println(string(body))
+		os.Exit(1)
 	}
 	return auth
 }
