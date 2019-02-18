@@ -59,7 +59,7 @@ func dirname(path string) string {
 // FuseFs is a memory-backed filesystem for Microsoft Graph
 type FuseFs struct {
 	pathfs.FileSystem
-	Auth     Auth
+	Auth
 	items    *ItemCache    // all DriveItems (read: files/folders) are cached
 	reqCache *RequestCache // some requests are cached
 }
@@ -107,13 +107,21 @@ func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code f
 func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = "/" + name
 	log.Printf("OpenDir(\"%s\")\n", name)
-	children, err := GetChildren(name, fs.Auth, fs.reqCache)
+
+	parent, err := fs.items.Get(name, fs.Auth)
+	if err != nil {
+		log.Printf("Error getting item \"%s\": %s\n", name, err)
+		return nil, fuse.EREMOTEIO
+	}
+
+	children, err := parent.GetChildren(name, fs.Auth)
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection
 		log.Println("Error during OpenDir()", err)
 		return nil, fuse.EREMOTEIO
 	}
+
 	for _, child := range children {
 		entry := fuse.DirEntry{
 			Name: child.Name,
@@ -121,6 +129,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 		}
 		c = append(c, entry)
 	}
+
 	return c, fuse.OK
 }
 

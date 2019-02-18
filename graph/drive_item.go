@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ import (
 type DriveItemParent struct {
 	ID   string `json:"id"`
 	Path string `json:"path"`
+	Item *DriveItem
 }
 
 // DriveItem represents a file or folder fetched from the Graph API
@@ -27,6 +29,7 @@ type DriveItem struct {
 	ModifyTime time.Time       `json:"lastModifiedDatetime"`
 	mode       uint32          // do not set manually
 	Parent     DriveItemParent `json:"parentReference"`
+	Children   []*DriveItem
 	Folder     struct {
 		ChildCount uint32 `json:"childCount"`
 	} `json:"folder,omitempty"`
@@ -42,6 +45,7 @@ type DriveItem struct {
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
+	var children []*DriveItem
 	var size uint64
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
@@ -49,7 +53,9 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		Parent: DriveItemParent{
 			ID:   parent.ID,
 			Path: parent.Parent.Path + "/" + parent.Name,
+			Item: parent,
 		},
+		Children:   children,
 		Data:       &empty,
 		Size:       &size,
 		ModifyTime: time.Now(),
@@ -63,6 +69,32 @@ func (d DriveItem) String() string {
 		l = 10
 	}
 	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
+}
+
+// only used for parsing
+type driveChildren struct {
+	Children []*DriveItem `json:"value"`
+}
+
+// GetChildren fetches all DriveItems that are children of resource at path
+func (d *DriveItem) GetChildren(path string, auth Auth) ([]*DriveItem, error) {
+	if !d.IsDir() || len(d.Children) > 0 {
+		return d.Children, nil
+	}
+
+	body, err := Get(ChildrenPath(path), auth)
+	var children driveChildren
+	if err != nil {
+		return children.Children, err
+	}
+	json.Unmarshal(body, &children)
+	d.Children = children.Children
+
+	for _, child := range d.Children {
+		child.Parent.Item = d
+	}
+
+	return children.Children, nil
 }
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.

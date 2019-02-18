@@ -88,19 +88,3 @@ func GetItem(path string, auth Auth) (*DriveItem, error) {
 	err = json.Unmarshal(body, item)
 	return item, err
 }
-
-// only used for parsing
-type driveChildren struct {
-	Children []DriveItem `json:"value"`
-}
-
-// GetChildren fetches all DriveItems that are children of resource at path
-func GetChildren(path string, auth Auth, cache *RequestCache) ([]DriveItem, error) {
-	body, err := cache.Get(ChildrenPath(path), auth)
-	var children driveChildren
-	if err != nil {
-		return children.Children, err
-	}
-	json.Unmarshal(body, &children)
-	return children.Children, nil
-}
