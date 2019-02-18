@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -77,7 +77,8 @@ func (d DriveItem) Path() string {
 	if d.Parent.Path == "" && d.Name == "root" {
 		return "/"
 	}
-	return filepath.Join(d.Parent.Path, d.Name)
+	// all paths come prefixed with "/drive/root:"
+	return strings.TrimPrefix(d.Parent.Path+"/"+d.Name, "/drive/root:")
 }
 
 // only used for parsing
@@ -88,6 +89,7 @@ type driveChildren struct {
 // GetChildren fetches all DriveItems that are children of resource at path.
 // Also initializes the children field.
 func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
+	//TODO will exit prematurely if *any* children are in the cache
 	if !d.IsDir() || d.Children != nil {
 		return d.Children, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -88,7 +89,8 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 
 	// from the root directory, traverse the chain of items till we reach our
 	// target key
-	split := filepath.SplitList(key)[1:] // omit leading "/"
+	key = strings.TrimSuffix(key, "/")
+	split := strings.Split(key, "/")[1:] // omit leading "/"
 	for i := 0; i < len(split); i++ {
 		item, exists := last.Children[split[i]]
 		if !exists {
@@ -99,18 +101,17 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 			}
 
 			// we have an auth token and can try to fetch an item's children
-			children, err := item.GetChildren(auth)
+			children, err := last.GetChildren(auth)
 			if err != nil {
 				return last, err
 			}
-			last, exists = children[split[i]]
+			item, exists = children[split[i]]
 			if !exists {
 				// this time, we know the key *really* doesn't exist
 				return nil, errors.New(filepath.Join(last.Path(), split[i]) + " does not exist.")
 			}
-		} else {
-			last = item
 		}
+		last = item
 	}
 	return last, nil
 }
