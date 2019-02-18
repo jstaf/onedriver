@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -86,7 +87,7 @@ func (a *Auth) Refresh() {
 func getAuthCode() string {
 	authURL := authCodeURL +
 		"?client_id=" + authClientID +
-		"&scope=" + "files.readwrite files.readwrite.all offline_access" +
+		"&scope=" + url.PathEscape("files.readwrite.all offline_access") +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
 
@@ -96,7 +97,7 @@ func getAuthCode() string {
 	defer C.free(unsafe.Pointer(responseC))
 	response := C.GoString(responseC)
 
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-])+")
+	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_])+")
 	code := rexp.FindString(response)
 	if len(code) == 0 {
 		log.Fatal("No validation code returned, or code was invalid. " +
