@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -18,7 +20,7 @@ func TestCacheRoot(t *testing.T) {
 	}
 }
 
-func TestCacheChildrenUpdate(t *testing.T) {
+func TestRootChildrenUpdate(t *testing.T) {
 	cache := ItemCache{}
 	root, _ := cache.Get("/", auth)
 	_, err := root.GetChildren(auth)
@@ -28,6 +30,23 @@ func TestCacheChildrenUpdate(t *testing.T) {
 
 	if _, exists := root.Children["Documents"]; !exists {
 		t.Fatal("Could not find documents folder.")
+	}
+}
+
+func TestSubdirChildrenUpdate(t *testing.T) {
+	cache := ItemCache{}
+	documents, err := cache.Get("/Documents", auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	children, err := documents.GetChildren(auth)
+	if _, exists := children["Documents"]; exists {
+		log.Println("Documents directory found inside itself. " +
+			"Likely the cache did not traverse correctly.\n\nChildren:\n")
+		for key := range children {
+			fmt.Println(key)
+		}
+		t.FailNow()
 	}
 }
 
