@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -72,7 +73,11 @@ func (d DriveItem) String() string {
 
 // Path returns an item's full Path
 func (d DriveItem) Path() string {
-	return d.Parent.Path + "/" + d.Name
+	// special case when it's the root item
+	if d.Parent.Path == "" && d.Name == "root" {
+		return "/"
+	}
+	return filepath.Join(d.Parent.Path, d.Name)
 }
 
 // only used for parsing
@@ -87,15 +92,15 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 		return d.Children, nil
 	}
 
-	body, err := Get(ChildrenPath(d.Parent.Path+"/"+d.Name), auth)
-	var children driveChildren
+	body, err := Get(ChildrenPath(d.Path()), auth)
+	var fetched driveChildren
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(body, &children)
+	json.Unmarshal(body, &fetched)
 
 	d.Children = make(map[string]*DriveItem)
-	for _, child := range d.Children {
+	for _, child := range fetched.Children {
 		child.Parent.Item = d
 		d.Children[child.Name] = child
 	}

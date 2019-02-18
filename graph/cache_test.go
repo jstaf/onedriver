@@ -6,6 +6,31 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 )
 
+func TestCacheRoot(t *testing.T) {
+	cache := ItemCache{}
+	root, err := cache.Get("/", auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if root.Path() != "/" {
+		t.Fatal("Root path did not resolve correctly")
+	}
+}
+
+func TestCacheChildrenUpdate(t *testing.T) {
+	cache := ItemCache{}
+	root, _ := cache.Get("/", auth)
+	_, err := root.GetChildren(auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, exists := root.Children["Documents"]; !exists {
+		t.Fatal("Could not find documents folder.")
+	}
+}
+
 func TestSamePointer(t *testing.T) {
 	cache := ItemCache{}
 	item, _ := cache.Get("/Documents", auth)

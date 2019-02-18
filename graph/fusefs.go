@@ -3,6 +3,7 @@ package graph
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"path/filepath"
 
@@ -98,7 +99,8 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 		return nil, fuse.EREMOTEIO
 	}
 
-	for _, child := range children {
+	for basename, child := range children {
+		fmt.Println(basename)
 		entry := fuse.DirEntry{
 			Name: child.Name,
 			Mode: child.Mode(),

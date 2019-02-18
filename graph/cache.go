@@ -86,13 +86,15 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 	}
 	last := c.root
 
+	// from the root directory, traverse the chain of items till we reach our
+	// target key
 	split := filepath.SplitList(key)[1:] // omit leading "/"
 	for i := 0; i < len(split); i++ {
 		item, exists := last.Children[split[i]]
 		if !exists {
 			if auth.AccessToken == "" {
-				return last, errors.New("Auth was empty and \"/" +
-					last.Path() + "/" + split[i] +
+				return last, errors.New("Auth was empty and \"" +
+					filepath.Join(last.Path(), split[i]) +
 					"\" was not in cache. Could not fetch item as a result.")
 			}
 
@@ -101,7 +103,11 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 			if err != nil {
 				return last, err
 			}
-			last = children[split[i]]
+			last, exists = children[split[i]]
+			if !exists {
+				// this time, we know the key *really* doesn't exist
+				return nil, errors.New(filepath.Join(last.Path(), split[i]) + " does not exist.")
+			}
 		} else {
 			last = item
 		}
