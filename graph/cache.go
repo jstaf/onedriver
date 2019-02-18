@@ -5,72 +5,11 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-// Cache is a generic cache interface intended to be overridden
-type Cache interface {
-	Delete(string)                         // wipes a cache item
-	Get(string, Auth) (interface{}, error) // returns the item or an error
-}
-
-type expiringRequest struct {
-	Response []byte
-	Time     int64
-}
-
-// RequestCache is a map of past responses that we can check against.
-// Keys of stored values must be a valid URI.
-type RequestCache struct {
-	Cache
-	interval int64 // items in the cache expire after this interval
-	cache    map[string]expiringRequest
-}
-
-// NewRequestCache produces a new request cache
-func NewRequestCache() *RequestCache {
-	return &RequestCache{
-		interval: 30,
-		cache:    make(map[string]expiringRequest),
-	}
-}
-
-// Delete a request from the cache
-func (c *RequestCache) Delete(key string) {
-	delete(c.cache, key)
-}
-
-// Get performs a HTTP get request - if it's been performed in the last 10s it
-// will just use the last response. Used to avoid swamping the API with useless
-// requests and adding tons of latency.
-func (c *RequestCache) Get(key string, auth Auth) ([]byte, error) {
-	last, exists := c.cache[key]
-	if exists && time.Now().Unix()-last.Time < c.interval {
-		// we have a response that's less than 30 seconds old that's cached!
-		return last.Response, nil
-	}
-
-	// no recent requestCache, fetch
-	// note: not recursive, calls a standard Get to the Graph endpoint
-	body, err := Get(key, auth)
-	if err != nil {
-		if exists {
-			// send the out-of-date requestCache back, it's all we got
-			return last.Response, nil
-		}
-		return nil, err
-	}
-	c.cache[key] = expiringRequest{
-		Response: body,
-		Time:     time.Now().Unix(),
-	}
-	return body, nil
-}
 
 // ItemCache caches DriveItems for a filesystem. This cache never expires so
 // that local changes can persist.
 type ItemCache struct {
-	Cache
 	root *DriveItem // will be a nil pointer on start, lazily initialized
 }
 

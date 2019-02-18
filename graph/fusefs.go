@@ -36,8 +36,7 @@ func ignore(path string) bool {
 type FuseFs struct {
 	pathfs.FileSystem
 	Auth
-	items    *ItemCache    // all DriveItems (read: files/folders) are cached
-	reqCache *RequestCache // some requests are cached
+	items *ItemCache // all DriveItems (read: files/folders) are cached
 }
 
 // NewFS initializes a new Graph Filesystem to be used by go-fuse
@@ -46,7 +45,6 @@ func NewFS() *FuseFs {
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       Authenticate(),
 		items:      &ItemCache{}, // lazily initialized on first use
-		reqCache:   NewRequestCache(),
 	}
 }
 
@@ -120,9 +118,15 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	name = "/" + name
 	log.Printf("Mkdir(\"%s\")\n", name)
 
+	_, code := fs.Create(name, 0, mode, context)
+	if code != fuse.OK {
+		return code
+	}
+
 	bytePayload, _ := json.Marshal(newFolderPost{Name: filepath.Base(name)})
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
+		fs.items.Delete(name) // delete the local copy we just created
 		log.Println("Error during directory creation", err)
 		log.Println(string(resp))
 		return fuse.EREMOTEIO
