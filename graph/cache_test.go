@@ -8,7 +8,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 )
 
-func TestCacheRoot(t *testing.T) {
+func TestRootGet(t *testing.T) {
 	cache := ItemCache{}
 	root, err := cache.Get("/", auth)
 	if err != nil {
@@ -33,12 +33,25 @@ func TestRootChildrenUpdate(t *testing.T) {
 	}
 }
 
+func TestSubdirGet(t *testing.T) {
+	cache := ItemCache{}
+	documents, err := cache.Get("/Documents", auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if documents.Name != "Documents" {
+		t.Fatalf("Failed to fetch \"/Documents\". Got \"%s\" instead!\n", documents.Name)
+	}
+}
+
 func TestSubdirChildrenUpdate(t *testing.T) {
 	cache := ItemCache{}
 	documents, err := cache.Get("/Documents", auth)
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(documents.Path())
+
 	children, err := documents.GetChildren(auth)
 	if _, exists := children["Documents"]; exists {
 		log.Println("Documents directory found inside itself. " +
