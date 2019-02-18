@@ -7,9 +7,9 @@ import (
 )
 
 func TestSamePointer(t *testing.T) {
-	cache := NewItemCache()
-	item, _ := cache.Get("/", auth)
-	item2, _ := cache.Get("/", auth)
+	cache := ItemCache{}
+	item, _ := cache.Get("/Documents", auth)
+	item2, _ := cache.Get("/Documents", auth)
 	if item != item2 {
 		t.Fatalf("Pointers to cached items do not match: %p != %p\n", item, item2)
 	}
@@ -19,7 +19,7 @@ func TestSamePointer(t *testing.T) {
 }
 
 func TestCacheWriteAppend(t *testing.T) {
-	cache := NewItemCache()
+	cache := ItemCache{}
 	text := "test"
 
 	item, err := cache.Get("/Documents/README.md", auth)

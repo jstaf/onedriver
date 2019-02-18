@@ -36,23 +36,3 @@ func TestGetItem(t *testing.T) {
 		t.Fatal("We didn't return an error for a non-existent item!")
 	}
 }
-
-func TestGetChildren(t *testing.T) {
-	reqCache := NewRequestCache()
-	items, err := GetChildren("/", auth, reqCache)
-	var success bool
-	for _, item := range items {
-		if item.Name == "Documents" {
-			success = true
-			break
-		}
-	}
-	if !success {
-		t.Fatal("Could not find the '/Documents' folder as a child of '/'!")
-	}
-
-	items, err = GetChildren("/lkdsjflkdjsfl", auth, reqCache)
-	if err == nil {
-		t.Fatal("GetChildren() for a non-existent directory did not throw an error")
-	}
-}

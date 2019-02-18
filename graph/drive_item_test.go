@@ -31,3 +31,22 @@ func TestIsDir(t *testing.T) {
 		t.Fatal("Intro to Onedrive.pdf not detected as a file")
 	}
 }
+
+func TestGetChildren(t *testing.T) {
+	root, _ := GetItem("/", auth)
+	items, err := root.GetChildren(auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var success bool
+	for _, item := range items {
+		if item.Name == "Documents" {
+			success = true
+			break
+		}
+	}
+	if !success {
+		t.Fatal("Could not find the '/Documents' folder as a child of '/'!")
+	}
+}
