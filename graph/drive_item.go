@@ -41,7 +41,7 @@ type DriveItem struct {
 
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
-	empty := make([]byte, 0)
+	var empty []byte
 	var size uint64
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
@@ -148,6 +148,12 @@ func (d *DriveItem) Mode() uint32 {
 // MTime returns the Unix timestamp of last modification
 func (d DriveItem) MTime() uint64 {
 	return uint64(d.ModifyTime.Unix())
+}
+
+// Utimens sets the access/modify times of a file
+func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
+	d.ModifyTime = *mtime
+	return fuse.OK
 }
 
 // NLink gives the number of hard links to an inode (or child count if a
