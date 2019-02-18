@@ -1,6 +1,9 @@
 package graph
 
 import (
+	"errors"
+	"log"
+	"path/filepath"
 	"time"
 )
 
@@ -63,38 +66,66 @@ func (c *RequestCache) Get(key string, auth Auth) ([]byte, error) {
 	return body, nil
 }
 
-// ItemCache caches DriveItems for a filesystem
+// ItemCache caches DriveItems for a filesystem. This cache never expires so
+// that local changes can persist.
 type ItemCache struct {
 	Cache
-	cache map[string]*DriveItem // must be pointers or writes are not honored
+	root *DriveItem // will be a nil pointer on start, lazily initialized
 }
 
-// NewItemCache initializes an returns a pointer to a new ItemCache
-func NewItemCache() *ItemCache {
-	return &ItemCache{cache: make(map[string]*DriveItem)}
+// Get fetches a given DriveItem in the cache, if any items along the way are
+// not found, they are fetched.
+func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
+	// lazily initialize root of filesystem
+	if c.root == nil {
+		root, err := GetItem("/", auth)
+		if err != nil {
+			log.Fatal("Could not fetch root item of filesystem!:", err)
+		}
+		c.root = root
+	}
+	last := c.root
+
+	split := filepath.SplitList(key)[1:] // omit leading "/"
+	for i := 0; i < len(split); i++ {
+		item, exists := last.Children[split[i]]
+		if !exists {
+			if auth.AccessToken == "" {
+				return last, errors.New("Auth was empty and \"/" +
+					last.Path() + "/" + split[i] +
+					"\" was not in cache. Could not fetch item as a result.")
+			}
+
+			// we have an auth token and can try to fetch an item's children
+			children, err := item.GetChildren(auth)
+			if err != nil {
+				return last, err
+			}
+			last = children[split[i]]
+		} else {
+			last = item
+		}
+	}
+	return last, nil
 }
 
 // Delete an item from the cache
 func (c *ItemCache) Delete(key string) {
-	delete(c.cache, key)
-}
-
-// Get fetches an item from the cache. This cache never expires (so local
-// changes can persist).
-func (c *ItemCache) Get(resource string, auth Auth) (*DriveItem, error) {
-	last, exists := c.cache[resource]
-	if exists {
-		return last, nil
+	// Uses empty auth, since we actually don't want to waste time fetchin items
+	// that are only being fetched so they can be deleted.
+	parent, err := c.Get(filepath.Dir(key), Auth{})
+	if err != nil {
+		delete(parent.Children, filepath.Base(key))
 	}
-	item, err := GetItem(resource, auth)
-	if err == nil {
-		c.cache[resource] = item
-	}
-	return item, err
 }
 
 // Insert lets us manually insert an item to the cache (like if it was created
 // locally). Overwrites a cached item if present.
-func (c *ItemCache) Insert(resource string, item *DriveItem) {
-	c.cache[resource] = item
+func (c *ItemCache) Insert(resource string, auth Auth, item *DriveItem) error {
+	parent, err := c.Get(filepath.Dir(resource), auth)
+	if err != nil {
+		return err
+	}
+	parent.Children[filepath.Base(resource)] = item
+	return nil
 }

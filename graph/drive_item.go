@@ -29,7 +29,7 @@ type DriveItem struct {
 	ModifyTime time.Time       `json:"lastModifiedDatetime"`
 	mode       uint32          // do not set manually
 	Parent     DriveItemParent `json:"parentReference"`
-	Children   []*DriveItem
+	Children   map[string]*DriveItem
 	Folder     struct {
 		ChildCount uint32 `json:"childCount"`
 	} `json:"folder,omitempty"`
@@ -45,7 +45,6 @@ type DriveItem struct {
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
-	var children []*DriveItem
 	var size uint64
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
@@ -55,7 +54,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 			Path: parent.Parent.Path + "/" + parent.Name,
 			Item: parent,
 		},
-		Children:   children,
+		Children:   make(map[string]*DriveItem),
 		Data:       &empty,
 		Size:       &size,
 		ModifyTime: time.Now(),
@@ -71,30 +70,37 @@ func (d DriveItem) String() string {
 	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
 }
 
+// Path returns an item's full Path
+func (d DriveItem) Path() string {
+	return d.Parent.Path + "/" + d.Name
+}
+
 // only used for parsing
 type driveChildren struct {
 	Children []*DriveItem `json:"value"`
 }
 
-// GetChildren fetches all DriveItems that are children of resource at path
-func (d *DriveItem) GetChildren(path string, auth Auth) ([]*DriveItem, error) {
-	if !d.IsDir() || len(d.Children) > 0 {
+// GetChildren fetches all DriveItems that are children of resource at path.
+// Also initializes the children field.
+func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
+	if !d.IsDir() || d.Children != nil {
 		return d.Children, nil
 	}
 
-	body, err := Get(ChildrenPath(path), auth)
+	body, err := Get(ChildrenPath(d.Parent.Path+"/"+d.Name), auth)
 	var children driveChildren
 	if err != nil {
-		return children.Children, err
+		return nil, err
 	}
 	json.Unmarshal(body, &children)
-	d.Children = children.Children
 
+	d.Children = make(map[string]*DriveItem)
 	for _, child := range d.Children {
 		child.Parent.Item = d
+		d.Children[child.Name] = child
 	}
 
-	return children.Children, nil
+	return d.Children, nil
 }
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"regexp"
+	"path/filepath"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -32,30 +32,6 @@ func ignore(path string) bool {
 	return false
 }
 
-// find where a file's basename + dirname split
-func pathSplit(path string) int {
-	if path[len(path)-1] == '/' {
-		// remove trailing slash (if one exists) for easier regex
-		path = path[:len(path)-1]
-	}
-
-	//TODO this is really lazy and doesn't account for a nonalphanumeric
-	// character in a filename. It should accept anything that isn't an explicit
-	// '/' (and ignore escaped '\/'es)
-	re := regexp.MustCompile(`\w+$`)
-	return re.FindStringIndex(path)[0]
-}
-
-// equivalent to the bash basename cmd
-func basename(path string) string {
-	return path[pathSplit(path):]
-}
-
-// equivalent to the bash dirname cmd
-func dirname(path string) string {
-	return path[:pathSplit(path)]
-}
-
 // FuseFs is a memory-backed filesystem for Microsoft Graph
 type FuseFs struct {
 	pathfs.FileSystem
@@ -69,7 +45,7 @@ func NewFS() *FuseFs {
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       Authenticate(),
-		items:      NewItemCache(),
+		items:      &ItemCache{}, // lazily initialized on first use
 		reqCache:   NewRequestCache(),
 	}
 }
@@ -114,7 +90,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 		return nil, fuse.EREMOTEIO
 	}
 
-	children, err := parent.GetChildren(name, fs.Auth)
+	children, err := parent.GetChildren(fs.Auth)
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection
@@ -144,8 +120,8 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	name = "/" + name
 	log.Printf("Mkdir(\"%s\")\n", name)
 
-	bytePayload, _ := json.Marshal(newFolderPost{Name: basename(name)})
-	resp, err := Post(ChildrenPath(dirname(name)), fs.Auth, bytes.NewReader(bytePayload))
+	bytePayload, _ := json.Marshal(newFolderPost{Name: filepath.Base(name)})
+	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
 		log.Println("Error during directory creation", err)
 		log.Println(string(resp))
@@ -163,7 +139,6 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 		log.Println("Error during delete:", err)
 		return fuse.EREMOTEIO
 	}
-	fs.reqCache.Delete(ChildrenPath(dirname(name)))
 	fs.items.Delete(name)
 	return fuse.OK
 }
@@ -198,14 +173,13 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	log.Printf("Create(\"%s\")\n", name)
 
 	// fetch details about the new item's parent (need the ID from the remote)
-	parentPath := dirname(name)
-	parent, err := fs.items.Get(parentPath, fs.Auth)
+	parent, err := fs.items.Get(filepath.Dir(name), fs.Auth)
 	if err != nil {
 		log.Println("Error while fetching parent:", err)
 		return nil, fuse.EREMOTEIO
 	}
 
-	item := NewDriveItem(basename(name), mode, parent)
-	fs.items.Insert(name, item)
+	item := NewDriveItem(filepath.Base(name), mode, parent)
+	fs.items.Insert(name, fs.Auth, item)
 	return item, fuse.OK
 }
