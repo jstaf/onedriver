@@ -31,8 +31,10 @@ type DriveItem struct {
 		ChildCount uint32 `json:"childCount"`
 	} `json:"folder,omitempty"`
 	FileAPI struct { // renamed to avoid conflict with nodefs.File interface
-		Hashes struct {
-			Sha1Hash string `json:"sha1Hash"`
+		MimeType string `json:"mimeType"`
+		Hashes   struct {
+			Sha1Hash     string `json:"sha1Hash"`
+			QuickXorHash string `json:"quickXorHash"`
 		} `json:"hashes"`
 	} `json:"file,omitempty"`
 }
@@ -134,7 +136,7 @@ func (d DriveItem) IsDir() bool {
 // underlying mode field.
 func (d *DriveItem) Mode() uint32 {
 	if d.mode == 0 { // only 0 if fetched from Graph API
-		if d.FileAPI.Hashes.Sha1Hash == "" { // blank if a folder
+		if d.FileAPI.MimeType == "" { // blank if a folder
 			d.mode = fuse.S_IFDIR | 0755
 		} else {
 			d.mode = fuse.S_IFREG | 0644
