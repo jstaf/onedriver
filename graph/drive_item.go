@@ -160,6 +160,7 @@ func (d DriveItem) Flush() fuse.Status {
 // GetAttr returns a the DriveItem as a UNIX stat
 func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 	out.Size = d.FakeSize()
+	out.Nlink = d.NLink()
 	out.Atime = d.MTime()
 	out.Mtime = d.MTime()
 	out.Ctime = d.MTime()
@@ -205,7 +206,14 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 // directory)
 func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
-		return d.Folder.ChildCount
+		// technically 2 + number of subdirectories
+		var nSubdir uint32
+		for _, v := range d.Children {
+			if v.IsDir() {
+				nSubdir++
+			}
+		}
+		return 2 + nSubdir
 	}
 	return 1
 }
