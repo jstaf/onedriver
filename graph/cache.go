@@ -57,10 +57,10 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 
 // Delete an item from the cache
 func (c *ItemCache) Delete(key string) {
-	// Uses empty auth, since we actually don't want to waste time fetchin items
-	// that are only being fetched so they can be deleted.
+	// Uses empty auth, since we actually don't want to waste time fetching
+	// items that are only being fetched so they can be deleted.
 	parent, err := c.Get(filepath.Dir(key), Auth{})
-	if err != nil {
+	if err == nil {
 		delete(parent.Children, filepath.Base(key))
 	}
 }
