@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"path/filepath"
+	"strings"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -32,14 +33,22 @@ func ignore(path string) bool {
 	return false
 }
 
+func leadingSlash(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
 // FuseFs is a memory-backed filesystem for Microsoft Graph
 type FuseFs struct {
 	pathfs.FileSystem
 	Auth
-	items *ItemCache // all DriveItems (read: files/folders) are cached
+	items *ItemCache
 }
 
-// NewFS initializes a new Graph Filesystem to be used by go-fuse
+// NewFS initializes a new Graph Filesystem to be used by go-fuse.
+// Each method is executed concurrently as a goroutine.
 func NewFS() *FuseFs {
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
@@ -50,20 +59,21 @@ func NewFS() *FuseFs {
 
 // GetAttr returns a stat structure for the specified file
 func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
-	name = "/" + name
+	name = leadingSlash(name)
 	if ignore(name) {
 		return nil, fuse.ENOENT
 	}
 	log.Printf("GetAttr(\"%s\")\n", name)
+
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
 		// this is where non-existent files are caught - called before any other
 		// method when accessing a file
-		log.Println(err)
 		return nil, fuse.ENOENT
 	}
 	attr := fuse.Attr{}
 	status := item.GetAttr(&attr)
+
 	return &attr, status
 }
 
@@ -79,7 +89,7 @@ func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code f
 
 // OpenDir returns a list of directory entries
 func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
-	name = "/" + name
+	name = leadingSlash(name)
 	log.Printf("OpenDir(\"%s\")\n", name)
 
 	parent, err := fs.items.Get(name, fs.Auth)
@@ -92,7 +102,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection
-		log.Println("Error during OpenDir()", err)
+		log.Printf("Error during OpenDir(\"%s\"): %s\n", name, err)
 		return nil, fuse.EREMOTEIO
 	}
 
@@ -115,13 +125,8 @@ type newFolderPost struct {
 // Mkdir creates a directory, mode is ignored
 //TODO fix "File exists" case when folder is created, deleted, then created again
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
-	name = "/" + name
+	name = leadingSlash(name)
 	log.Printf("Mkdir(\"%s\")\n", name)
-
-	_, code := fs.Create(name, 0, mode, context)
-	if code != fuse.OK {
-		return code
-	}
 
 	bytePayload, _ := json.Marshal(newFolderPost{Name: filepath.Base(name)})
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
@@ -131,26 +136,36 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 		log.Println(string(resp))
 		return fuse.EREMOTEIO
 	}
+
+	_, code := fs.Create(name, 0, mode|fuse.S_IFDIR, context)
+	if code != fuse.OK {
+		return code
+	}
+
 	return fuse.OK
 }
 
 // Rmdir removes a directory
 func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
-	name = "/" + name
+	name = leadingSlash(name)
 	log.Printf("Rmdir(\"%s\")\n", name)
+
 	err := Delete(ResourcePath(name), fs.Auth)
 	if err != nil {
 		log.Println("Error during delete:", err)
 		return fuse.EREMOTEIO
 	}
+
 	fs.items.Delete(name)
+
 	return fuse.OK
 }
 
 // Open populates a DriveItem's Data field with actual data
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	name = "/" + name
+	name = leadingSlash(name)
 	log.Printf("Open(\"%s\")\n", name)
+
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
 		// We know the file exists, GetAttr() has already been called
@@ -173,7 +188,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 
 // Create a new local file. The server doesn't have this yet.
 func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	name = "/" + name
+	name = leadingSlash(name)
 	log.Printf("Create(\"%s\")\n", name)
 
 	// fetch details about the new item's parent (need the ID from the remote)
@@ -185,5 +200,6 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 
 	item := NewDriveItem(filepath.Base(name), mode, parent)
 	fs.items.Insert(name, fs.Auth, item)
+
 	return item, fuse.OK
 }
