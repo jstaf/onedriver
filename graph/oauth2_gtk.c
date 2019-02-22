@@ -58,9 +58,9 @@ char *webkit_auth_window(char *auth_url) {
   // unfortunately on windows or mac... CLI only
   printf("Please visit the following url:\n%s\n\n", auth_url);
 
-  char *auth_redirect_value = malloc(128);
+  char *auth_redirect_value = malloc(2048);
   printf("Please enter the redirect URL:\n");
-  fgets(auth_redirect_value, 128, stdin);
+  fgets(auth_redirect_value, 2048, stdin);
 #endif
 
   return auth_redirect_value;
