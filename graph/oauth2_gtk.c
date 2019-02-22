@@ -32,9 +32,13 @@ static gboolean close_web_view_cb(WebKitWebView *web_view, GtkWidget *window) {
 char *webkit_auth_window(char *auth_url) {
 #if defined(__linux__)
   // linux - hooray, we can auth via an embedded browser!
+  printf("Performing initial authentication to Microsoft Graph (OneDrive API). "
+         "The authentication window can be closed once you are redirected "
+         "to a blank page (after \"Let this app access your info?\").\n");
+
   gtk_init(NULL, NULL);
   GtkWidget *auth_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_default_size(GTK_WINDOW(auth_window), 400, 600);
+  gtk_window_set_default_size(GTK_WINDOW(auth_window), 450, 600);
   g_signal_connect(auth_window, "destroy", G_CALLBACK(destroy_window_cb), NULL);
 
   // create browser and add to gtk window
@@ -59,7 +63,8 @@ char *webkit_auth_window(char *auth_url) {
   printf("Please visit the following url:\n%s\n\n", auth_url);
 
   char *auth_redirect_value = malloc(2048);
-  printf("Please enter the redirect URL:\n");
+  printf("Please enter the redirect URL once you are redirected to a blank page "
+         "(after \"Let this app access your info?\"):\n");
   fgets(auth_redirect_value, 2048, stdin);
 #endif
 

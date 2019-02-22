@@ -83,7 +83,8 @@ func main() {
 	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
 	if err != nil {
-		log.Fatalf("Mount failed. Is the mountpoint already in use?\n%v", err)
+		log.Fatalf("Mount failed. Is the mountpoint already in use? "+
+			"(Try running \"fusermount -u %s\")\n%v", flag.Arg(0), err)
 	}
 	server.SetDebug(*debugOn)
 
