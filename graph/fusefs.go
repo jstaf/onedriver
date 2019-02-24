@@ -203,3 +203,15 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 
 	return item, fuse.OK
 }
+
+// Unlink deletes a file
+func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) {
+	name = leadingSlash(name)
+	log.Printf("Unlink(\"%s\")\n", name)
+
+	//TODO currently local only until uploads are implemented
+
+	fs.items.Delete(name)
+
+	return fuse.OK
+}

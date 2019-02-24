@@ -172,6 +172,19 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 	return fuse.OK
 }
 
+// Utimens sets the access/modify times of a file
+func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
+	d.ModifyTime = *mtime
+	return fuse.OK
+}
+
+// Truncate cuts a file in place
+func (d *DriveItem) Truncate(size uint64) fuse.Status {
+	*d.Data = (*d.Data)[:size]
+	*d.Size = size
+	return fuse.OK
+}
+
 // IsDir returns if it is a directory (true) or file (false).
 func (d DriveItem) IsDir() bool {
 	// following statement returns 0 if the dir bit is not set
@@ -194,12 +207,6 @@ func (d *DriveItem) Mode() uint32 {
 // MTime returns the Unix timestamp of last modification
 func (d DriveItem) MTime() uint64 {
 	return uint64(d.ModifyTime.Unix())
-}
-
-// Utimens sets the access/modify times of a file
-func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	d.ModifyTime = *mtime
-	return fuse.OK
 }
 
 // NLink gives the number of hard links to an inode (or child count if a
