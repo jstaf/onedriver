@@ -88,8 +88,8 @@ func TestCacheWriteAppend(t *testing.T) {
 		t.Fatal("Failed to fetch item content:", err)
 	}
 
-	startLen := *item.Size
-	endLen := *item.Size + uint64(len(text))
+	startLen := item.Size
+	endLen := item.Size + uint64(len(text))
 	writeLen, status := item.Write([]byte(text), int64(startLen))
 	if status != fuse.OK {
 		t.Fatal("Error during write:", status)
@@ -98,7 +98,7 @@ func TestCacheWriteAppend(t *testing.T) {
 		t.Fatalf("Write length did not match expected value: %d != %d\n",
 			writeLen, len(text))
 	}
-	if *item.Size != endLen {
+	if item.Size != endLen {
 		t.Fatalf("Size was not updated to proper length during write: %d != %d\n",
 			item.Size, endLen)
 	}
@@ -108,7 +108,7 @@ func TestCacheWriteAppend(t *testing.T) {
 		t.Fatal("Failed to fetch item:", err)
 	}
 
-	if *readItem.Size != endLen {
+	if readItem.Size != endLen {
 		t.Fatalf("Size does not reflect updated file, "+
 			"did the catch fetch an old copy of the item?: %d != %d\n",
 			item.Size, endLen)
