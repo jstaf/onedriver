@@ -22,6 +22,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 		if err != nil {
 			log.Fatal("Could not fetch root item of filesystem!:", err)
 		}
+		root.auth = &auth
 		c.root = root
 	}
 	last := c.root

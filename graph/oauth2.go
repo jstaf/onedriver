@@ -57,8 +57,8 @@ func (a *Auth) Refresh() {
 		oldTime := a.ExpiresAt
 
 		postData := strings.NewReader("client_id=" + authClientID +
-			"&redirect_uri= " + authRedirectURL +
-			"&refresh_token= " + a.RefreshToken +
+			"&redirect_uri=" + authRedirectURL +
+			"&refresh_token=" + a.RefreshToken +
 			"&grant_type=refresh_token")
 		resp, err := http.Post(authTokenURL,
 			"application/x-www-form-urlencoded",

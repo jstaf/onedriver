@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,10 +21,12 @@ type DriveItemParent struct {
 	Item *DriveItem
 }
 
-// DriveItem represents a file or folder fetched from the Graph API
+// DriveItem represents a file or folder fetched from the Graph API.
 type DriveItem struct {
 	nodefs.File
+	auth       *Auth           // only populated for root item
 	Data       *[]byte         // empty by default
+	hasChanges bool            // used to trigger an upload on flush
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	Size       *uint64         `json:"size"` // must be a pointer or cannot be modified during write
@@ -36,10 +39,6 @@ type DriveItem struct {
 	} `json:"folder,omitempty"`
 	FileAPI struct { // renamed to avoid conflict with nodefs.File interface
 		MimeType string `json:"mimeType"`
-		Hashes   struct {
-			Sha1Hash     string `json:"sha1Hash"`
-			QuickXorHash string `json:"quickXorHash"`
-		} `json:"hashes"`
 	} `json:"file,omitempty"`
 }
 
@@ -133,7 +132,7 @@ func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.S
 
 // Write to a DriveItem like a file. Note that changes are 100% local until
 // Flush() is called.
-func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
+func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
 	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)
@@ -147,14 +146,46 @@ func (d DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	}
 	// probably a better way to do this, but whatever
 	*d.Size = uint64(len(*d.Data))
+	d.hasChanges = true
 
 	return uint32(nWrite), fuse.OK
+}
+
+func (d DriveItem) getRoot() *DriveItem {
+	parent := d.Parent.Item
+	for parent.Parent.Path != "" {
+		parent = parent.Parent.Item
+	}
+	return parent
 }
 
 // Flush is called when a file descriptor is closed, and is responsible for upload
 func (d DriveItem) Flush() fuse.Status {
 	log.Printf("Flush(\"%s\")\n", d.Name)
+	if d.hasChanges {
+		log.Println("Triggering upload of:", d.Name)
+		auth := *d.getRoot().auth
+		go d.Upload(auth)
+	}
 	return fuse.OK
+}
+
+// Upload copies the file's contents to the server
+func (d *DriveItem) Upload(auth Auth) error {
+	// TODO implement upload sessions for files over 4MB
+	var uploadPath string
+	if d.ID == "" { // ID will be empty for a file that's local only
+		uploadPath = fmt.Sprintf("/me/drive/items/%s:/%s:/content",
+			d.Parent.ID, d.Name)
+	} else {
+		uploadPath = "/me/drive/items/" + d.ID + "/content"
+	}
+	resp, err := Put(uploadPath, auth, bytes.NewReader(*d.Data))
+	if err != nil {
+		return err
+	}
+	// Unmarshal into existing item so we don't have to redownload file contents.
+	return json.Unmarshal(resp, d)
 }
 
 // GetAttr returns a the DriveItem as a UNIX stat
@@ -182,6 +213,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
 	*d.Data = (*d.Data)[:size]
 	*d.Size = size
+	d.hasChanges = true
 	return fuse.OK
 }
 

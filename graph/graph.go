@@ -26,8 +26,11 @@ func Request(resource string, auth Auth, method string, content io.Reader) ([]by
 	client := &http.Client{}
 	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
-	if method == "POST" {
+	switch method { // request type-specific code here
+	case "POST":
 		request.Header.Add("Content-Type", "application/json")
+	case "PUT":
+		request.Header.Add("Content-Type", "text/plain")
 	}
 
 	response, err := client.Do(request)
@@ -54,6 +57,11 @@ func Get(resource string, auth Auth) ([]byte, error) {
 // Post is a convenience wrapper around Request
 func Post(resource string, auth Auth, content io.Reader) ([]byte, error) {
 	return Request(resource, auth, "POST", content)
+}
+
+// Put is a convenience wrapper around Request
+func Put(resource string, auth Auth, content io.Reader) ([]byte, error) {
+	return Request(resource, auth, "PUT", content)
 }
 
 // Delete performs an HTTP delete

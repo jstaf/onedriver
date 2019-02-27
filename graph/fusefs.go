@@ -123,7 +123,6 @@ type newFolderPost struct {
 }
 
 // Mkdir creates a directory, mode is ignored
-//TODO fix "File exists" case when folder is created, deleted, then created again
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
 	log.Printf("Mkdir(\"%s\")\n", name)
@@ -209,7 +208,14 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 	name = leadingSlash(name)
 	log.Printf("Unlink(\"%s\")\n", name)
 
-	//TODO currently local only until uploads are implemented
+	item, _ := fs.items.Get(name, fs.Auth)
+	if item.ID != "" {
+		err := Delete(ResourcePath(name), fs.Auth)
+		if err != nil {
+			log.Println("Error during unlink:", err)
+			return fuse.EREMOTEIO
+		}
+	}
 
 	fs.items.Delete(name)
 
