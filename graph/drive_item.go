@@ -29,7 +29,7 @@ type DriveItem struct {
 	hasChanges bool            // used to trigger an upload on flush
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
-	Size       *uint64         `json:"size"` // must be a pointer or cannot be modified during write
+	Size       uint64          `json:"size"`
 	ModifyTime time.Time       `json:"lastModifiedDatetime"`
 	mode       uint32          // do not set manually
 	Parent     DriveItemParent `json:"parentReference"`
@@ -45,7 +45,6 @@ type DriveItem struct {
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
-	var size uint64
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
 		Name: name,
@@ -56,14 +55,13 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		},
 		Children:   make(map[string]*DriveItem),
 		Data:       &empty,
-		Size:       &size,
 		ModifyTime: time.Now(),
 		mode:       mode,
 	}
 }
 
 func (d DriveItem) String() string {
-	l := *d.Size
+	l := d.Size
 	if l > 10 {
 		l = 10
 	}
@@ -137,7 +135,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	offset := int(off)
 	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)
 
-	if offset+nWrite > int(*d.Size)-1 {
+	if offset+nWrite > int(d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
 		*d.Data = append((*d.Data)[:offset], data...)
 	} else {
@@ -145,7 +143,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 		copy((*d.Data)[offset:], data)
 	}
 	// probably a better way to do this, but whatever
-	*d.Size = uint64(len(*d.Data))
+	d.Size = uint64(len(*d.Data))
 	d.hasChanges = true
 
 	return uint32(nWrite), fuse.OK
@@ -212,7 +210,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
 	*d.Data = (*d.Data)[:size]
-	*d.Size = size
+	d.Size = size
 	d.hasChanges = true
 	return fuse.OK
 }
@@ -263,5 +261,5 @@ func (d DriveItem) FakeSize() uint64 {
 	if d.IsDir() {
 		return 4096
 	}
-	return *d.Size
+	return d.Size
 }
