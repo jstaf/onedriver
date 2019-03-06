@@ -17,7 +17,7 @@ import (
 // DriveItem's ID and its path)
 type DriveItemParent struct {
 	ID   string `json:"id"`
-	Path string `json:"path"`
+	Path string `json:"path,omitempty"`
 	Item *DriveItem
 }
 
@@ -66,6 +66,15 @@ func (d DriveItem) String() string {
 		l = 10
 	}
 	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
+}
+
+// Set an item's parent
+func (d *DriveItem) setParent(newParent *DriveItem) {
+	d.Parent = DriveItemParent{
+		ID:   newParent.ID,
+		Path: newParent.Path(),
+		Item: newParent,
+	}
 }
 
 // Path returns an item's full Path

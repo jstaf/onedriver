@@ -77,6 +77,46 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	return &attr, status
 }
 
+//TODO maybe remove this in favor of an actual driveitem with most of the fields
+// removed to save on extra code
+type renamePatch struct {
+	Parent DriveItemParent `json:"parentReference,omitempty"`
+	Name   string          `json:"name,omitempty"`
+}
+
+// Rename is used by mv operations (move, rename)
+func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
+	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
+	log.Printf("Rename(\"%s\",\"%s\")\n", oldName, newName)
+
+	// rename remote copy
+	patchContent := renamePatch{}
+	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
+		// we are moving the item
+		newParent, err := fs.items.Get(newDir, fs.Auth)
+		if err != nil {
+			log.Printf("Failed to fetch \"%s\": %s\n", newDir, err)
+			return fuse.EREMOTEIO
+		}
+		patchContent.Parent.ID = newParent.ID
+	}
+	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
+		patchContent.Name = newBase
+	}
+
+	item, _ := fs.items.Get(oldName, fs.Auth)
+	jsonPatch, _ := json.Marshal(patchContent)
+	// don't actually care about the response content
+	_, err := Patch("/me/drive/items/"+item.ID, fs.Auth, bytes.NewReader(jsonPatch))
+	if err != nil {
+		log.Println(err)
+		return fuse.EREMOTEIO
+	}
+	fs.items.Move(oldName, newName, fs.Auth)
+
+	return fuse.OK
+}
+
 // Chown currently does nothing - it is not a valid option, since fuse is single-user anyways
 func (fs *FuseFs) Chown(name string, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
 	return fuse.EPERM

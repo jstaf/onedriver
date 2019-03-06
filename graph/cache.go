@@ -73,6 +73,21 @@ func (c *ItemCache) Insert(resource string, auth Auth, item *DriveItem) error {
 	if err != nil {
 		return err
 	}
+	item.setParent(parent)
 	parent.Children[filepath.Base(resource)] = item
+	return nil
+}
+
+// Move an item to a new position
+func (c *ItemCache) Move(oldPath string, newPath string, auth Auth) error {
+	item, err := c.Get(oldPath, auth)
+	if err != nil {
+		return err
+	}
+	// insert first, so data is not lost in the event the insert fails
+	if err = c.Insert(newPath, auth, item); err != nil {
+		return err
+	}
+	c.Delete(oldPath)
 	return nil
 }

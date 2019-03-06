@@ -27,7 +27,7 @@ func Request(resource string, auth Auth, method string, content io.Reader) ([]by
 	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
-	case "POST":
+	case "POST", "PATCH":
 		request.Header.Add("Content-Type", "application/json")
 	case "PUT":
 		request.Header.Add("Content-Type", "text/plain")
@@ -52,6 +52,11 @@ func Request(resource string, auth Auth, method string, content io.Reader) ([]by
 // Get is a convenience wrapper around Request
 func Get(resource string, auth Auth) ([]byte, error) {
 	return Request(resource, auth, "GET", nil)
+}
+
+// Patch is a convenience wrapper around Request
+func Patch(resource string, auth Auth, content io.Reader) ([]byte, error) {
+	return Request(resource, auth, "PATCH", content)
 }
 
 // Post is a convenience wrapper around Request
