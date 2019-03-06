@@ -89,7 +89,8 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
 	log.Printf("Rename(\"%s\", \"%s\")\n", oldName, newName)
 
-	// rename remote copy
+	item, _ := fs.items.Get(oldName, fs.Auth)
+
 	patchContent := renamePatch{}
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
 		// we are moving the item
@@ -100,11 +101,13 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		}
 		patchContent.Parent = &DriveItemParent{ID: newParent.ID}
 	}
+
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
+		// we are renaming the item
 		patchContent.Name = newBase
+		item.Name = newBase
 	}
 
-	item, _ := fs.items.Get(oldName, fs.Auth)
 	jsonPatch, _ := json.Marshal(patchContent)
 	// don't actually care about the response content
 	_, err := Patch("/me/drive/items/"+item.ID, fs.Auth, bytes.NewReader(jsonPatch))
@@ -112,6 +115,8 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		log.Println(err)
 		return fuse.EREMOTEIO
 	}
+
+	// rename local copy
 	fs.items.Move(oldName, newName, fs.Auth)
 
 	return fuse.OK
@@ -171,7 +176,7 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
 		fs.items.Delete(name) // delete the local copy we just created
-		log.Println("Error during directory creation", err)
+		log.Println("Error during directory creation:", err)
 		log.Println(string(resp))
 		return fuse.EREMOTEIO
 	}
