@@ -16,46 +16,48 @@ import (
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
 // DriveItem's ID and its path)
 type DriveItemParent struct {
-	ID   string `json:"id"`
+	ID   string `json:"id,omitempty"`
 	Path string `json:"path,omitempty"`
 	item *DriveItem
 }
 
-// DriveItem represents a file or folder fetched from the Graph API.
+// DriveItem represents a file or folder fetched from the Graph API. All struct
+// fields are pointers so as to avoid including them when marshaling to JSON.
 type DriveItem struct {
 	nodefs.File `json:"-"`
-	auth        *Auth           // only populated for root item
-	data        *[]byte         // empty by default
-	hasChanges  bool            // used to trigger an upload on flush
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Size        uint64          `json:"size"`
-	ModifyTime  time.Time       `json:"lastModifiedDatetime"`
-	mode        uint32          // do not set manually
-	Parent      DriveItemParent `json:"parentReference"`
+	auth        *Auth            // only populated for root item
+	data        *[]byte          // empty by default
+	hasChanges  bool             // used to trigger an upload on flush
+	ID          string           `json:"id,omitempty"`
+	Name        string           `json:"name,omitempty"`
+	Size        uint64           `json:"size,omitempty"`
+	ModifyTime  *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	mode        uint32           // do not set manually
+	Parent      *DriveItemParent `json:"parentReference,omitempty"`
 	children    map[string]*DriveItem
-	Folder      struct {
-		ChildCount uint32 `json:"childCount"`
+	Folder      *struct {
+		ChildCount uint32 `json:"childCount,omitempty"`
 	} `json:"folder,omitempty"`
-	FileAPI struct { // renamed to avoid conflict with nodefs.File interface
-		MimeType string `json:"mimeType"`
+	FileAPI *struct { // renamed to avoid conflict with nodefs.File interface
+		MimeType string `json:"mimeType,omitempty"`
 	} `json:"file,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
+	currentTime := time.Now()
 	return &DriveItem{
 		File: nodefs.NewDefaultFile(),
 		Name: name,
-		Parent: DriveItemParent{
+		Parent: &DriveItemParent{
 			ID:   parent.ID,
 			Path: parent.Parent.Path + "/" + parent.Name,
 			item: parent,
 		},
 		children:   make(map[string]*DriveItem),
 		data:       &empty,
-		ModifyTime: time.Now(),
+		ModifyTime: &currentTime,
 		mode:       mode,
 	}
 }
@@ -70,7 +72,7 @@ func (d DriveItem) String() string {
 
 // Set an item's parent
 func (d *DriveItem) setParent(newParent *DriveItem) {
-	d.Parent = DriveItemParent{
+	d.Parent = &DriveItemParent{
 		ID:   newParent.ID,
 		Path: newParent.Path(),
 		item: newParent,
@@ -212,7 +214,7 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	d.ModifyTime = *mtime
+	d.ModifyTime = mtime
 	return fuse.OK
 }
 
@@ -234,7 +236,7 @@ func (d DriveItem) IsDir() bool {
 // underlying mode field.
 func (d *DriveItem) Mode() uint32 {
 	if d.mode == 0 { // only 0 if fetched from Graph API
-		if d.FileAPI.MimeType == "" { // blank if a folder
+		if d.FileAPI == nil { // nil if a folder
 			d.mode = fuse.S_IFDIR | 0755
 		} else {
 			d.mode = fuse.S_IFREG | 0644

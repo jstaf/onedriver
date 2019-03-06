@@ -77,13 +77,6 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	return &attr, status
 }
 
-//TODO maybe remove this in favor of an actual driveitem with most of the fields
-// removed to save on extra code
-type renamePatch struct {
-	Parent *DriveItemParent `json:"parentReference,omitempty"`
-	Name   string           `json:"name,omitempty"`
-}
-
 // Rename is used by mv operations (move, rename)
 func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
@@ -91,7 +84,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
 
-	patchContent := renamePatch{}
+	patchContent := DriveItem{} // totally empty to avoid sending extra data
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
 		// we are moving the item
 		newParent, err := fs.items.Get(newDir, fs.Auth)
@@ -113,6 +106,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	_, err := Patch("/me/drive/items/"+item.ID, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		log.Println(err)
+		item.Name = filepath.Base(oldName) // unrename things locally
 		return fuse.EREMOTEIO
 	}
 
