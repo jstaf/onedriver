@@ -80,14 +80,14 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 //TODO maybe remove this in favor of an actual driveitem with most of the fields
 // removed to save on extra code
 type renamePatch struct {
-	Parent DriveItemParent `json:"parentReference,omitempty"`
-	Name   string          `json:"name,omitempty"`
+	Parent *DriveItemParent `json:"parentReference,omitempty"`
+	Name   string           `json:"name,omitempty"`
 }
 
 // Rename is used by mv operations (move, rename)
 func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
-	log.Printf("Rename(\"%s\",\"%s\")\n", oldName, newName)
+	log.Printf("Rename(\"%s\", \"%s\")\n", oldName, newName)
 
 	// rename remote copy
 	patchContent := renamePatch{}
@@ -98,7 +98,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			log.Printf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
 		}
-		patchContent.Parent.ID = newParent.ID
+		patchContent.Parent = &DriveItemParent{ID: newParent.ID}
 	}
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
 		patchContent.Name = newBase
@@ -213,7 +213,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	}
 
 	// check for if file has already been populated
-	if item.Data == nil {
+	if item.data == nil {
 		// it is unpopulated, grab from api
 		log.Println("Fetching remote content for", item.Name)
 		err = item.FetchContent(fs.Auth)

@@ -32,7 +32,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 	key = strings.TrimSuffix(key, "/")
 	split := strings.Split(key, "/")[1:] // omit leading "/"
 	for i := 0; i < len(split); i++ {
-		item, exists := last.Children[split[i]]
+		item, exists := last.children[split[i]]
 		if !exists {
 			if auth.AccessToken == "" {
 				return last, errors.New("Auth was empty and \"" +
@@ -62,7 +62,7 @@ func (c *ItemCache) Delete(key string) {
 	// items that are only being fetched so they can be deleted.
 	parent, err := c.Get(filepath.Dir(key), Auth{})
 	if err == nil {
-		delete(parent.Children, filepath.Base(key))
+		delete(parent.children, filepath.Base(key))
 	}
 }
 
@@ -74,7 +74,7 @@ func (c *ItemCache) Insert(resource string, auth Auth, item *DriveItem) error {
 		return err
 	}
 	item.setParent(parent)
-	parent.Children[filepath.Base(resource)] = item
+	parent.children[filepath.Base(resource)] = item
 	return nil
 }
 

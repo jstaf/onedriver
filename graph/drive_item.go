@@ -18,23 +18,23 @@ import (
 type DriveItemParent struct {
 	ID   string `json:"id"`
 	Path string `json:"path,omitempty"`
-	Item *DriveItem
+	item *DriveItem
 }
 
 // DriveItem represents a file or folder fetched from the Graph API.
 type DriveItem struct {
-	nodefs.File
-	auth       *Auth           // only populated for root item
-	Data       *[]byte         // empty by default
-	hasChanges bool            // used to trigger an upload on flush
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Size       uint64          `json:"size"`
-	ModifyTime time.Time       `json:"lastModifiedDatetime"`
-	mode       uint32          // do not set manually
-	Parent     DriveItemParent `json:"parentReference"`
-	Children   map[string]*DriveItem
-	Folder     struct {
+	nodefs.File `json:"-"`
+	auth        *Auth           // only populated for root item
+	data        *[]byte         // empty by default
+	hasChanges  bool            // used to trigger an upload on flush
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Size        uint64          `json:"size"`
+	ModifyTime  time.Time       `json:"lastModifiedDatetime"`
+	mode        uint32          // do not set manually
+	Parent      DriveItemParent `json:"parentReference"`
+	children    map[string]*DriveItem
+	Folder      struct {
 		ChildCount uint32 `json:"childCount"`
 	} `json:"folder,omitempty"`
 	FileAPI struct { // renamed to avoid conflict with nodefs.File interface
@@ -51,10 +51,10 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		Parent: DriveItemParent{
 			ID:   parent.ID,
 			Path: parent.Parent.Path + "/" + parent.Name,
-			Item: parent,
+			item: parent,
 		},
-		Children:   make(map[string]*DriveItem),
-		Data:       &empty,
+		children:   make(map[string]*DriveItem),
+		data:       &empty,
 		ModifyTime: time.Now(),
 		mode:       mode,
 	}
@@ -65,7 +65,7 @@ func (d DriveItem) String() string {
 	if l > 10 {
 		l = 10
 	}
-	return fmt.Sprintf("DriveItem(%x)", (*d.Data)[:l])
+	return fmt.Sprintf("DriveItem(%x)", (*d.data)[:l])
 }
 
 // Set an item's parent
@@ -73,7 +73,7 @@ func (d *DriveItem) setParent(newParent *DriveItem) {
 	d.Parent = DriveItemParent{
 		ID:   newParent.ID,
 		Path: newParent.Path(),
-		Item: newParent,
+		item: newParent,
 	}
 }
 
@@ -96,8 +96,8 @@ type driveChildren struct {
 // Also initializes the children field.
 func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	//TODO will exit prematurely if *any* children are in the cache
-	if !d.IsDir() || d.Children != nil {
-		return d.Children, nil
+	if !d.IsDir() || d.children != nil {
+		return d.children, nil
 	}
 
 	body, err := Get(ChildrenPath(d.Path()), auth)
@@ -107,13 +107,13 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	}
 	json.Unmarshal(body, &fetched)
 
-	d.Children = make(map[string]*DriveItem)
+	d.children = make(map[string]*DriveItem)
 	for _, child := range fetched.Children {
-		child.Parent.Item = d
-		d.Children[child.Name] = child
+		child.Parent.item = d
+		d.children[child.Name] = child
 	}
 
-	return d.Children, nil
+	return d.children, nil
 }
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
@@ -122,7 +122,7 @@ func (d *DriveItem) FetchContent(auth Auth) error {
 	if err != nil {
 		return err
 	}
-	d.Data = &body
+	d.data = &body
 	d.File = nodefs.NewDefaultFile()
 	return nil
 }
@@ -130,11 +130,11 @@ func (d *DriveItem) FetchContent(auth Auth) error {
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.Status) {
 	end := int(off) + int(len(buf))
-	if end > len(*d.Data) {
-		end = len(*d.Data)
+	if end > len(*d.data) {
+		end = len(*d.data)
 	}
 	log.Printf("Read(\"%s\"): %d bytes at offset %d\n", d.Name, int64(end)-off, off)
-	return fuse.ReadResultData((*d.Data)[off:end]), fuse.OK
+	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
 // Write to a DriveItem like a file. Note that changes are 100% local until
@@ -146,22 +146,22 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 
 	if offset+nWrite > int(d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
-		*d.Data = append((*d.Data)[:offset], data...)
+		*d.data = append((*d.data)[:offset], data...)
 	} else {
 		// writing inside the current file, overwrite in place
-		copy((*d.Data)[offset:], data)
+		copy((*d.data)[offset:], data)
 	}
 	// probably a better way to do this, but whatever
-	d.Size = uint64(len(*d.Data))
+	d.Size = uint64(len(*d.data))
 	d.hasChanges = true
 
 	return uint32(nWrite), fuse.OK
 }
 
 func (d DriveItem) getRoot() *DriveItem {
-	parent := d.Parent.Item
+	parent := d.Parent.item
 	for parent.Parent.Path != "" {
-		parent = parent.Parent.Item
+		parent = parent.Parent.item
 	}
 	return parent
 }
@@ -187,7 +187,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 	} else {
 		uploadPath = "/me/drive/items/" + d.ID + "/content"
 	}
-	resp, err := Put(uploadPath, auth, bytes.NewReader(*d.Data))
+	resp, err := Put(uploadPath, auth, bytes.NewReader(*d.data))
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	*d.Data = (*d.Data)[:size]
+	*d.data = (*d.data)[:size]
 	d.Size = size
 	d.hasChanges = true
 	return fuse.OK
@@ -254,7 +254,7 @@ func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
 		// technically 2 + number of subdirectories
 		var nSubdir uint32
-		for _, v := range d.Children {
+		for _, v := range d.children {
 			if v.IsDir() {
 				nSubdir++
 			}
