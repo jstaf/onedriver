@@ -84,9 +84,17 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
 	if item.ID == "" {
-		// we fucked up at some point and don't have the ID for this item
-		log.Println("ID of item to move cannot be empty")
-		return fuse.EBADF
+		// uploads will fail without an id
+		if item.IsDir() {
+			log.Println("ID of folder to move cannot be empty")
+			return fuse.EBADF
+		}
+
+		if item.Upload(fs.Auth) != nil || item.ID == "" {
+			log.Println("ID of item to move cannot be empty " +
+				"and we failed to obtain an ID.")
+			return fuse.EBADF
+		}
 	}
 
 	patchContent := DriveItem{} // totally empty to avoid sending extra data
@@ -98,7 +106,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			return fuse.EREMOTEIO
 		}
 		if newParent.ID == "" {
-			log.Println("ID of folder to move to cannot be empty")
+			log.Println("ID of destination folder cannot be empty!")
 			return fuse.EBADF
 		}
 		patchContent.Parent = &DriveItemParent{ID: newParent.ID}
