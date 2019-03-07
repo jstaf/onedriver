@@ -21,6 +21,16 @@ type DriveItemParent struct {
 	item *DriveItem
 }
 
+// Folder is used for parsing only
+type Folder struct {
+	ChildCount uint32 `json:"childCount,omitempty"`
+}
+
+// File is used for parsing only
+type File struct {
+	MimeType string `json:"mimeType,omitempty"`
+}
+
 // DriveItem represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON.
 type DriveItem struct {
@@ -35,12 +45,8 @@ type DriveItem struct {
 	mode        uint32           // do not set manually
 	Parent      *DriveItemParent `json:"parentReference,omitempty"`
 	children    map[string]*DriveItem
-	Folder      *struct {
-		ChildCount uint32 `json:"childCount,omitempty"`
-	} `json:"folder,omitempty"`
-	FileAPI *struct { // renamed to avoid conflict with nodefs.File interface
-		MimeType string `json:"mimeType,omitempty"`
-	} `json:"file,omitempty"`
+	Folder      *Folder `json:"folder,omitempty"`
+	FileAPI     *File   `json:"file,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem

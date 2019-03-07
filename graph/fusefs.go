@@ -83,6 +83,11 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	log.Printf("Rename(\"%s\", \"%s\")\n", oldName, newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
+	if item.ID == "" {
+		// we fucked up at some point and don't have the ID for this item
+		log.Println("ID of item to move cannot be empty")
+		return fuse.EBADF
+	}
 
 	patchContent := DriveItem{} // totally empty to avoid sending extra data
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
@@ -91,6 +96,10 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		if err != nil {
 			log.Printf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
+		}
+		if newParent.ID == "" {
+			log.Println("ID of folder to move to cannot be empty")
+			return fuse.EBADF
 		}
 		patchContent.Parent = &DriveItemParent{ID: newParent.ID}
 	}
@@ -156,29 +165,34 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	return c, fuse.OK
 }
 
-type newFolderPost struct {
-	Name   string   `json:"name"`
-	Folder struct{} `json:"folder"`
-}
-
 // Mkdir creates a directory, mode is ignored
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
 	log.Printf("Mkdir(\"%s\")\n", name)
 
-	bytePayload, _ := json.Marshal(newFolderPost{Name: filepath.Base(name)})
+	// create a new folder on the server
+	newFolderPost := DriveItem{
+		Name:   filepath.Base(name),
+		Folder: &Folder{},
+	}
+	bytePayload, _ := json.Marshal(newFolderPost)
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
-		fs.items.Delete(name) // delete the local copy we just created
 		log.Println("Error during directory creation:", err)
-		log.Println(string(resp))
 		return fuse.EREMOTEIO
 	}
 
+	// create the new folder locally
 	_, code := fs.Create(name, 0, mode|fuse.S_IFDIR, context)
 	if code != fuse.OK {
 		return code
 	}
+
+	// now unmarshal the response into the new folder so that it has an ID
+	// (otherwise things involving this folder will fail later)
+	item, _ := fs.items.Get(name, fs.Auth)
+	json.Unmarshal(resp, item)
+	fs.items.Insert(name, fs.Auth, item)
 
 	return fuse.OK
 }
