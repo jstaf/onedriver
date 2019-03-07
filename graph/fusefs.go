@@ -130,9 +130,14 @@ func (fs *FuseFs) Chown(name string, uid uint32, gid uint32, context *fuse.Conte
 	return fuse.EPERM
 }
 
-// Chmod currently does nothing - no way to change mode yet.
+// Chmod changes mode purely for convenience/compatibility - it has no effect on
+// server contents (onedrive has no notion of permissions).
 func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code fuse.Status) {
-	return fuse.EPERM
+	name = leadingSlash(name)
+	log.Printf("Chmod(\"%s\")\n", name)
+
+	item, _ := fs.items.Get(name, fs.Auth)
+	return item.Chmod(mode)
 }
 
 // OpenDir returns a list of directory entries
@@ -192,7 +197,6 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	// (otherwise things involving this folder will fail later)
 	item, _ := fs.items.Get(name, fs.Auth)
 	json.Unmarshal(resp, item)
-	fs.items.Insert(name, fs.Auth, item)
 
 	return fuse.OK
 }

@@ -251,6 +251,16 @@ func (d *DriveItem) Mode() uint32 {
 	return d.mode
 }
 
+// Chmod changes the mode of a file
+func (d *DriveItem) Chmod(perms uint32) fuse.Status {
+	if d.IsDir() {
+		d.mode = fuse.S_IFDIR | perms
+	} else {
+		d.mode = fuse.S_IFREG | perms
+	}
+	return fuse.OK
+}
+
 // MTime returns the Unix timestamp of last modification
 func (d DriveItem) MTime() uint64 {
 	return uint64(d.ModifyTime.Unix())
