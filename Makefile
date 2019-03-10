@@ -4,8 +4,6 @@ onedriver: graph/*.go graph/*.c graph/*.h
 	go build
 
 test: onedriver
-	./$< -a
-	ln -s -f ../auth_tokens.json graph/
 	go test ./graph
 
 # for autocompletion by ide-clangd

@@ -1,17 +1,9 @@
 package graph
 
 import (
-	"os"
 	"testing"
 	"time"
 )
-
-var auth Auth
-
-func TestMain(m *testing.M) {
-	auth = Authenticate()
-	os.Exit(m.Run())
-}
 
 func TestRequestUnauthenticated(t *testing.T) {
 	badAuth := Auth{

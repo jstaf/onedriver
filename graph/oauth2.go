@@ -21,11 +21,13 @@ import (
 	"unsafe"
 )
 
-const authCodeURL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-const authTokenURL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-const authRedirectURL = "https://login.live.com/oauth20_desktop.srf"
-const authClientID = "3470c3fa-bc10-45ab-a0a9-2d30836485d1"
-const authFile = "auth_tokens.json"
+const (
+	authCodeURL     = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+	authTokenURL    = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+	authRedirectURL = "https://login.live.com/oauth20_desktop.srf"
+	authClientID    = "3470c3fa-bc10-45ab-a0a9-2d30836485d1"
+	authFile        = "auth_tokens.json"
+)
 
 // Auth represents a set of oauth2 authentication tokens
 type Auth struct {
