@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	"github.com/jstaf/onedriver/graph"
@@ -26,30 +25,6 @@ Usage: onedriver [options] <mountpoint>
 Valid options:
 `)
 	flag.PrintDefaults()
-}
-
-// A goroutine that will handle sigint then exit gracefully
-func unmountHandler(signal <-chan os.Signal, server *fuse.Server) {
-	sig := <-signal // block until sigint
-
-	// signals don't automatically format well
-	var code int
-	var text string
-	if sig == syscall.SIGINT {
-		text = "SIGINT"
-		code = int(syscall.SIGINT)
-	} else {
-		text = "SIGTERM"
-		code = int(syscall.SIGTERM)
-	}
-	log.Println(text, "received, unmounting filesystem...")
-	err := server.Unmount()
-	if err != nil {
-		log.Println(err)
-	}
-
-	// convention when exiting via signal is 128 + signal value
-	os.Exit(128 + int(code))
 }
 
 func main() {
@@ -91,7 +66,7 @@ func main() {
 	// setup sigint handler for graceful unmount on interrupt
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go unmountHandler(sigChan, server)
+	go graph.UnmountHandler(sigChan, server)
 
 	// serve filesystem
 	server.Serve()

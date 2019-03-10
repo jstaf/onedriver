@@ -1,7 +1,11 @@
 package graph
 
 import (
+	"log"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
 	"testing"
 
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -27,9 +31,33 @@ func TestMain(m *testing.M) {
 	fs := pathfs.NewPathNodeFs(fusefs, nil)
 	server, _, _ := nodefs.MountRoot(mountLoc, fs.Root(), nil)
 
+	// setup sigint handler for graceful unmount on interrupt/terminate
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go UnmountHandler(sigChan, server)
+
 	// mount fs in background thread
 	go server.Serve()
-	defer server.Unmount()
+	os.Mkdir(TestDir, 0755)
+	// we do not cd into the mounted directory or it will hang indefinitely on
+	// unmount with "device or resource busy"
 
-	os.Exit(m.Run())
+	// run tests
+	code := m.Run()
+
+	// cleanup
+	os.RemoveAll(TestDir)
+	err := server.Unmount()
+	if err != nil {
+		log.Println("Failed to unmount test fuse server, attempting lazy unmount")
+		exec.Command("fusermount", "-zu", "mount").Start()
+	}
+	os.Exit(code)
+}
+
+// convenience handler to fail tests if an error is not nil
+func failOnErr(t *testing.T, err error) {
+	if err != nil {
+		t.Fatal(err)
+	}
 }
