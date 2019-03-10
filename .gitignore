@@ -3,4 +3,5 @@ compile_flags.txt
 mount/
 *.json
 *.bak
+*.log
 onedriver

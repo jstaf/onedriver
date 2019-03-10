@@ -24,6 +24,9 @@ var auth Auth
 // sessions.
 func TestMain(m *testing.M) {
 	os.Chdir("..")
+	// attempt to unmount regardless of what happens (in case previous tests
+	// failed and didn't clean themselves up)
+	exec.Command("fusermount", "-u", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 
 	fusefs := NewFS()
@@ -38,19 +41,23 @@ func TestMain(m *testing.M) {
 
 	// mount fs in background thread
 	go server.Serve()
+	// cleanup from last run
+	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
 
+	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	log.SetOutput(logFile)
+
 	// run tests
 	code := m.Run()
 
-	// cleanup
-	os.RemoveAll(TestDir)
+	// unmount
 	err := server.Unmount()
 	if err != nil {
 		log.Println("Failed to unmount test fuse server, attempting lazy unmount")
-		exec.Command("fusermount", "-zu", "mount").Start()
+		exec.Command("fusermount", "-zu", "mount").Run()
 	}
 	os.Exit(code)
 }
