@@ -1,16 +1,18 @@
 package graph
 
 import (
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
 
 // does ls work and can we find the Documents/Pictures folders
-func TestLS(t *testing.T) {
+func TestLs(t *testing.T) {
 	stdout, err := exec.Command("ls", "mount").Output()
 	failOnErr(t, err)
 	sout := string(stdout)
@@ -25,6 +27,7 @@ func TestLS(t *testing.T) {
 // can touch create an empty file
 func TestTouchCreate(t *testing.T) {
 	fname := filepath.Join(TestDir, "empty")
+	syscall.Umask(022) // otherwise tests fail if default umask is 002
 	failOnErr(t, exec.Command("touch", fname).Run())
 	st, err := os.Stat(fname)
 	failOnErr(t, err)
@@ -32,7 +35,7 @@ func TestTouchCreate(t *testing.T) {
 		t.Fatal("size was not 0")
 	}
 	if st.Mode() != 0644 {
-		t.Fatal("Mode of new file was not 644")
+		t.Fatalf("Mode of new file was not 644, got %o instead.\n", st.Mode())
 	}
 	if st.IsDir() {
 		t.Fatal("New file detected as directory")
@@ -75,4 +78,55 @@ func TestMkdirRmdir(t *testing.T) {
 	failOnErr(t, exec.Command("mkdir", fname).Run())
 	failOnErr(t, exec.Command("rmdir", fname).Run())
 	failOnErr(t, exec.Command("mkdir", fname).Run())
+}
+
+// test that we can write to a file and read its contents back correctly
+func TestReadWrite(t *testing.T) {
+	fname := filepath.Join(TestDir, "write.txt")
+	content := "my hands are typing words\n"
+	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	read, err := ioutil.ReadFile(fname)
+	failOnErr(t, err)
+	if string(read) != content {
+		t.Fatalf("File content was not correct - got: %s\n wanted %s\n",
+			string(read), content)
+	}
+}
+
+// test that we can create a file and rename it
+func TestRenameMove(t *testing.T) {
+	fname := filepath.Join(TestDir, "rename.txt")
+	dname := filepath.Join(TestDir, "new-name.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
+	failOnErr(t, os.Rename(fname, dname))
+	st, err := os.Stat(dname)
+	failOnErr(t, err)
+	if st == nil {
+		t.Fatal("Renamed file does not exist")
+	}
+
+	os.Mkdir(filepath.Join(TestDir, "dest"), 0755)
+	dname2 := filepath.Join(TestDir, "dest/even-newer-name.txt")
+	failOnErr(t, os.Rename(dname, dname2))
+	st, err = os.Stat(dname2)
+	failOnErr(t, err)
+	if st == nil {
+		t.Fatal("Renamed file does not exist")
+	}
+}
+
+// test that copies work as expected
+func TestCopy(t *testing.T) {
+	fname := filepath.Join(TestDir, "copy-start.txt")
+	dname := filepath.Join(TestDir, "copy-end.txt")
+	content := "and copies too!\n"
+	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	failOnErr(t, exec.Command("cp", fname, dname).Run())
+
+	read, err := ioutil.ReadFile(fname)
+	failOnErr(t, err)
+	if string(read) != content {
+		t.Fatalf("File content was not correct - got: %s\n wanted %s\n",
+			string(read), content)
+	}
 }
