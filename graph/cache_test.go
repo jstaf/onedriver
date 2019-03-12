@@ -52,7 +52,6 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(documents.Path())
 
 	children, _ := documents.GetChildren(auth)
 	if _, exists := children["Documents"]; exists {

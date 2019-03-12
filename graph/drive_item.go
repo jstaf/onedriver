@@ -136,7 +136,7 @@ func (d *DriveItem) FetchContent(auth Auth) error {
 }
 
 // Read from a DriveItem like a file
-func (d DriveItem) Read(buf []byte, off int64) (res fuse.ReadResult, code fuse.Status) {
+func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
 	if end > len(*d.data) {
 		end = len(*d.data)
