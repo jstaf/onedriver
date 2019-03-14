@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/jstaf/onedriver/logger"
+
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 )
@@ -49,6 +51,7 @@ func TestMain(m *testing.M) {
 
 	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	log.SetOutput(logFile)
+	logger.SetLogLevel(logger.TRACE)
 
 	// run tests
 	code := m.Run()
