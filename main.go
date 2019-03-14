@@ -13,6 +13,8 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+const onedriverVersion = "0.1"
+
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Onedrive.
 
@@ -31,6 +33,8 @@ func main() {
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to Onedrive and then exit. Useful for running tests.")
+	logLevel := flag.String("log", "trace", "Set logging level/verbosity. "+
+		"Can be one of: fatal, error, warn, info, trace")
 	version := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
 	flag.BoolP("help", "h", false, "Display usage and help.")
@@ -38,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Println("onedriver v0.1")
+		fmt.Println("onedriver v" + onedriverVersion)
 		os.Exit(0)
 	}
 
@@ -48,13 +52,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	logger.SetLogLevel(logger.StringToLevel(*logLevel))
+
 	if len(flag.Args()) != 1 {
 		// no mountpoint provided
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	logger.SetLogLevel(logger.TRACE)
+	logger.Info("onedriver v%s starting now...", onedriverVersion)
 
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)

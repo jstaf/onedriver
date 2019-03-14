@@ -1,6 +1,6 @@
 .PHONY = test
 
-onedriver: graph/*.go graph/*.c graph/*.h
+onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
 	go build
 
 test: onedriver

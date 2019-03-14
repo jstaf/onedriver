@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // LogLevel represents the severity of a log message
@@ -21,6 +22,26 @@ const (
 )
 
 var currentLevel = INFO
+
+// StringToLevel converts a string to a LogLevel in a case-insensitive manner.
+func StringToLevel(level string) LogLevel {
+	level = strings.ToUpper(level)
+	switch level {
+	case "FATAL":
+		return FATAL
+	case "ERROR":
+		return ERROR
+	case "WARN":
+		return WARN
+	case "INFO":
+		return INFO
+	case "TRACE":
+		return TRACE
+	default:
+		Errorf("Unrecognized log level %s, defaulting to TRACE.\n", level)
+		return TRACE
+	}
+}
 
 // SetLogLevel changes the current log level
 func SetLogLevel(level LogLevel) {

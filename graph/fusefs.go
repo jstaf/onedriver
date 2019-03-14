@@ -3,7 +3,6 @@ package graph
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"path/filepath"
 	"strings"
 
@@ -81,7 +80,7 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 // Rename is used by mv operations (move, rename)
 func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
-	log.Printf("Rename(\"%s\", \"%s\")\n", oldName, newName)
+	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
 	if item.ID == "" {
@@ -143,8 +142,6 @@ func (fs *FuseFs) Chown(name string, uid uint32, gid uint32, context *fuse.Conte
 // server contents (onedrive has no notion of permissions).
 func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code fuse.Status) {
 	name = leadingSlash(name)
-	logger.Trace(name)
-
 	item, _ := fs.items.Get(name, fs.Auth)
 	return item.Chmod(mode)
 }
