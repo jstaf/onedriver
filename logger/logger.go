@@ -99,15 +99,6 @@ func logger(level LogLevel, format string, args ...interface{}) {
 		prefix, filepath.Base(file), line, functionName, preformatted)
 }
 
-// collapse a set of interfaces to a single string
-func collapse(args ...interface{}) string {
-	all := make([]string, len(args))
-	for i, val := range args {
-		all[i] = fmt.Sprint(val)
-	}
-	return strings.Join(all, " ")
-}
-
 // Fatalf logs and kills the program. Uses printf formatting.
 func Fatalf(format string, args ...interface{}) {
 	logger(FATAL, format, args...)
@@ -116,7 +107,7 @@ func Fatalf(format string, args ...interface{}) {
 
 // Fatal logs and kills the program
 func Fatal(args ...interface{}) {
-	logger(FATAL, "%s\n", collapse(args))
+	logger(FATAL, "%s", fmt.Sprintln(args...))
 	os.Exit(1)
 }
 
@@ -127,7 +118,7 @@ func Errorf(format string, args ...interface{}) {
 
 // Error logs at the Error level
 func Error(args ...interface{}) {
-	logger(ERROR, "%s\n", collapse(args))
+	logger(ERROR, "%s\n", fmt.Sprintln(args...))
 }
 
 // Warnf logs at the Warn level, but allows formatting
@@ -137,7 +128,7 @@ func Warnf(format string, args ...interface{}) {
 
 // Warn logs at the Warn level
 func Warn(args ...interface{}) {
-	logger(WARN, "%s\n", collapse(args))
+	logger(WARN, "%s", fmt.Sprintln(args...))
 }
 
 // Infof logs at the Info level, but allows formatting
@@ -147,7 +138,7 @@ func Infof(format string, args ...interface{}) {
 
 // Info logs at the Info level
 func Info(args ...interface{}) {
-	logger(INFO, "%s\n", collapse(args))
+	logger(INFO, "%s", fmt.Sprintln(args...))
 }
 
 // Tracef logs at the Warn level, but allows formatting
@@ -157,5 +148,5 @@ func Tracef(format string, args ...interface{}) {
 
 // Trace logs at the Trace level
 func Trace(args ...interface{}) {
-	logger(TRACE, "%s\n", collapse(args))
+	logger(TRACE, "%s", fmt.Sprintln(args...))
 }

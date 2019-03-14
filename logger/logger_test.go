@@ -23,6 +23,11 @@ func TestNormalPrint(t *testing.T) {
 		t.Fatalf("Did not contain expected output.\nGot: \"%s\"\nWanted: \"%s\"\n",
 			contents, text)
 	}
+
+	if strings.Contains(contents, "["+text+"]") {
+		t.Fatalf("Did not contain expected output.\nGot: \"%s\"\nWanted: \"%s\"\n",
+			contents, text)
+	}
 }
 
 func TestMultiplePrint(t *testing.T) {
