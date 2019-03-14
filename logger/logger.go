@@ -48,6 +48,14 @@ func SetLogLevel(level LogLevel) {
 	currentLevel = level
 }
 
+func pad(text string, length int) string {
+	strlen := len(text)
+	if strlen < length {
+		text += strings.Repeat(" ", length-strlen)
+	}
+	return text
+}
+
 func extractFuncName(ptr uintptr) string {
 	// grab function name
 	fname := runtime.FuncForPC(ptr).Name()
@@ -77,7 +85,7 @@ func logger(level LogLevel, format string, args ...interface{}) {
 	case ERROR:
 		prefix = "ERROR"
 	case WARN:
-		prefix = "WARNING"
+		prefix = "WARN"
 	case INFO:
 		prefix = "INFO"
 	case TRACE:
@@ -96,7 +104,7 @@ func logger(level LogLevel, format string, args ...interface{}) {
 	}
 
 	log.Printf("- %s - %s:%d:%s - %s",
-		prefix, filepath.Base(file), line, functionName, preformatted)
+		pad(prefix, 5), filepath.Base(file), line, functionName, preformatted)
 }
 
 // Fatalf logs and kills the program. Uses printf formatting.
