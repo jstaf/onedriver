@@ -27,6 +27,21 @@ func SetLogLevel(level LogLevel) {
 	currentLevel = level
 }
 
+func extractFuncName(ptr uintptr) string {
+	// grab function name
+	fname := runtime.FuncForPC(ptr).Name()
+	lastDot := 0
+	for i := 0; i < len(fname); i++ {
+		if fname[i] == '.' {
+			lastDot = i
+		}
+	}
+	if lastDot == 0 {
+		return filepath.Base(fname)
+	}
+	return fname[lastDot:] + "()"
+}
+
 // Log a function's output at a various level, ignoring those below the
 // currently configured level.
 func loggerf(level LogLevel, format string, args ...interface{}) {
@@ -48,25 +63,19 @@ func loggerf(level LogLevel, format string, args ...interface{}) {
 		prefix = "TRACE"
 	}
 
-	ptr, file, line, ok := runtime.Caller(2)
-	if !ok {
-		log.Printf("- %s - %s\n", prefix, args)
-	}
-
-	fname := runtime.FuncForPC(ptr).Name()
-	lastDot := 0
-	for i := 0; i < len(fname); i++ {
-		if fname[i] == '.' {
-			lastDot = i
-		}
-	}
-	if lastDot == 0 {
-		fname = filepath.Base(fname)
-	}
-
 	preformatted := fmt.Sprintf(format, args...)
-	log.Printf("- %s - %s:%d:%s() - %s",
-		prefix, filepath.Base(file), line, fname[lastDot:], preformatted)
+
+	// go runtime witchcraft
+	ptr, file, line, ok := runtime.Caller(2)
+	var functionName string
+	if ok {
+		functionName = extractFuncName(ptr)
+	} else {
+		functionName = "(unknown source)"
+	}
+
+	log.Printf("- %s - %s:%d:%s - %s",
+		prefix, filepath.Base(file), line, functionName, preformatted)
 }
 
 func logger(level LogLevel, args ...interface{}) {
