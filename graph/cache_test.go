@@ -49,9 +49,7 @@ func TestSubdirGet(t *testing.T) {
 func TestSubdirChildrenUpdate(t *testing.T) {
 	cache := ItemCache{}
 	documents, err := cache.Get("/Documents", auth)
-	if err != nil {
-		t.Fatal(err)
-	}
+	failOnErr(t, err)
 
 	children, _ := documents.GetChildren(auth)
 	if _, exists := children["Documents"]; exists {

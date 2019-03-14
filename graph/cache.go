@@ -2,9 +2,10 @@ package graph
 
 import (
 	"errors"
-	"log"
 	"path/filepath"
 	"strings"
+
+	"github.com/jstaf/onedriver/logger"
 )
 
 // ItemCache caches DriveItems for a filesystem. This cache never expires so
@@ -20,7 +21,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 	if c.root == nil {
 		root, err := GetItem("/", auth)
 		if err != nil {
-			log.Fatal("Could not fetch root item of filesystem!:", err)
+			logger.Fatal("Could not fetch root item of filesystem!:", err)
 		}
 		root.auth = &auth
 		c.root = root

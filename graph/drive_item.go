@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/jstaf/onedriver/logger"
 )
 
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
@@ -141,7 +141,7 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	if end > len(*d.data) {
 		end = len(*d.data)
 	}
-	log.Printf("Read(\"%s\"): %d bytes at offset %d\n", d.Name, int64(end)-off, off)
+	logger.Tracef("%s: %d bytes at offset %d\n", d.Name, int64(end)-off, off)
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -150,7 +150,7 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
-	log.Printf("Write(\"%s\"): %d bytes at offset %d\n", d.Name, nWrite, off)
+	logger.Tracef("%s: %d bytes at offset %d\n", d.Name, nWrite, off)
 
 	if offset+nWrite > int(d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
@@ -176,9 +176,8 @@ func (d DriveItem) getRoot() *DriveItem {
 
 // Flush is called when a file descriptor is closed, and is responsible for upload
 func (d DriveItem) Flush() fuse.Status {
-	log.Printf("Flush(\"%s\")\n", d.Name)
+	logger.Trace(d.Name)
 	if d.hasChanges {
-		log.Println("Triggering upload of:", d.Name)
 		auth := *d.getRoot().auth
 		go d.Upload(auth)
 	}
@@ -187,6 +186,7 @@ func (d DriveItem) Flush() fuse.Status {
 
 // Upload copies the file's contents to the server
 func (d *DriveItem) Upload(auth Auth) error {
+	logger.Info(d.Name)
 	// TODO implement upload sessions for files over 4MB
 	var uploadPath string
 	if d.ID == "" { // ID will be empty for a file that's local only
@@ -220,12 +220,14 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
+	logger.Trace(d.Name)
 	d.ModifyTime = mtime
 	return fuse.OK
 }
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
+	logger.Trace(d.Name)
 	*d.data = (*d.data)[:size]
 	d.Size = size
 	d.hasChanges = true
@@ -253,6 +255,7 @@ func (d *DriveItem) Mode() uint32 {
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
+	logger.Trace(d.Name)
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms
 	} else {

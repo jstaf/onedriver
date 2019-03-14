@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/jstaf/onedriver/logger"
 )
 
 // UnmountHandler should be used as goroutine that will handle sigint then exit gracefully
@@ -22,7 +23,7 @@ func UnmountHandler(signal <-chan os.Signal, server *fuse.Server) {
 		text = "SIGTERM"
 		code = int(syscall.SIGTERM)
 	}
-	log.Println(text, "received, unmounting filesystem...")
+	logger.Info(text, "received, unmounting filesystem...")
 	err := server.Unmount()
 	if err != nil {
 		log.Println(err)

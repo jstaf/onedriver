@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,6 +18,8 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/jstaf/onedriver/logger"
 )
 
 const (
@@ -55,7 +56,7 @@ func (a *Auth) FromFile(file string) error {
 // Refresh auth tokens if expired.
 func (a *Auth) Refresh() {
 	if a.ExpiresAt <= time.Now().Unix() {
-		log.Println("Auth tokens expired, attempting renewal...")
+		logger.Info("Auth tokens expired, attempting renewal...")
 		oldTime := a.ExpiresAt
 
 		postData := strings.NewReader("client_id=" + authClientID +
@@ -66,7 +67,7 @@ func (a *Auth) Refresh() {
 			"application/x-www-form-urlencoded",
 			postData)
 		if err != nil {
-			log.Fatal("Could not renew tokens, exiting...")
+			logger.Fatal("Could not renew tokens, exiting...")
 		}
 		defer resp.Body.Close()
 
@@ -77,9 +78,7 @@ func (a *Auth) Refresh() {
 		}
 		if a.AccessToken == "" || a.RefreshToken == "" {
 			os.Remove(authFile)
-			log.Println("Failed to renew access tokens. Response from server:")
-			fmt.Println(string(body))
-			os.Exit(1)
+			logger.Fatalf("Failed to renew access tokens. Response from server:\n%s\n", string(body))
 		}
 		a.ToFile(authFile)
 	}
@@ -102,7 +101,7 @@ func getAuthCode() string {
 	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_])+")
 	code := rexp.FindString(response)
 	if len(code) == 0 {
-		log.Fatal("No validation code returned, or code was invalid. " +
+		logger.Fatal("No validation code returned, or code was invalid. " +
 			"Please restart the application and try again.")
 	}
 	return code[5:]
@@ -131,9 +130,7 @@ func getAuthTokens(authCode string) Auth {
 		auth.ExpiresAt = time.Now().Unix() + auth.ExpiresIn
 	}
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
-		log.Println("Failed to retrieve access tokens. Response from server:")
-		fmt.Println(string(body))
-		os.Exit(1)
+		logger.Fatal("Failed to retrieve access tokens. Response from server:\n%s\n", string(body))
 	}
 	return auth
 }

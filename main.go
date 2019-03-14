@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +9,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	"github.com/jstaf/onedriver/graph"
+	"github.com/jstaf/onedriver/logger"
 	flag "github.com/spf13/pflag"
 )
 
@@ -54,11 +54,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	logger.SetLogLevel(logger.TRACE)
+
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
 	if err != nil {
-		log.Fatalf("Mount failed. Is the mountpoint already in use? "+
+		logger.Fatalf("Mount failed. Is the mountpoint already in use? "+
 			"(Try running \"fusermount -u %s\")\n%v", flag.Arg(0), err)
 	}
 	server.SetDebug(*debugOn)
