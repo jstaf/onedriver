@@ -130,7 +130,7 @@ func getAuthTokens(authCode string) Auth {
 		auth.ExpiresAt = time.Now().Unix() + auth.ExpiresIn
 	}
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
-		logger.Fatal("Failed to retrieve access tokens. Response from server:\n%s\n", string(body))
+		logger.Fatalf("Failed to retrieve access tokens. Response from server:\n%s\n", string(body))
 	}
 	return auth
 }
