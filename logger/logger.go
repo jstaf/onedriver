@@ -39,7 +39,7 @@ func extractFuncName(ptr uintptr) string {
 	if lastDot == 0 {
 		return filepath.Base(fname)
 	}
-	return fname[lastDot:] + "()"
+	return fname[lastDot+1:] + "()"
 }
 
 // Log a function's output at a various level, ignoring messages below the
