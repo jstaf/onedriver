@@ -226,3 +226,14 @@ in volutpat nulla lectus id neque.`
 			string(result), match)
 	}
 }
+
+// Statfs should succeed
+func TestStatFs(t *testing.T) {
+	var st syscall.Statfs_t
+	err := syscall.Statfs(TestDir, &st)
+	failOnErr(t, err)
+
+	if st.Blocks == 0 {
+		t.Fatal("StatFs failed, got 0 blocks!")
+	}
+}

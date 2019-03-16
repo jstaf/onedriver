@@ -57,6 +57,54 @@ func NewFS() *FuseFs {
 	}
 }
 
+// DriveQuota is used to parse the User's current storage quotas from the API
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
+type DriveQuota struct {
+	Deleted   uint64 `json:"deleted"`   // bytes in recycle bin
+	FileCount uint64 `json:"fileCount"` // unavailable on personal accounts
+	Remaining uint64 `json:"remaining"`
+	State     string `json:"state"` // normal | nearing | critical | exceeded
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+}
+
+// Drive has some general information about the user's OneDrive
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
+type Drive struct {
+	ID        string     `json:"id"`
+	DriveType string     `json:"driveType"` // personal or business
+	Quota     DriveQuota `json:"quota,omitempty"`
+}
+
+// StatFs returns information about the filesystem. Mainly useful for checking
+// quotas and storage limits.
+func (fs FuseFs) StatFs(name string) *fuse.StatfsOut {
+	logger.Trace(leadingSlash(name))
+	resp, err := Get("/me/drive", fs.Auth)
+	if err != nil {
+		logger.Error("Could not fetch filesystem details:", err)
+	}
+	drive := Drive{}
+	json.Unmarshal(resp, &drive)
+
+	if drive.DriveType == "personal" {
+		logger.Warn("Personal OneDrive accounts do not show number of files, " +
+			"inode counts reported by onedriver will be bogus.")
+	}
+
+	// limits are pasted from https://support.microsoft.com/en-us/help/3125202
+	var blkSize uint64 = 4096 // default ext4 block size
+	return &fuse.StatfsOut{
+		Bsize:   uint32(blkSize),
+		Blocks:  drive.Quota.Total / blkSize,
+		Bfree:   drive.Quota.Remaining / blkSize,
+		Bavail:  drive.Quota.Remaining / blkSize,
+		Files:   100000,
+		Ffree:   100000 - drive.Quota.FileCount,
+		NameLen: 260,
+	}
+}
+
 // GetAttr returns a stat structure for the specified file
 func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
 	name = leadingSlash(name)
