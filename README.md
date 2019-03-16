@@ -70,5 +70,6 @@ fusermount -u mount
 
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account
+# at the path /onedriver_tests
 make test
 ```

@@ -16,7 +16,7 @@ import (
 
 const (
 	mountLoc = "mount"
-	TestDir  = mountLoc + "/test"
+	TestDir  = mountLoc + "/onedriver_tests"
 )
 
 var auth Auth
