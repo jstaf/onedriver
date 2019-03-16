@@ -174,11 +174,33 @@ func (d DriveItem) getRoot() *DriveItem {
 	return parent
 }
 
-// Flush is called when a file descriptor is closed, and is responsible for upload
+// obtainID uploads an empty file to obtain a Onedrive ID if it doesn't already
+// have one. This is necessary to avoid race conditions against uploads if the
+// file has not already been uploaded.
+func (d *DriveItem) ensureID(auth Auth) error {
+	if d.ID == "" {
+		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
+			d.Parent.ID, d.Name)
+
+		resp, err := Put(uploadPath, auth, strings.NewReader(""))
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(resp, d)
+	}
+	return nil
+}
+
+// Flush is called when a file descriptor is closed. This is responsible for all
+// uploads of file contents.
 func (d DriveItem) Flush() fuse.Status {
 	logger.Trace(d.Name)
 	if d.hasChanges {
 		auth := *d.getRoot().auth
+		// we're betting that uploading an empty file to obtain an ID will be
+		// faster than waiting for a full upload. (d.ensureID is blocking,
+		// upload is not)
+		d.ensureID(auth)
 		go d.Upload(auth)
 	}
 	return fuse.OK
@@ -190,6 +212,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 	// TODO implement upload sessions for files over 4MB
 	var uploadPath string
 	if d.ID == "" { // ID will be empty for a file that's local only
+		// will never be hit with ensureID()
 		uploadPath = fmt.Sprintf("/me/drive/items/%s:/%s:/content",
 			d.Parent.ID, d.Name)
 	} else {
