@@ -60,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("onedriver v%s starting now...", onedriverVersion)
+	logger.Infof("onedriver v%s starting now...", onedriverVersion)
 
 	// setup filesystem
 	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)
