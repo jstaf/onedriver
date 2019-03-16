@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"bufio"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -128,5 +129,57 @@ func TestCopy(t *testing.T) {
 	if string(read) != content {
 		t.Fatalf("File content was not correct - got: %s\n wanted %s\n",
 			string(read), content)
+	}
+}
+
+// do appends work correctly?
+func TestAppend(t *testing.T) {
+	fname := filepath.Join(TestDir, "append.txt")
+	for i := 0; i < 5; i++ {
+		file, _ := os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+		file.WriteString("append\n")
+		file.Close()
+	}
+
+	file, err := os.Open(fname)
+	failOnErr(t, err)
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var counter int
+	for scanner.Scan() {
+		counter++
+		if scanner.Text() != "append" {
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"", scanner.Text())
+		}
+	}
+	if counter != 5 {
+		t.Fatalf("Got wrong number of lines (%d), expected 5", counter)
+	}
+}
+
+// identical to TestAppend, but truncates the file each time it is written to
+func TestTruncate(t *testing.T) {
+	fname := filepath.Join(TestDir, "truncate.txt")
+	for i := 0; i < 5; i++ {
+		file, _ := os.OpenFile(fname, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+		file.WriteString("append\n")
+		file.Close()
+	}
+
+	file, err := os.Open(fname)
+	failOnErr(t, err)
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var counter int
+	for scanner.Scan() {
+		counter++
+		if scanner.Text() != "append" {
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"", scanner.Text())
+		}
+	}
+	if counter != 1 {
+		t.Fatalf("Got wrong number of lines (%d), expected 1", counter)
 	}
 }
