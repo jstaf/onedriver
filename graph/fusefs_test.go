@@ -150,11 +150,11 @@ func TestAppend(t *testing.T) {
 	for scanner.Scan() {
 		counter++
 		if scanner.Text() != "append" {
-			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"", scanner.Text())
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanner.Text())
 		}
 	}
 	if counter != 5 {
-		t.Fatalf("Got wrong number of lines (%d), expected 5", counter)
+		t.Fatalf("Got wrong number of lines (%d), expected 5\n", counter)
 	}
 }
 
@@ -176,10 +176,53 @@ func TestTruncate(t *testing.T) {
 	for scanner.Scan() {
 		counter++
 		if scanner.Text() != "append" {
-			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"", scanner.Text())
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanner.Text())
 		}
 	}
 	if counter != 1 {
-		t.Fatalf("Got wrong number of lines (%d), expected 1", counter)
+		t.Fatalf("Got wrong number of lines (%d), expected 1\n", counter)
+	}
+}
+
+// can we seek to the middle of a file and do writes there correctly?
+func TestReadWriteMidfile(t *testing.T) {
+	content := `Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+Phasellus viverra dui vel velit eleifend, vel auctor nulla scelerisque. 
+Mauris volutpat a justo vel suscipit. 
+Suspendisse diam lorem, imperdiet eget fermentum ut, sodales a nunc. 
+Phasellus eget mattis purus. 
+Aenean vitae justo condimentum, rutrum libero non, commodo ex. 
+Nullam mi metus, accumsan sit amet varius non, volutpat eget mi. 
+Fusce sollicitudin arcu eget ipsum gravida, ut blandit turpis facilisis. 
+Quisque vel rhoncus nulla, ultrices tempor turpis. 
+Nullam urna leo, dapibus eu velit eu, venenatis aliquet tortor. 
+In tempus lacinia est, nec gravida ipsum viverra sed. 
+In vel felis vitae odio pulvinar egestas. 
+Sed ullamcorper, nulla non molestie dictum, massa lectus mattis dolor, 
+in volutpat nulla lectus id neque.`
+	fname := filepath.Join(TestDir, "midfile.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
+
+	file, _ := os.OpenFile(fname, os.O_RDWR, 0644)
+	defer file.Close()
+	match := "my hands are typing words. aaaaaaa"
+
+	n, err := file.WriteAt([]byte(match), 123)
+	failOnErr(t, err)
+	if n != len(match) {
+		t.Fatalf("Got %d bytes written, wanted %d bytes.\n", n, len(match))
+	}
+
+	result := make([]byte, len(match))
+	n, err = file.ReadAt(result, 123)
+	failOnErr(t, err)
+
+	if n != len(match) {
+		t.Fatalf("Got %d bytes read, wanted %d bytes.\n", n, len(match))
+	}
+	if string(result) != match {
+		t.Fatalf("Content did not match expected output.\n"+
+			"Got: \"%s\"\n Wanted: \"%s\"\n",
+			string(result), match)
 	}
 }
