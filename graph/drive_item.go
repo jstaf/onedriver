@@ -141,7 +141,7 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	if end > len(*d.data) {
 		end = len(*d.data)
 	}
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Name, int64(end)-off, off)
+	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), int64(end)-off, off)
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -150,7 +150,7 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Name, nWrite, off)
+	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), nWrite, off)
 
 	if offset+nWrite > int(d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
@@ -194,7 +194,7 @@ func (d *DriveItem) ensureID(auth Auth) error {
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
-	logger.Trace(d.Name)
+	logger.Trace(d.Path())
 	if d.hasChanges {
 		auth := *d.getRoot().auth
 		// we're betting that uploading an empty file to obtain an ID will be
@@ -223,14 +223,14 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	logger.Trace(d.Name)
+	logger.Trace(d.Path())
 	d.ModifyTime = mtime
 	return fuse.OK
 }
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	logger.Trace(d.Name)
+	logger.Trace(d.Path())
 	*d.data = (*d.data)[:size]
 	d.Size = size
 	d.hasChanges = true
@@ -258,7 +258,7 @@ func (d *DriveItem) Mode() uint32 {
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
-	logger.Trace(d.Name)
+	logger.Trace(d.Path())
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms
 	} else {

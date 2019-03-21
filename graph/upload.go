@@ -121,7 +121,7 @@ func (d DriveItem) uploadChunk(auth Auth, offset uint64) (int, error) {
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time.
 func (d *DriveItem) Upload(auth Auth) error {
-	logger.Info(d.Name)
+	logger.Info(d.Path())
 	d.ensureID(auth)
 	if d.Size <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
