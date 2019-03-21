@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,19 +33,20 @@ type File struct {
 // DriveItem represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON.
 type DriveItem struct {
-	nodefs.File `json:"-"`
-	auth        *Auth            // only populated for root item
-	data        *[]byte          // empty by default
-	hasChanges  bool             // used to trigger an upload on flush
-	ID          string           `json:"id,omitempty"`
-	Name        string           `json:"name,omitempty"`
-	Size        uint64           `json:"size,omitempty"`
-	ModifyTime  *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	mode        uint32           // do not set manually
-	Parent      *DriveItemParent `json:"parentReference,omitempty"`
-	children    map[string]*DriveItem
-	Folder      *Folder `json:"folder,omitempty"`
-	FileAPI     *File   `json:"file,omitempty"`
+	nodefs.File      `json:"-"`
+	uploadSessionURL string           // url for current upload session
+	auth             *Auth            // only populated for root item
+	data             *[]byte          // empty by default
+	hasChanges       bool             // used to trigger an upload on flush
+	ID               string           `json:"id,omitempty"`
+	Name             string           `json:"name,omitempty"`
+	Size             uint64           `json:"size,omitempty"`
+	ModifyTime       *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	mode             uint32           // do not set manually
+	Parent           *DriveItemParent `json:"parentReference,omitempty"`
+	children         map[string]*DriveItem
+	Folder           *Folder `json:"folder,omitempty"`
+	FileAPI          *File   `json:"file,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -193,7 +193,7 @@ func (d *DriveItem) ensureID(auth Auth) error {
 
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
-func (d DriveItem) Flush() fuse.Status {
+func (d *DriveItem) Flush() fuse.Status {
 	logger.Trace(d.Name)
 	if d.hasChanges {
 		auth := *d.getRoot().auth
@@ -204,26 +204,6 @@ func (d DriveItem) Flush() fuse.Status {
 		go d.Upload(auth)
 	}
 	return fuse.OK
-}
-
-// Upload copies the file's contents to the server
-func (d *DriveItem) Upload(auth Auth) error {
-	logger.Info(d.Name)
-	// TODO implement upload sessions for files over 4MB
-	var uploadPath string
-	if d.ID == "" { // ID will be empty for a file that's local only
-		// will never be hit with ensureID()
-		uploadPath = fmt.Sprintf("/me/drive/items/%s:/%s:/content",
-			d.Parent.ID, d.Name)
-	} else {
-		uploadPath = "/me/drive/items/" + d.ID + "/content"
-	}
-	resp, err := Put(uploadPath, auth, bytes.NewReader(*d.data))
-	if err != nil {
-		return err
-	}
-	// Unmarshal into existing item so we don't have to redownload file contents.
-	return json.Unmarshal(resp, d)
 }
 
 // GetAttr returns a the DriveItem as a UNIX stat

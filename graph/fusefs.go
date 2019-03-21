@@ -131,7 +131,6 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
-	item.ensureID(fs.Auth) //TODO can we get rid of this?
 	if item.ID == "" {
 		// uploads will fail without an id
 		if item.IsDir() {
