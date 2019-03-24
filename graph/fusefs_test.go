@@ -89,7 +89,7 @@ func TestReadWrite(t *testing.T) {
 	read, err := ioutil.ReadFile(fname)
 	failOnErr(t, err)
 	if string(read) != content {
-		t.Fatalf("File content was not correct - got: %s\n wanted %s\n",
+		t.Fatalf("File content was not correct - got: %s\nwanted: %s\n",
 			string(read), content)
 	}
 }
@@ -127,7 +127,7 @@ func TestCopy(t *testing.T) {
 	read, err := ioutil.ReadFile(fname)
 	failOnErr(t, err)
 	if string(read) != content {
-		t.Fatalf("File content was not correct - got: %s\n wanted %s\n",
+		t.Fatalf("File content was not correct\ngot: %s\nwanted: %s\n",
 			string(read), content)
 	}
 }
@@ -187,19 +187,16 @@ func TestTruncate(t *testing.T) {
 // can we seek to the middle of a file and do writes there correctly?
 func TestReadWriteMidfile(t *testing.T) {
 	content := `Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-Phasellus viverra dui vel velit eleifend, vel auctor nulla scelerisque. 
-Mauris volutpat a justo vel suscipit. 
-Suspendisse diam lorem, imperdiet eget fermentum ut, sodales a nunc. 
-Phasellus eget mattis purus. 
-Aenean vitae justo condimentum, rutrum libero non, commodo ex. 
-Nullam mi metus, accumsan sit amet varius non, volutpat eget mi. 
-Fusce sollicitudin arcu eget ipsum gravida, ut blandit turpis facilisis. 
-Quisque vel rhoncus nulla, ultrices tempor turpis. 
-Nullam urna leo, dapibus eu velit eu, venenatis aliquet tortor. 
-In tempus lacinia est, nec gravida ipsum viverra sed. 
-In vel felis vitae odio pulvinar egestas. 
-Sed ullamcorper, nulla non molestie dictum, massa lectus mattis dolor, 
-in volutpat nulla lectus id neque.`
+Phasellus viverra dui vel velit eleifend, vel auctor nulla scelerisque.
+Mauris volutpat a justo vel suscipit. Suspendisse diam lorem, imperdiet eget
+fermentum ut, sodales a nunc. Phasellus eget mattis purus. Aenean vitae justo
+condimentum, rutrum libero non, commodo ex. Nullam mi metus, accumsan sit
+amet varius non, volutpat eget mi. Fusce sollicitudin arcu eget ipsum
+gravida, ut blandit turpis facilisis. Quisque vel rhoncus nulla, ultrices
+tempor turpis. Nullam urna leo, dapibus eu velit eu, venenatis aliquet
+tortor. In tempus lacinia est, nec gravida ipsum viverra sed. In vel felis
+vitae odio pulvinar egestas. Sed ullamcorper, nulla non molestie dictum,
+massa lectus mattis dolor, in volutpat nulla lectus id neque.`
 	fname := filepath.Join(TestDir, "midfile.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
 

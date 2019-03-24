@@ -19,6 +19,24 @@ import (
 // 10MB is the recommended upload size according to the graph API docs
 const chunkSize uint64 = 10 * 1024 * 1024
 
+// UploadSession contains a snapshot of the file we're uploading. We have to
+// take the snapshot or the file may have changed on disk during upload (which
+// would break the upload).
+type UploadSession struct {
+	ID                 string    `json:"id"`
+	UploadURL          string    `json:"uploadUrl"`
+	ExpirationDateTime time.Time `json:"expirationDateTime"`
+	data               *[]byte
+	Size               uint64 `json:"-"`
+}
+
+// UploadSessionPost is the initial post used to create an upload session
+type UploadSessionPost struct {
+	Name             string `json:"name,omitempty"`
+	ConflictBehavior string `json:"@microsoft.graph.conflictBehavior,omitempty"`
+	FileSystemInfo   `json:"fileSystemInfo,omitempty"`
+}
+
 // FileSystemInfo carries the filesystem metadata like Mtime/Atime
 type FileSystemInfo struct {
 	CreatedDateTime      time.Time `json:"createdDateTime,omitempty"`
@@ -26,74 +44,64 @@ type FileSystemInfo struct {
 	LastModifiedDateTime time.Time `json:"lastModifiedDateTime,omitempty"`
 }
 
-// UploadSession is the initial post used to create an upload session
-type UploadSession struct {
-	Name             string `json:"name,omitempty"`
-	ConflictBehavior string `json:"@microsoft.graph.conflictBehavior,omitempty"`
-	FileSystemInfo   `json:"fileSystemInfo,omitempty"`
-}
-
-// UploadSessionResponse is created on a successful POST
-type UploadSessionResponse struct {
-	UploadURL          string    `json:"uploadUrl"`
-	ExpirationDateTime time.Time `json:"expirationDateTime"`
-}
-
 // createUploadSession creates a new "upload session" resource on the server for
 // uploading big files.
-func (d *DriveItem) createUploadSession(auth Auth) error {
+func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 	d.cancelUploadSession(auth) // THERE CAN ONLY BE ONE!
 
 	if d.ID == "" {
-		return errors.New("id cannot be empty")
+		return nil, errors.New("id cannot be empty")
 	}
 
-	session, _ := json.Marshal(UploadSession{
+	sessionResp, _ := json.Marshal(UploadSessionPost{
 		ConflictBehavior: "replace",
 		FileSystemInfo: FileSystemInfo{
 			LastModifiedDateTime: *d.ModifyTime,
 		},
 	})
 	resp, err := Post("/me/drive/items/"+d.ID+"/createUploadSession",
-		auth, bytes.NewReader(session))
+		auth, bytes.NewReader(sessionResp))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	dest := UploadSessionResponse{}
-	err = json.Unmarshal(resp, &dest)
+	session := UploadSession{Size: d.Size}
+	err = json.Unmarshal(resp, &session)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	d.uploadSessionURL = dest.UploadURL
-	return nil
+	snapshot := make([]byte, session.Size)
+	copy(snapshot, *d.data)
+	session.data = &snapshot
+	d.uploadSession = &session
+	return &session, nil
 }
 
 // cancel the upload session by deleting the temp file at the endpoint and
 // clearing the singleton field in the DriveItem
 func (d *DriveItem) cancelUploadSession(auth Auth) {
-	if d.uploadSessionURL != "" {
-		Delete(d.uploadSessionURL, auth)
+	if d.uploadSession != nil {
+		Delete(d.uploadSession.UploadURL, auth)
 	}
-	d.uploadSessionURL = ""
+	d.uploadSession = nil
 }
 
 // Internal method used for uploading individual chunks of a DriveItem. We have
 // to make things this way because the internal Put func doesn't work all that
 // well when we need to add custom headers.
-func (d DriveItem) uploadChunk(auth Auth, offset uint64) (int, error) {
-	if d.uploadSessionURL == "" {
-		return -1, errors.New("uploadSessionURL cannot be empty")
+func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
+	if u.UploadURL == "" {
+		return -1, errors.New("uploadSession UploadURL cannot be empty")
 	}
 
 	// how much of the file are we going to upload?
 	end := offset + chunkSize
 	var reqChunkSize uint64
-	if end > d.Size {
-		end = d.Size + 1
+	if end > u.Size {
+		end = u.Size + 1
 		reqChunkSize = end - offset
 	}
-	if offset > d.Size {
+	if offset > u.Size {
 		return -1, errors.New("offset cannot be larger than DriveItem size")
 	}
 
@@ -101,11 +109,11 @@ func (d DriveItem) uploadChunk(auth Auth, offset uint64) (int, error) {
 
 	client := &http.Client{}
 	request, _ := http.NewRequest("PUT",
-		d.uploadSessionURL, bytes.NewReader((*d.data)[offset:end]))
+		u.UploadURL, bytes.NewReader((*u.data)[offset:end]))
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", string(reqChunkSize))
 	request.Header.Add("Content-Range",
-		fmt.Sprintf("bytes %d-%d/%d", offset, end, d.Size))
+		fmt.Sprintf("bytes %d-%d/%d", offset, end, u.Size))
 
 	resp, err := client.Do(request)
 	if err != nil {
@@ -136,14 +144,15 @@ func (d *DriveItem) Upload(auth Auth) error {
 	}
 
 	logger.Info("Creating upload session for", d.Name)
-	if err := d.createUploadSession(auth); err != nil {
+	session, err := d.createUploadSession(auth)
+	if err != nil {
 		logger.Error("Could not create upload session:", err)
 		return err
 	}
 
 	nchunks := int(math.Ceil(float64(d.Size) / float64(chunkSize)))
 	for i := 0; i < nchunks; i++ {
-		status, err := d.uploadChunk(auth, uint64(i)*chunkSize)
+		status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
 		if err != nil {
 			logger.Errorf("Error while uploading chunk %d of %d: %s\n", i, nchunks, err)
 			logger.Error("Cancelling upload session...")
@@ -155,7 +164,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 		for backoff := 1; status >= 500; backoff *= 2 {
 			logger.Error("The OneDrive server is having issues, "+
 				"retrying upload in %ds...", backoff)
-			status, err = d.uploadChunk(auth, uint64(i)*chunkSize)
+			status, err = session.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil {
 				logger.Error("Failed while retrying upload. Killing upload session...")
 				d.cancelUploadSession(auth)
@@ -165,7 +174,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 
 		if status == 404 {
 			logger.Error("Upload session expired, cancelling upload.")
-			d.uploadSessionURL = "" // nothing to delete on the server
+			d.uploadSession = nil // nothing to delete on the server
 			return errors.New("Upload session expired")
 		}
 	}

@@ -4,8 +4,7 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
 	go build
 
 test: onedriver
-	go test ./logger
-	go test ./graph
+	go test ./logger ./graph
 
 # for autocompletion by ide-clangd
 compile_flags.txt:

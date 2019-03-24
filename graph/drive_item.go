@@ -33,20 +33,20 @@ type File struct {
 // DriveItem represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON.
 type DriveItem struct {
-	nodefs.File      `json:"-"`
-	uploadSessionURL string           // url for current upload session
-	auth             *Auth            // only populated for root item
-	data             *[]byte          // empty by default
-	hasChanges       bool             // used to trigger an upload on flush
-	ID               string           `json:"id,omitempty"`
-	Name             string           `json:"name,omitempty"`
-	Size             uint64           `json:"size,omitempty"`
-	ModifyTime       *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	mode             uint32           // do not set manually
-	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	children         map[string]*DriveItem
-	Folder           *Folder `json:"folder,omitempty"`
-	FileAPI          *File   `json:"file,omitempty"`
+	nodefs.File   `json:"-"`
+	uploadSession *UploadSession   // current upload session, or nil
+	auth          *Auth            // only populated for root item
+	data          *[]byte          // empty by default
+	hasChanges    bool             // used to trigger an upload on flush
+	ID            string           `json:"id,omitempty"`
+	Name          string           `json:"name,omitempty"`
+	Size          uint64           `json:"size,omitempty"`
+	ModifyTime    *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	mode          uint32           // do not set manually
+	Parent        *DriveItemParent `json:"parentReference,omitempty"`
+	children      map[string]*DriveItem
+	Folder        *Folder `json:"folder,omitempty"`
+	FileAPI       *File   `json:"file,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
