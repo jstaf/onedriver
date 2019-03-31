@@ -18,7 +18,7 @@ install:
   - pip install --user awscli
 script:
   - go build
-  - aws s3 cp fusefs-travis/auth_tokens.json .
+  - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - make test
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
