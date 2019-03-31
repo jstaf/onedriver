@@ -1,10 +1,3 @@
-language: go
-go:
-  - "1.11"
-env:
-  - GO111MODULE=on
-script:
-  - go build
 dist: xenial
 addons:
   apt:
@@ -12,3 +5,24 @@ addons:
       - gcc
       - pkg-config
       - libwebkit2gtk-4.0-dev
+      - python3
+
+language: go
+go:
+  - "1.11"
+env:
+  - GO111MODULE=on
+
+# we copy the auth_tokens for the test account to and from s3 each build.
+cache: pip
+install:
+  - pip3 install awscli
+script:
+  - go build
+  - aws s3 cp fusefs-travis/auth_tokens.json .
+  - make test
+after_script:
+  - aws s3 cp auth_tokens.json s3://fusefs-travis/
+
+notifications:
+  email: false
