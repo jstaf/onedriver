@@ -16,7 +16,9 @@ env:
 # we copy the auth_tokens for the test account to and from s3 each build.
 cache: pip
 install:
-  - pip3 install awscli
+  - python --version
+  - pip --version
+  - pip install awscli
 script:
   - go build
   - aws s3 cp fusefs-travis/auth_tokens.json .
