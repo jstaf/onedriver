@@ -5,7 +5,6 @@ addons:
       - gcc
       - pkg-config
       - libwebkit2gtk-4.0-dev
-      - python3
 
 language: go
 go:
@@ -16,9 +15,7 @@ env:
 # we copy the auth_tokens for the test account to and from s3 each build.
 cache: pip
 install:
-  - python --version
-  - pip --version
-  - pip install awscli
+  - pip install --user awscli
 script:
   - go build
   - aws s3 cp fusefs-travis/auth_tokens.json .
