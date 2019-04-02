@@ -146,7 +146,6 @@ func (d *DriveItem) Upload(auth Auth) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(resp)
 		// Unmarshal into existing item so we don't have to redownload file contents.
 		return json.Unmarshal(resp, d)
 	}
