@@ -268,6 +268,11 @@ func TestUploadSession(t *testing.T) {
 		t.Fatalf("Could not read final line of FASTA. Wanted \"%s\", got \"%s\"\n",
 			header, match)
 	}
+
+	st, _ := os.Stat(dname)
+	if st.Size() == 0 {
+		t.Fatal("File size cannot be 0.")
+	}
 }
 
 func TestIgnoredFiles(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"strconv"
@@ -94,9 +95,9 @@ func (d *DriveItem) cancelUploadSession(auth Auth) {
 // Internal method used for uploading individual chunks of a DriveItem. We have
 // to make things this way because the internal Put func doesn't work all that
 // well when we need to add custom headers.
-func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
+func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error) {
 	if u.UploadURL == "" {
-		return -1, errors.New("uploadSession UploadURL cannot be empty")
+		return nil, -1, errors.New("uploadSession UploadURL cannot be empty")
 	}
 
 	// how much of the file are we going to upload?
@@ -107,7 +108,7 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
 		reqChunkSize = end - offset + 1
 	}
 	if offset > u.Size {
-		return -1, errors.New("offset cannot be larger than DriveItem size")
+		return nil, -1, errors.New("offset cannot be larger than DriveItem size")
 	}
 
 	auth.Refresh()
@@ -118,17 +119,17 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	request.Header.Add("Content-Range",
-		fmt.Sprintf("bytes %d-%d/%d", offset, end, u.Size))
+		fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size))
 
 	resp, err := client.Do(request)
 	if err != nil {
 		// this is a serious error, not simply one with a non-200 return code
 		logger.Error("Error during file upload, terminating upload session.")
-		return -1, err
+		return nil, -1, err
 	}
 	defer resp.Body.Close()
-
-	return resp.StatusCode, nil
+	response, _ := ioutil.ReadAll(resp.Body)
+	return response, resp.StatusCode, nil
 }
 
 // Upload copies the file's contents to the server. Should only be called as a
@@ -157,7 +158,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 
 	nchunks := int(math.Ceil(float64(d.Size) / float64(chunkSize)))
 	for i := 0; i < nchunks; i++ {
-		status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
+		resp, status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
 		if err != nil {
 			logger.Errorf("Error while uploading chunk %d of %d: %s\n", i, nchunks, err)
 			logger.Error("Cancelling upload session...")
@@ -169,19 +170,25 @@ func (d *DriveItem) Upload(auth Auth) error {
 		for backoff := 1; status >= 500; backoff *= 2 {
 			logger.Error("The OneDrive server is having issues, "+
 				"retrying upload in %ds...", backoff)
-			status, err = session.uploadChunk(auth, uint64(i)*chunkSize)
+			resp, status, err = session.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil {
+				logger.Error(resp)
 				logger.Error("Failed while retrying upload. Killing upload session...")
 				d.cancelUploadSession(auth)
 				return err
 			}
 		}
 
+		// handle client-side errors
 		if status == 404 {
 			logger.Error("Upload session expired, cancelling upload.")
 			d.uploadSession = nil // nothing to delete on the server
 			return errors.New("Upload session expired")
+		} else if status >= 400 {
+			logger.Errorf("Error %d during upload: %s\n", status, resp)
 		}
+
+		logger.Infof("Upload of chunk %d of %d completed!", i+1, nchunks)
 	}
 
 	logger.Infof("Upload of %s completed!", d.Path())
