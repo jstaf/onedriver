@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
@@ -59,7 +60,11 @@ func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 			LastModifiedDateTime: *d.ModifyTime,
 		},
 	})
-	resp, err := Post("/me/drive/items/"+d.ID+"/createUploadSession",
+
+	//TODO yikes, there has to be a way to upload by ID here... cmon microsoft.
+	// (unless we can upload by id, an upload that gets mv-ed before it's
+	// finished will do weird things locally)
+	resp, err := Post(ResourcePath(d.Path())+":/createUploadSession",
 		auth, bytes.NewReader(sessionResp))
 	if err != nil {
 		return nil, err
@@ -98,8 +103,8 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
 	end := offset + chunkSize
 	var reqChunkSize uint64
 	if end > u.Size {
-		end = u.Size + 1
-		reqChunkSize = end - offset
+		end = u.Size - 1
+		reqChunkSize = end - offset + 1
 	}
 	if offset > u.Size {
 		return -1, errors.New("offset cannot be larger than DriveItem size")
@@ -111,7 +116,7 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) (int, error) {
 	request, _ := http.NewRequest("PUT",
 		u.UploadURL, bytes.NewReader((*u.data)[offset:end]))
 	// no Authorization header - it will throw a 401 if present
-	request.Header.Add("Content-Length", string(reqChunkSize))
+	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	request.Header.Add("Content-Range",
 		fmt.Sprintf("bytes %d-%d/%d", offset, end, u.Size))
 
