@@ -234,3 +234,38 @@ func TestStatFs(t *testing.T) {
 		t.Fatal("StatFs failed, got 0 blocks!")
 	}
 }
+
+// does unlink work? (because apparently we weren't testing that before...)
+func TestUnlink(t *testing.T) {
+	fname := filepath.Join(TestDir, "unlink_tester")
+	failOnErr(t, exec.Command("touch", fname).Run())
+	failOnErr(t, os.Remove(fname))
+	stdout, _ := exec.Command("ls", "mount").Output()
+	if strings.Contains(string(stdout), "unlink_tester") {
+		t.Fatalf("Deleting %s did not work.", fname)
+	}
+}
+
+// copy large file inside onedrive mount, then verify that we can still
+// access selected lines
+func TestUploadSession(t *testing.T) {
+	fname := "dmel.fa"
+	dname := filepath.Join(TestDir, "dmel.fa")
+	failOnErr(t, exec.Command("cp", fname, dname).Run())
+
+	contents, err := ioutil.ReadFile(dname)
+	failOnErr(t, err)
+
+	header := ">X dna:chromosome chromosome:BDGP6.22:X:1:23542271:1 REF"
+	if string(contents[:len(header)]) != header {
+		t.Fatalf("Could not read FASTA header. Wanted \"%s\", got \"%s\"\n",
+			header, string(contents[:len(header)]))
+	}
+
+	final := "AAATAAAATAC"
+	match := string(contents[len(contents)-len(final):])
+	if match != final {
+		t.Fatalf("Could not read final line of FASTA. Wanted \"%s\", got \"%s\"\n",
+			header, match)
+	}
+}
