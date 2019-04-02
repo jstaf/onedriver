@@ -21,7 +21,8 @@ install:
 script:
   - go build
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
-  - make dmel.fa
+  - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
+  - gunzip dmel.fa.gz
   - go test -covermode=count -coverprofile=coverage.out ./logger ./graph 
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
