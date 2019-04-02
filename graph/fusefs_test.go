@@ -269,3 +269,11 @@ func TestUploadSession(t *testing.T) {
 			header, match)
 	}
 }
+
+func TestIgnoredFiles(t *testing.T) {
+	fname := filepath.Join(TestDir, ".Trash-1000")
+	_, err := os.Stat(fname)
+	if err == nil || !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatal("Somehow we found a non-existent file.")
+	}
+}
