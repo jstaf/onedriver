@@ -104,7 +104,7 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 	end := offset + chunkSize
 	var reqChunkSize uint64
 	if end > u.Size {
-		end = u.Size - 1
+		end = u.Size
 		reqChunkSize = end - offset + 1
 	}
 	if offset > u.Size {
@@ -118,8 +118,9 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 		u.UploadURL, bytes.NewReader((*u.data)[offset:end]))
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
-	request.Header.Add("Content-Range",
-		fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size))
+	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
+	logger.Info("Uploading", frags)
+	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)
 	if err != nil {
@@ -145,6 +146,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 		if err != nil {
 			return err
 		}
+		fmt.Println(resp)
 		// Unmarshal into existing item so we don't have to redownload file contents.
 		return json.Unmarshal(resp, d)
 	}
@@ -187,8 +189,6 @@ func (d *DriveItem) Upload(auth Auth) error {
 		} else if status >= 400 {
 			logger.Errorf("Error %d during upload: %s\n", status, resp)
 		}
-
-		logger.Infof("Upload of chunk %d of %d completed!", i+1, nchunks)
 	}
 
 	logger.Infof("Upload of %s completed!", d.Path())

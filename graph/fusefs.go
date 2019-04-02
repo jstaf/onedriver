@@ -111,7 +111,6 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	if ignore(name) {
 		return nil, fuse.ENOENT
 	}
-	logger.Trace(name)
 
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
@@ -119,6 +118,8 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 		// method when accessing a file
 		return nil, fuse.ENOENT
 	}
+	logger.Trace(name)
+
 	attr := fuse.Attr{}
 	status := item.GetAttr(&attr)
 

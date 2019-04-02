@@ -91,8 +91,10 @@ func (d DriveItem) Path() string {
 	if d.Parent.Path == "" && d.Name == "root" {
 		return "/"
 	}
+
 	// all paths come prefixed with "/drive/root:"
-	return strings.TrimPrefix(d.Parent.Path+"/"+d.Name, "/drive/root:")
+	prepath := strings.TrimPrefix(d.Parent.Path+"/"+d.Name, "/drive/root:")
+	return strings.Replace(prepath, "//", "/", -1)
 }
 
 // only used for parsing
