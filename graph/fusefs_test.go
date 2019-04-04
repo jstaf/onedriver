@@ -282,3 +282,30 @@ func TestIgnoredFiles(t *testing.T) {
 		t.Fatal("Somehow we found a non-existent file.")
 	}
 }
+
+// OneDrive is case-insensitive due to limitations imposed by Windows NTFS
+// filesystem. Make sure we prevent users of normal systems from running into
+// issues with OneDrive's case-insensitivity.
+func TestNTFSIsABadFilesystem(t *testing.T) {
+	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
+		[]byte("NTFS is bad"), 0644))
+
+	err := ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
+		[]byte("yep"), 0644)
+	if err == nil {
+		t.Fatal("We should be throwing an error, since OneDrive is case-insensitive.")
+	}
+}
+
+// same as last test, but with exclusive create() calls.
+func TestNTFSIsABadFilesystem2(t *testing.T) {
+	file, err := os.OpenFile(filepath.Join(TestDir, "case-sensitive2.txt"), os.O_CREATE|os.O_EXCL, 0644)
+	failOnErr(t, err)
+	file.Close()
+
+	file, err = os.OpenFile(filepath.Join(TestDir, "CASE-SENSITIVE2.txt"), os.O_CREATE|os.O_EXCL, 0644)
+	defer file.Close()
+	if err == nil {
+		t.Fatal("We should be throwing an error, since OneDrive is case-insensitive.")
+	}
+}
