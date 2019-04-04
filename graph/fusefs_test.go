@@ -300,11 +300,11 @@ func TestNTFSIsABadFilesystem(t *testing.T) {
 // same as last test, but with exclusive create() calls.
 func TestNTFSIsABadFilesystem2(t *testing.T) {
 	file, err := os.OpenFile(filepath.Join(TestDir, "case-sensitive2.txt"), os.O_CREATE|os.O_EXCL, 0644)
-	failOnErr(t, err)
 	file.Close()
+	failOnErr(t, err)
 
 	file, err = os.OpenFile(filepath.Join(TestDir, "CASE-SENSITIVE2.txt"), os.O_CREATE|os.O_EXCL, 0644)
-	defer file.Close()
+	file.Close()
 	if err == nil {
 		t.Fatal("We should be throwing an error, since OneDrive is case-insensitive.")
 	}
