@@ -310,6 +310,32 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 	}
 }
 
+// Ensure that case-sensitivity collisions due to renames are handled properly
+// (allow rename/overwrite for exact matches, deny when case-sensitivity would
+// normally allow success)
+func TestNTFSIsABadFilesystem3(t *testing.T) {
+	fname := filepath.Join(TestDir, "original_NAME.txt")
+	ioutil.WriteFile(fname, []byte("original"), 0644)
+
+	// should work
+	secondName := filepath.Join(TestDir, "new_name.txt")
+	failOnErr(t, ioutil.WriteFile(secondName, []byte("new"), 0644))
+	failOnErr(t, os.Rename(secondName, fname))
+	contents, err := ioutil.ReadFile(fname)
+	if string(contents) != "new" {
+		t.Fatalf("Contents did not match expected output: got \"%s\", wanted \"new\"\n",
+			string(contents))
+	}
+
+	// should fail
+	thirdName := filepath.Join(TestDir, "new_name2.txt")
+	failOnErr(t, ioutil.WriteFile(thirdName, []byte("this rename shouldn't work"), 0644))
+	err = os.Rename(thirdName, filepath.Join(TestDir, "original_name.txt"))
+	if err == nil {
+		t.Fatal("This rename should have failed, since it matched due to case-insensitivity.")
+	}
+}
+
 // This test is insurance to prevent tests (and the fs) from accidentally not
 // storing case for filenames at all
 func TestChildrenAreCasedProperly(t *testing.T) {
