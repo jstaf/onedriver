@@ -212,6 +212,7 @@ func (d *DriveItem) Flush() fuse.Status {
 		// faster than waiting for a full upload. (d.ensureID is blocking,
 		// upload is not)
 		d.ensureID(auth)
+		d.hasChanges = false
 		go d.Upload(auth)
 	}
 	return fuse.OK

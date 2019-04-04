@@ -144,6 +144,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 		resp, err := Put("/me/drive/items/"+d.ID+"/content", auth,
 			bytes.NewReader(*d.data))
 		if err != nil {
+			d.hasChanges = true
 			return err
 		}
 		// Unmarshal into existing item so we don't have to redownload file contents.
@@ -164,6 +165,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 			logger.Errorf("Error while uploading chunk %d of %d: %s\n", i, nchunks, err)
 			logger.Error("Cancelling upload session...")
 			d.cancelUploadSession(auth)
+			d.hasChanges = true
 			return err
 		}
 
@@ -176,6 +178,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 				logger.Error(resp)
 				logger.Error("Failed while retrying upload. Killing upload session...")
 				d.cancelUploadSession(auth)
+				d.hasChanges = true
 				return err
 			}
 		}
@@ -184,9 +187,12 @@ func (d *DriveItem) Upload(auth Auth) error {
 		if status == 404 {
 			logger.Error("Upload session expired, cancelling upload.")
 			d.uploadSession = nil // nothing to delete on the server
+			d.hasChanges = true
 			return errors.New("Upload session expired")
 		} else if status >= 400 {
 			logger.Errorf("Error %d during upload: %s\n", status, resp)
+			d.hasChanges = true
+			return errors.New(string(resp))
 		}
 	}
 
