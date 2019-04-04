@@ -262,11 +262,11 @@ func TestUploadSession(t *testing.T) {
 			header, string(contents[:len(header)]))
 	}
 
-	final := "AAATAAAATAC"
+	final := "AAATAAAATAC\n" // makes yucky test output, but is the final line
 	match := string(contents[len(contents)-len(final):])
 	if match != final {
 		t.Fatalf("Could not read final line of FASTA. Wanted \"%s\", got \"%s\"\n",
-			header, match)
+			final, match)
 	}
 
 	st, _ := os.Stat(dname)

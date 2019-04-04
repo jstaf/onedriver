@@ -188,7 +188,16 @@ func (d *DriveItem) ensureID(auth Auth) error {
 		if err != nil {
 			return err
 		}
-		return json.Unmarshal(resp, d)
+
+		// we use a new DriveItem to unmarshal things into or it will fuck
+		// with the existing object (namely its size)
+		unsafe := NewDriveItem(d.Name, d.Mode(), d.Parent.item)
+		err = json.Unmarshal(resp, unsafe)
+		if err != nil {
+			return err
+		}
+		// this is all we really wanted from this transaction
+		d.ID = unsafe.ID
 	}
 	return nil
 }
