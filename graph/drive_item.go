@@ -208,11 +208,9 @@ func (d *DriveItem) Flush() fuse.Status {
 	logger.Trace(d.Path())
 	if d.hasChanges {
 		auth := *d.getRoot().auth
-		// we're betting that uploading an empty file to obtain an ID will be
-		// faster than waiting for a full upload. (d.ensureID is blocking,
-		// upload is not)
-		d.ensureID(auth)
 		d.hasChanges = false
+		// ensureID() is no longer used here to make upload dispatch even faster
+		// (since upload is using ensureID() internally)
 		go d.Upload(auth)
 	}
 	return fuse.OK
