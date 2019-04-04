@@ -139,9 +139,10 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			return fuse.EBADF
 		}
 
-		if item.Upload(fs.Auth) != nil || item.ID == "" {
-			logger.Error("ID of item to move cannot be empty " +
-				"and we failed to obtain an ID.")
+		err := item.ensureID(fs.Auth)
+		if err != nil {
+			logger.Error("ID of item to move cannot be empty "+
+				"and we failed to obtain an ID. Error:", err.Error())
 			return fuse.EBADF
 		}
 	}

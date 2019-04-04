@@ -97,7 +97,9 @@ func TestReadWrite(t *testing.T) {
 // test that we can create a file and rename it
 func TestRenameMove(t *testing.T) {
 	fname := filepath.Join(TestDir, "rename.txt")
-	dname := filepath.Join(TestDir, "new-name.txt")
+	//TODO this test fails when destination name is "new-name.txt"...
+	// is it a name collision with another test?
+	dname := filepath.Join(TestDir, "new-destination-name.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	failOnErr(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)

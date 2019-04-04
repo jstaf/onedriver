@@ -180,6 +180,11 @@ func (d DriveItem) getRoot() *DriveItem {
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded.
 func (d *DriveItem) ensureID(auth Auth) error {
+	if d.IsDir() {
+		//TODO maybe retry the dir creation again server-side?
+		return nil
+	}
+
 	if d.ID == "" {
 		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
 			d.Parent.ID, d.Name)
