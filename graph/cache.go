@@ -30,6 +30,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 
 	// from the root directory, traverse the chain of items till we reach our
 	// target key
+	key = strings.ToLower(key)
 	key = strings.TrimSuffix(key, "/")
 	split := strings.Split(key, "/")[1:] // omit leading "/"
 	for i := 0; i < len(split); i++ {
@@ -59,6 +60,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 
 // Delete an item from the cache
 func (c *ItemCache) Delete(key string) {
+	key = strings.ToLower(key)
 	// Uses empty auth, since we actually don't want to waste time fetching
 	// items that are only being fetched so they can be deleted.
 	parent, err := c.Get(filepath.Dir(key), Auth{})
@@ -69,13 +71,14 @@ func (c *ItemCache) Delete(key string) {
 
 // Insert lets us manually insert an item to the cache (like if it was created
 // locally). Overwrites a cached item if present.
-func (c *ItemCache) Insert(resource string, auth Auth, item *DriveItem) error {
-	parent, err := c.Get(filepath.Dir(resource), auth)
+func (c *ItemCache) Insert(key string, auth Auth, item *DriveItem) error {
+	key = strings.ToLower(key)
+	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
 		return err
 	}
 	item.setParent(parent)
-	parent.children[filepath.Base(resource)] = item
+	parent.children[filepath.Base(key)] = item
 	return nil
 }
 

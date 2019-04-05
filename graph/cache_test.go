@@ -30,7 +30,7 @@ func TestRootChildrenUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, exists := root.children["Documents"]; !exists {
+	if _, exists := root.children["documents"]; !exists {
 		t.Fatal("Could not find documents folder.")
 	}
 }

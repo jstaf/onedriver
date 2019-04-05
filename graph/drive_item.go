@@ -120,7 +120,7 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	d.children = make(map[string]*DriveItem)
 	for _, child := range fetched.Children {
 		child.Parent.item = d
-		d.children[child.Name] = child
+		d.children[strings.ToLower(child.Name)] = child
 	}
 
 	return d.children, nil
