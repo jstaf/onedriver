@@ -1,11 +1,13 @@
 package logger
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -71,6 +73,19 @@ func extractFuncName(ptr uintptr) string {
 	return fname[lastDot+1:] + "()"
 }
 
+// extractGoroutineID fetches the current goroutine ID. Used solely for
+// debugging which goroutine is doing what in the logs.
+// Adapted from https://github.com/golang/net/blob/master/http2/gotrack.go
+func extractGoroutineID() uint64 {
+	buf := make([]byte, 64)
+	buf = buf[:runtime.Stack(buf, false)]
+	// parse out # in the format "goroutine # "
+	buf = bytes.TrimPrefix(buf, []byte("goroutine "))
+	buf = buf[:bytes.IndexByte(buf, ' ')]
+	id, _ := strconv.ParseUint(string(buf), 10, 64)
+	return id
+}
+
 // Log a function's output at a various level, ignoring messages below the
 // currently configured level.
 func logger(level LogLevel, format string, args ...interface{}) {
@@ -103,8 +118,11 @@ func logger(level LogLevel, format string, args ...interface{}) {
 		functionName = "(unknown source)"
 	}
 
-	log.Printf("- %s - %s:%d:%s - %s",
-		pad(prefix, 5), filepath.Base(file), line, functionName, preformatted)
+	log.Printf("- %s - %s - %s:%d:%s - %s",
+		pad(strconv.Itoa(int(extractGoroutineID())), 3), // goroutine ID
+		pad(prefix, 5),                          // log level
+		filepath.Base(file), line, functionName, // function being logged
+		preformatted) // actual log message
 }
 
 // Fatalf logs and kills the program. Uses printf formatting.
