@@ -140,7 +140,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		}
 
 		err := item.ensureID(fs.Auth)
-		if err != nil {
+		if err != nil || item.ID == "" {
 			logger.Error("ID of item to move cannot be empty "+
 				"and we failed to obtain an ID. Error:", err.Error())
 			return fuse.EBADF
@@ -168,8 +168,12 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		item.Name = newBase
 	}
 
-	jsonPatch, _ := json.Marshal(patchContent)
+	// if an item already exists at the new name, we'll need to purge it or the
+	// server will refuse to perform the op
+	fs.Unlink(newName, nil)
+
 	// don't actually care about the response content
+	jsonPatch, _ := json.Marshal(patchContent)
 	_, err := Patch("/me/drive/items/"+item.ID, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		logger.Error(err)
@@ -321,9 +325,14 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 	name = leadingSlash(name)
 	logger.Trace(name)
 
-	item, _ := fs.items.Get(name, fs.Auth)
+	item, err := fs.items.Get(name, fs.Auth)
+	// allow safely calling Unlink on items that don't actually exist
+	if err != nil && strings.Contains(err.Error(), "does not exist") {
+		return fuse.ENOENT
+	}
+
 	if item.ID != "" {
-		err := Delete(ResourcePath(name), fs.Auth)
+		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
 			logger.Error(err)
 			return fuse.EREMOTEIO

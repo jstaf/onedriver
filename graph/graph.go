@@ -27,7 +27,10 @@ func Request(resource string, auth Auth, method string, content io.Reader) ([]by
 	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
-	case "POST", "PATCH":
+	case "PATCH":
+		request.Header.Add("If-Match", "*")
+		request.Header.Add("Content-Type", "application/json")
+	case "POST":
 		request.Header.Add("Content-Type", "application/json")
 	case "PUT":
 		request.Header.Add("Content-Type", "text/plain")
