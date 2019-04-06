@@ -58,8 +58,8 @@ func pad(text string, length int) string {
 	return text
 }
 
-func extractFuncName(ptr uintptr) string {
-	// grab function name
+// funcName gets the current function name from a pointer
+func funcName(ptr uintptr) string {
 	fname := runtime.FuncForPC(ptr).Name()
 	lastDot := 0
 	for i := 0; i < len(fname); i++ {
@@ -73,10 +73,10 @@ func extractFuncName(ptr uintptr) string {
 	return fname[lastDot+1:] + "()"
 }
 
-// extractGoroutineID fetches the current goroutine ID. Used solely for
+// goroutineID fetches the current goroutine ID. Used solely for
 // debugging which goroutine is doing what in the logs.
 // Adapted from https://github.com/golang/net/blob/master/http2/gotrack.go
-func extractGoroutineID() uint64 {
+func goroutineID() uint64 {
 	buf := make([]byte, 64)
 	buf = buf[:runtime.Stack(buf, false)]
 	// parse out # in the format "goroutine # "
@@ -113,15 +113,14 @@ func logger(level LogLevel, format string, args ...interface{}) {
 	ptr, file, line, ok := runtime.Caller(2)
 	var functionName string
 	if ok {
-		functionName = extractFuncName(ptr)
+		functionName = funcName(ptr)
 	} else {
 		functionName = "(unknown source)"
 	}
 
-	log.Printf("- %s - %s - %s:%d:%s - %s",
-		pad(strconv.Itoa(int(extractGoroutineID())), 3), // goroutine ID
-		pad(prefix, 5),                          // log level
-		filepath.Base(file), line, functionName, // function being logged
+	log.Printf("- %s - %d:%s:%d:%s - %s",
+		pad(prefix, 5),                                         // log level
+		goroutineID(), filepath.Base(file), line, functionName, // goroutine + function being logged
 		preformatted) // actual log message
 }
 
