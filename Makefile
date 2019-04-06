@@ -7,8 +7,10 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
 dmel.fa:
 	curl ftp://ftp.ensemblgenomes.org/pub/metazoa/release-42/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.chromosome.X.fa.gz | zcat > $@
 
+# cache disabled to always force rerun of all tests
+# (some tests can fail due to race conditions (since all fuse ops are async))
 test: onedriver dmel.fa
-	go test ./logger ./graph
+	go test -count 1 ./logger ./graph
 
 # for autocompletion by ide-clangd
 compile_flags.txt:

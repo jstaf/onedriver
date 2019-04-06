@@ -97,8 +97,6 @@ func TestReadWrite(t *testing.T) {
 // test that we can create a file and rename it
 func TestRenameMove(t *testing.T) {
 	fname := filepath.Join(TestDir, "rename.txt")
-	//TODO this test fails when destination name is "new-name.txt"...
-	// is it a name collision with another test?
 	dname := filepath.Join(TestDir, "new-destination-name.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	failOnErr(t, os.Rename(fname, dname))
@@ -291,11 +289,14 @@ func TestIgnoredFiles(t *testing.T) {
 func TestNTFSIsABadFilesystem(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
 		[]byte("NTFS is bad"), 0644))
+	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
+		[]byte("yep"), 0644))
 
-	err := ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
-		[]byte("yep"), 0644)
-	if err == nil {
-		t.Fatal("We should be throwing an error, since OneDrive is case-insensitive.")
+	content, err := ioutil.ReadFile(filepath.Join(TestDir, "Case-Sensitive.TXT"))
+	failOnErr(t, err)
+	if string(content) != "yep" {
+		t.Fatalf("Did not find expected output. got: \"%s\", wanted \"%s\"\n",
+			string(content), "yep")
 	}
 }
 

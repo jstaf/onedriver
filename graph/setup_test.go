@@ -53,6 +53,7 @@ func TestMain(m *testing.M) {
 	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	log.SetOutput(logFile)
 	logger.SetLogLevel(logger.TRACE)
+	logger.Info("Test session start -----------------------------------")
 
 	// run tests
 	code := m.Run()

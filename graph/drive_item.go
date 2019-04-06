@@ -191,6 +191,11 @@ func (d *DriveItem) ensureID(auth Auth) error {
 
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
+			if strings.Contains(err.Error(), "nameAlreadyExists") {
+				// this likely got fired off just as an initial upload completed
+				// we probaby have the original ID by now
+				return nil
+			}
 			return err
 		}
 
