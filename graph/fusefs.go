@@ -44,7 +44,7 @@ func leadingSlash(path string) string {
 type FuseFs struct {
 	pathfs.FileSystem
 	Auth
-	items *ItemCache
+	items *Cache
 }
 
 // NewFS initializes a new Graph Filesystem to be used by go-fuse.
@@ -53,7 +53,7 @@ func NewFS() *FuseFs {
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       Authenticate(),
-		items:      &ItemCache{}, // lazily initialized on first use
+		items:      &Cache{}, // lazily initialized on first use
 	}
 }
 

@@ -8,15 +8,15 @@ import (
 	"github.com/jstaf/onedriver/logger"
 )
 
-// ItemCache caches DriveItems for a filesystem. This cache never expires so
+// Cache caches DriveItems for a filesystem. This cache never expires so
 // that local changes can persist.
-type ItemCache struct {
+type Cache struct {
 	root *DriveItem // will be a nil pointer on start, lazily initialized
 }
 
 // Get fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
-func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
+func (c *Cache) Get(key string, auth Auth) (*DriveItem, error) {
 	// lazily initialize root of filesystem
 	if c.root == nil {
 		root, err := GetItem("/", auth)
@@ -59,7 +59,7 @@ func (c *ItemCache) Get(key string, auth Auth) (*DriveItem, error) {
 }
 
 // Delete an item from the cache
-func (c *ItemCache) Delete(key string) {
+func (c *Cache) Delete(key string) {
 	key = strings.ToLower(key)
 	// Uses empty auth, since we actually don't want to waste time fetching
 	// items that are only being fetched so they can be deleted.
@@ -71,7 +71,7 @@ func (c *ItemCache) Delete(key string) {
 
 // Insert lets us manually insert an item to the cache (like if it was created
 // locally). Overwrites a cached item if present.
-func (c *ItemCache) Insert(key string, auth Auth, item *DriveItem) error {
+func (c *Cache) Insert(key string, auth Auth, item *DriveItem) error {
 	key = strings.ToLower(key)
 	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
@@ -83,7 +83,7 @@ func (c *ItemCache) Insert(key string, auth Auth, item *DriveItem) error {
 }
 
 // Move an item to a new position
-func (c *ItemCache) Move(oldPath string, newPath string, auth Auth) error {
+func (c *Cache) Move(oldPath string, newPath string, auth Auth) error {
 	item, err := c.Get(oldPath, auth)
 	if err != nil {
 		return err
