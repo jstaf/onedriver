@@ -30,6 +30,8 @@ func TestRootChildrenUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	root.mutex.RLock()
+	defer root.mutex.RUnlock()
 	if _, exists := root.children["documents"]; !exists {
 		t.Fatal("Could not find documents folder.")
 	}
@@ -52,6 +54,8 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 	failOnErr(t, err)
 
 	children, _ := documents.GetChildren(auth)
+	documents.mutex.RLock()
+	defer documents.mutex.RUnlock()
 	if _, exists := children["Documents"]; exists {
 		log.Println("Documents directory found inside itself. " +
 			"Likely the cache did not traverse correctly.\n\nChildren:\n")

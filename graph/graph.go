@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sync"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -97,7 +98,9 @@ func ChildrenPath(path string) string {
 // GetItem fetches a DriveItem by path
 func GetItem(path string, auth Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
-	item := new(DriveItem)
+	item := &DriveItem{
+		mutex: &sync.RWMutex{},
+	}
 	if err != nil {
 		return item, err
 	}

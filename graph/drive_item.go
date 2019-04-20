@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -50,9 +51,10 @@ type DriveItem struct {
 	mode          uint32           // do not set manually
 	Parent        *DriveItemParent `json:"parentReference,omitempty"`
 	children      map[string]*DriveItem
-	Folder        *Folder  `json:"folder,omitempty"`
-	FileAPI       *File    `json:"file,omitempty"`
-	Deleted       *Deleted `json:"deleted,omitempty"`
+	mutex         *sync.RWMutex // manages access to the map of children
+	Folder        *Folder       `json:"folder,omitempty"`
+	FileAPI       *File         `json:"file,omitempty"`
+	Deleted       *Deleted      `json:"deleted,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -68,6 +70,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 			item: parent,
 		},
 		children:   make(map[string]*DriveItem),
+		mutex:      &sync.RWMutex{},
 		data:       &empty,
 		ModifyTime: &currentTime,
 		mode:       mode,
@@ -123,9 +126,13 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	}
 	json.Unmarshal(body, &fetched)
 
+	d.mutex = &sync.RWMutex{}
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	d.children = make(map[string]*DriveItem)
 	for _, child := range fetched.Children {
 		child.Parent.item = d
+		child.mutex = &sync.RWMutex{}
 		d.children[strings.ToLower(child.Name)] = child
 	}
 
@@ -304,6 +311,8 @@ func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
 		// technically 2 + number of subdirectories
 		var nSubdir uint32
+		d.mutex.RLock()
+		defer d.mutex.RUnlock()
 		for _, v := range d.children {
 			if v.IsDir() {
 				nSubdir++

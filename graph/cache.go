@@ -47,7 +47,9 @@ func (c *Cache) Get(key string, auth Auth) (*DriveItem, error) {
 	key = strings.TrimSuffix(key, "/")
 	split := strings.Split(key, "/")[1:] // omit leading "/"
 	for i := 0; i < len(split); i++ {
+		last.mutex.RLock()
 		item, exists := last.children[split[i]]
+		last.mutex.RUnlock()
 		if !exists {
 			if auth.AccessToken == "" {
 				return last, errors.New("Auth was empty and \"" +
@@ -60,7 +62,9 @@ func (c *Cache) Get(key string, auth Auth) (*DriveItem, error) {
 			if err != nil {
 				return last, err
 			}
+			last.mutex.RLock()
 			item, exists = children[split[i]]
+			last.mutex.RUnlock()
 			if !exists {
 				// this time, we know the key *really* doesn't exist
 				return nil, errors.New(filepath.Join(last.Path(), split[i]) + " does not exist.")
@@ -78,7 +82,9 @@ func (c *Cache) Delete(key string) {
 	// items that are only being fetched so they can be deleted.
 	parent, err := c.Get(filepath.Dir(key), Auth{})
 	if err == nil {
+		parent.mutex.Lock()
 		delete(parent.children, filepath.Base(key))
+		parent.mutex.Unlock()
 	}
 }
 
@@ -91,7 +97,9 @@ func (c *Cache) Insert(key string, auth Auth, item *DriveItem) error {
 		return err
 	}
 	item.setParent(parent)
+	parent.mutex.Lock()
 	parent.children[filepath.Base(key)] = item
+	parent.mutex.Unlock()
 	return nil
 }
 

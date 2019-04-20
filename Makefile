@@ -1,7 +1,8 @@
 .PHONY = test
 
+# development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
-	go build
+	go build -race
 
 # a large text file for us to test upload sessions with. #science
 dmel.fa:
@@ -10,7 +11,7 @@ dmel.fa:
 # cache disabled to always force rerun of all tests
 # (some tests can fail due to race conditions (since all fuse ops are async))
 test: onedriver dmel.fa
-	go test -count 1 ./logger ./graph
+	go test -race -count=1 ./logger ./graph
 
 # for autocompletion by ide-clangd
 compile_flags.txt:
