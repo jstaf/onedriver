@@ -11,7 +11,7 @@ import (
 )
 
 func TestRootGet(t *testing.T) {
-	cache := Cache{}
+	cache := NewCache(auth)
 	root, err := cache.Get("/", auth)
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestRootGet(t *testing.T) {
 }
 
 func TestRootChildrenUpdate(t *testing.T) {
-	cache := Cache{}
+	cache := NewCache(auth)
 	root, _ := cache.Get("/", auth)
 	_, err := root.GetChildren(auth)
 	if err != nil {
@@ -36,7 +36,7 @@ func TestRootChildrenUpdate(t *testing.T) {
 }
 
 func TestSubdirGet(t *testing.T) {
-	cache := Cache{}
+	cache := NewCache(auth)
 	documents, err := cache.Get("/Documents", auth)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestSubdirGet(t *testing.T) {
 }
 
 func TestSubdirChildrenUpdate(t *testing.T) {
-	cache := Cache{}
+	cache := NewCache(auth)
 	documents, err := cache.Get("/Documents", auth)
 	failOnErr(t, err)
 
@@ -63,7 +63,7 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 }
 
 func TestSamePointer(t *testing.T) {
-	cache := Cache{}
+	cache := NewCache(auth)
 	item, _ := cache.Get("/Documents", auth)
 	item2, _ := cache.Get("/Documents", auth)
 	if item != item2 {
@@ -78,7 +78,7 @@ func TestCacheWriteAppend(t *testing.T) {
 	// skip for now
 	t.SkipNow()
 
-	cache := Cache{}
+	cache := NewCache(auth)
 	text := "test"
 
 	// copy our README.md into the cache

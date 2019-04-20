@@ -1,31 +1,44 @@
 package graph
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jstaf/onedriver/logger"
 )
 
 // Cache caches DriveItems for a filesystem. This cache never expires so
-// that local changes can persist.
+// that local changes can persist. Should be created using the NewCache()
+// constructor.
 type Cache struct {
-	root *DriveItem // will be a nil pointer on start, lazily initialized
+	root      *DriveItem
+	deltaLink string
+}
+
+// NewCache creates a new Cache
+func NewCache(auth Auth) *Cache {
+	cache := &Cache{}
+	root, err := GetItem("/", auth)
+	if err != nil {
+		logger.Fatal("Could not fetch root item of filesystem!:", err)
+	}
+	root.auth = &auth
+	cache.root = root
+
+	// using token=latest because we don't care about existing items - they'll
+	// be downloaded on-demand by the cache
+	cache.deltaLink = "/me/drive/root/delta?token=latest"
+	// deltaloop is started manually
+	return cache
 }
 
 // Get fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
 func (c *Cache) Get(key string, auth Auth) (*DriveItem, error) {
-	// lazily initialize root of filesystem
-	if c.root == nil {
-		root, err := GetItem("/", auth)
-		if err != nil {
-			logger.Fatal("Could not fetch root item of filesystem!:", err)
-		}
-		root.auth = &auth
-		c.root = root
-	}
 	last := c.root
 
 	// from the root directory, traverse the chain of items till we reach our
@@ -93,5 +106,70 @@ func (c *Cache) Move(oldPath string, newPath string, auth Auth) error {
 		return err
 	}
 	c.Delete(oldPath)
+	return nil
+}
+
+// deltaLoop should be called as a goroutine
+func (c *Cache) deltaLoop(auth *Auth) {
+	logger.Trace("Starting delta goroutine...")
+	for { // eva
+		// get deltas
+		logger.Trace("Beginning sync...")
+		for {
+			cont, err := c.pollDeltas(auth)
+			if err != nil {
+				logger.Error(err)
+				break
+			}
+			if !cont {
+				break
+			}
+		}
+
+		// go to sleep until next poll interval
+		time.Sleep(30 * time.Second)
+	}
+}
+
+type deltaResponse struct {
+	NextLink  string      `json:"@odata.nextLink,omitempty"`
+	DeltaLink string      `json:"@odata.deltaLink,omitempty"`
+	Values    []DriveItem `json:"value,omitempty"`
+}
+
+// Polls the delta endpoint and return whether or not to continue polling
+func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
+	logger.Trace("Polling deltas...")
+	resp, err := Get(c.deltaLink, *auth)
+	if err != nil {
+		logger.Error("Could not fetch server deltas:", err)
+		return false, err
+	}
+
+	//TODO while developing for the first little bit
+	logger.Info("Delta response:")
+	fmt.Println(string(resp))
+
+	page := deltaResponse{}
+	json.Unmarshal(resp, &page)
+	for _, item := range page.Values {
+		c.applyDelta(item)
+	}
+
+	// If the server does not provide a `@odata.nextLink` item, it means we've
+	// reached the end of this polling cycle and should not continue until the
+	// next poll interval.
+	if page.NextLink != "" {
+		c.deltaLink = strings.TrimPrefix(page.NextLink, graphURL)
+		return true, nil
+	}
+	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graphURL)
+	return false, nil
+}
+
+// apply a server-side change to our local state
+func (c *Cache) applyDelta(item DriveItem) error {
+	logger.Trace("Applying delta for", item.Name)
+	//TODO stub
 	return nil
 }

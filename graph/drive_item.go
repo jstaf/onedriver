@@ -30,6 +30,11 @@ type File struct {
 	MimeType string `json:"mimeType,omitempty"`
 }
 
+// Deleted is used for detecting when items get deleted on the server
+type Deleted struct {
+	State string `json:"state,omitempty"`
+}
+
 // DriveItem represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON.
 type DriveItem struct {
@@ -45,8 +50,9 @@ type DriveItem struct {
 	mode          uint32           // do not set manually
 	Parent        *DriveItemParent `json:"parentReference,omitempty"`
 	children      map[string]*DriveItem
-	Folder        *Folder `json:"folder,omitempty"`
-	FileAPI       *File   `json:"file,omitempty"`
+	Folder        *Folder  `json:"folder,omitempty"`
+	FileAPI       *File    `json:"file,omitempty"`
+	Deleted       *Deleted `json:"deleted,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem

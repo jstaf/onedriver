@@ -50,10 +50,13 @@ type FuseFs struct {
 // NewFS initializes a new Graph Filesystem to be used by go-fuse.
 // Each method is executed concurrently as a goroutine.
 func NewFS() *FuseFs {
+	auth := Authenticate()
+	cache := NewCache(auth)
+	go cache.deltaLoop(&auth)
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
-		Auth:       Authenticate(),
-		items:      &Cache{}, // lazily initialized on first use
+		Auth:       auth,
+		items:      cache,
 	}
 }
 
