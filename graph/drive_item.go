@@ -51,10 +51,10 @@ type DriveItem struct {
 	mode          uint32           // do not set manually
 	Parent        *DriveItemParent `json:"parentReference,omitempty"`
 	children      map[string]*DriveItem
-	mutex         *sync.RWMutex // manages access to the map of children
-	Folder        *Folder       `json:"folder,omitempty"`
-	FileAPI       *File         `json:"file,omitempty"`
-	Deleted       *Deleted      `json:"deleted,omitempty"`
+	mutex         *sync.RWMutex
+	Folder        *Folder  `json:"folder,omitempty"`
+	FileAPI       *File    `json:"file,omitempty"`
+	Deleted       *Deleted `json:"deleted,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -78,15 +78,17 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 }
 
 func (d DriveItem) String() string {
-	l := d.Size
-	if l > 10 {
-		l = 10
+	length := d.Size
+	if length > 10 {
+		length = 10
 	}
-	return fmt.Sprintf("DriveItem(%x)", (*d.data)[:l])
+	return fmt.Sprintf("DriveItem(%x)", (*d.data)[:length])
 }
 
 // Set an item's parent
 func (d *DriveItem) setParent(newParent *DriveItem) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	d.Parent = &DriveItemParent{
 		ID:   newParent.ID,
 		Path: newParent.Path(),
@@ -145,8 +147,10 @@ func (d *DriveItem) FetchContent(auth Auth) error {
 	if err != nil {
 		return err
 	}
+	d.mutex.Lock()
 	d.data = &body
 	d.File = nodefs.NewDefaultFile()
+	d.mutex.Unlock()
 	return nil
 }
 
@@ -157,6 +161,8 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 		end = len(*d.data)
 	}
 	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), int64(end)-off, off)
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -167,6 +173,8 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	offset := int(off)
 	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), nWrite, off)
 
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	if offset+nWrite > int(d.Size)-1 {
 		// we've exceeded the file size, overwrite via append
 		*d.data = append((*d.data)[:offset], data...)
@@ -182,6 +190,8 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 }
 
 func (d DriveItem) getRoot() *DriveItem {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	parent := d.Parent.item
 	for parent.Parent.Path != "" {
 		parent = parent.Parent.item
@@ -214,6 +224,8 @@ func (d *DriveItem) ensureID(auth Auth) error {
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
+		d.mutex.Lock()
+		defer d.mutex.Unlock()
 		unsafe := NewDriveItem(d.Name, d.Mode(), d.Parent.item)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
@@ -257,6 +269,8 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 	logger.Trace(d.Path())
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	d.ModifyTime = mtime
 	return fuse.OK
 }
@@ -264,6 +278,8 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
 	logger.Trace(d.Path())
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	*d.data = (*d.data)[:size]
 	d.Size = size
 	d.hasChanges = true

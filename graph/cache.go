@@ -3,7 +3,6 @@ package graph
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -122,7 +121,7 @@ func (c *Cache) deltaLoop(auth *Auth) {
 	logger.Trace("Starting delta goroutine...")
 	for { // eva
 		// get deltas
-		logger.Trace("Beginning sync...")
+		logger.Trace("Syncing deltas from server...")
 		for {
 			cont, err := c.pollDeltas(auth)
 			if err != nil {
@@ -133,6 +132,7 @@ func (c *Cache) deltaLoop(auth *Auth) {
 				break
 			}
 		}
+		logger.Trace("Sync complete!")
 
 		// go to sleep until next poll interval
 		time.Sleep(30 * time.Second)
@@ -147,16 +147,11 @@ type deltaResponse struct {
 
 // Polls the delta endpoint and return whether or not to continue polling
 func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
-	logger.Trace("Polling deltas...")
 	resp, err := Get(c.deltaLink, *auth)
 	if err != nil {
 		logger.Error("Could not fetch server deltas:", err)
 		return false, err
 	}
-
-	//TODO while developing for the first little bit
-	logger.Info("Delta response:")
-	fmt.Println(string(resp))
 
 	page := deltaResponse{}
 	json.Unmarshal(resp, &page)

@@ -148,6 +148,8 @@ func (d *DriveItem) Upload(auth Auth) error {
 			return err
 		}
 		// Unmarshal into existing item so we don't have to redownload file contents.
+		d.mutex.Lock()
+		defer d.mutex.Unlock()
 		return json.Unmarshal(resp, d)
 	}
 
