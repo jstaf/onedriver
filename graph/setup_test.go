@@ -58,6 +58,8 @@ func TestMain(m *testing.M) {
 	// run tests
 	code := m.Run()
 
+	logger.Info("Test session end -----------------------------------")
+
 	// unmount
 	err := server.Unmount()
 	if err != nil {
