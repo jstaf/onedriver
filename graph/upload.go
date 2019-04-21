@@ -141,17 +141,26 @@ func (d *DriveItem) Upload(auth Auth) error {
 
 	id, err := d.ID(auth)
 	if err != nil || id == "" {
+		d.mutex.RLock() //TODO why is this necessary???? arghhhh
 		logger.Error("Could not obtain ID for upload of:", d.Name())
+		d.mutex.RUnlock()
 		return err
 	}
 
-	if d.Size() <= 4*1024*1024 { // 4MB
+	size := d.Size()
+	if size <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
+
+		// creating a snapshot prevents lock contention during the actual http
+		// upload
 		d.mutex.RLock()
 		logger.Trace("Using simple upload for", d.Name())
-		resp, err := Put("/me/drive/items/"+id+"/content", auth,
-			bytes.NewReader(*d.data))
+		snapshot := make([]byte, size)
+		copy(snapshot, *d.data)
 		d.mutex.RUnlock()
+
+		resp, err := Put("/me/drive/items/"+id+"/content", auth,
+			bytes.NewReader(snapshot))
 
 		d.mutex.Lock()
 		defer d.mutex.Unlock()
