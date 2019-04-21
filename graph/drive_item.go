@@ -143,7 +143,8 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth Auth) error {
-	body, err := Get("/me/drive/items/"+d.ID+"/content", auth)
+	metadata := d
+	body, err := Get("/me/drive/items/"+metadata.ID+"/content", auth)
 	if err != nil {
 		return err
 	}
@@ -157,12 +158,12 @@ func (d *DriveItem) FetchContent(auth Auth) error {
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	if end > len(*d.data) {
 		end = len(*d.data)
 	}
 	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), int64(end)-off, off)
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -190,8 +191,6 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 }
 
 func (d DriveItem) getRoot() *DriveItem {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
 	parent := d.Parent.item
 	for parent.Parent.Path != "" {
 		parent = parent.Parent.item
@@ -202,45 +201,49 @@ func (d DriveItem) getRoot() *DriveItem {
 // obtainID uploads an empty file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded.
-func (d *DriveItem) ensureID(auth Auth) error {
-	if d.IsDir() {
+func (d *DriveItem) ensureID(auth Auth) (string, error) {
+	metadata := d
+	if metadata.IsDir() {
 		//TODO maybe retry the dir creation again server-side?
-		return nil
+		return metadata.ID, nil
 	}
 
-	if d.ID == "" {
+	if metadata.ID == "" {
 		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
-			d.Parent.ID, d.Name)
+			metadata.Parent.ID, metadata.Name)
 
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// this likely got fired off just as an initial upload completed
 				// we probaby have the original ID by now
-				return nil
+				return metadata.ID, nil
 			}
-			return err
+			return "", err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		d.mutex.Lock()
-		defer d.mutex.Unlock()
 		unsafe := NewDriveItem(d.Name, d.Mode(), d.Parent.item)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
-			return err
+			return "", err
 		}
 		// this is all we really wanted from this transaction
+		d.mutex.Lock()
 		d.ID = unsafe.ID
+		d.mutex.Unlock()
+		metadata.ID = unsafe.ID
 	}
-	return nil
+	return metadata.ID, nil
 }
 
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
 	logger.Trace(d.Path())
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	if d.hasChanges {
 		auth := *d.getRoot().auth
 		d.hasChanges = false
@@ -251,7 +254,8 @@ func (d *DriveItem) Flush() fuse.Status {
 	return fuse.OK
 }
 
-// GetAttr returns a the DriveItem as a UNIX stat
+// GetAttr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
+// of the "metadata fetch" operations.
 func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 	out.Size = d.FakeSize()
 	out.Nlink = d.NLink()
@@ -295,24 +299,29 @@ func (d DriveItem) IsDir() bool {
 // Mode returns the permissions/mode of the file. Lazily initializes the
 // underlying mode field.
 func (d *DriveItem) Mode() uint32 {
-	if d.mode == 0 { // only 0 if fetched from Graph API
+	metadata := d
+	if metadata.mode == 0 { // only 0 if fetched from Graph API
+		// cannot use mutex here or the whole program locks up
 		if d.FileAPI == nil { // nil if a folder
 			d.mode = fuse.S_IFDIR | 0755
 		} else {
 			d.mode = fuse.S_IFREG | 0644
 		}
+		metadata.mode = d.mode
 	}
-	return d.mode
+	return metadata.mode
 }
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
 	logger.Trace(d.Path())
+	d.mutex.Lock()
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms
 	} else {
 		d.mode = fuse.S_IFREG | perms
 	}
+	d.mutex.Unlock()
 	return fuse.OK
 }
 
@@ -325,10 +334,11 @@ func (d DriveItem) MTime() uint64 {
 // directory)
 func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
+		return 2
 		// technically 2 + number of subdirectories
-		var nSubdir uint32
 		d.mutex.RLock()
 		defer d.mutex.RUnlock()
+		var nSubdir uint32
 		for _, v := range d.children {
 			if v.IsDir() {
 				nSubdir++

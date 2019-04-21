@@ -135,19 +135,12 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
-	if item.ID == "" {
+	id, err := item.ensureID(fs.Auth)
+	if err != nil || id == "" {
 		// uploads will fail without an id
-		if item.IsDir() {
-			logger.Error("ID of folder to move cannot be empty")
-			return fuse.EBADF
-		}
-
-		err := item.ensureID(fs.Auth)
-		if err != nil || item.ID == "" {
-			logger.Error("ID of item to move cannot be empty "+
-				"and we failed to obtain an ID. Error:", err.Error())
-			return fuse.EBADF
-		}
+		logger.Error("ID of item to move cannot be empty "+
+			"and we failed to obtain an ID. Error:", err.Error())
+		return fuse.EBADF
 	}
 
 	patchContent := DriveItem{} // totally empty to avoid sending extra data
@@ -177,9 +170,11 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	// don't actually care about the response content
 	jsonPatch, _ := json.Marshal(patchContent)
-	_, err := Patch("/me/drive/items/"+item.ID, fs.Auth, bytes.NewReader(jsonPatch))
+	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		logger.Error(err)
+		item.mutex.Lock()
+		defer item.mutex.Unlock()
 		item.Name = filepath.Base(oldName) // unrename things locally
 		return fuse.EREMOTEIO
 	}

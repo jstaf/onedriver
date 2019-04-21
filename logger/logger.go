@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // LogLevel represents the severity of a log message
@@ -24,6 +25,7 @@ const (
 )
 
 var currentLevel = INFO
+var mutex = &sync.RWMutex{}
 
 // StringToLevel converts a string to a LogLevel in a case-insensitive manner.
 func StringToLevel(level string) LogLevel {
@@ -47,7 +49,9 @@ func StringToLevel(level string) LogLevel {
 
 // SetLogLevel changes the current log level
 func SetLogLevel(level LogLevel) {
+	mutex.Lock()
 	currentLevel = level
+	mutex.Unlock()
 }
 
 func pad(text string, length int) string {
@@ -89,6 +93,8 @@ func goroutineID() uint64 {
 // Log a function's output at a various level, ignoring messages below the
 // currently configured level.
 func logger(level LogLevel, format string, args ...interface{}) {
+	mutex.RLock()
+	defer mutex.RUnlock()
 	if level > currentLevel {
 		return
 	}

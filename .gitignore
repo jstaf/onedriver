@@ -4,6 +4,6 @@ mount/
 *.json
 *.bak
 *.log
-*.fa 
+*.fa
 *.gz
 onedriver

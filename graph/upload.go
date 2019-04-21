@@ -51,10 +51,6 @@ type FileSystemInfo struct {
 func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 	d.cancelUploadSession(auth) // THERE CAN ONLY BE ONE!
 
-	if d.ID == "" {
-		return nil, errors.New("id cannot be empty")
-	}
-
 	sessionResp, _ := json.Marshal(UploadSessionPost{
 		ConflictBehavior: "replace",
 		FileSystemInfo: FileSystemInfo{
@@ -137,11 +133,18 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 // goroutine, or it can potentially block for a very long time.
 func (d *DriveItem) Upload(auth Auth) error {
 	logger.Info(d.Path())
-	d.ensureID(auth)
-	if d.Size <= 4*1024*1024 { // 4MB
+
+	id, err := d.ensureID(auth)
+	if err != nil {
+		logger.Error("Could not obtain ID for upload! Error:", err.Error())
+		return err
+	}
+
+	// fakesize is used here because it operates on a copy
+	if d.FakeSize() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
 		logger.Trace("Using simple upload for", d.Name)
-		resp, err := Put("/me/drive/items/"+d.ID+"/content", auth,
+		resp, err := Put("/me/drive/items/"+id+"/content", auth,
 			bytes.NewReader(*d.data))
 		if err != nil {
 			d.hasChanges = true
@@ -160,7 +163,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 		return err
 	}
 
-	nchunks := int(math.Ceil(float64(d.Size) / float64(chunkSize)))
+	nchunks := int(math.Ceil(float64(session.Size) / float64(chunkSize)))
 	for i := 0; i < nchunks; i++ {
 		resp, status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
 		if err != nil {
