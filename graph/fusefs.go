@@ -136,7 +136,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
 	id, err := item.ID(fs.Auth)
-	if id == "" {
+	if id == "" || err != nil {
 		// uploads will fail without an id
 		logger.Error("ID of item to move cannot be empty "+
 			"and we failed to obtain an ID:", err.Error())
@@ -152,12 +152,12 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
 		}
-		id, err := newParent.ID(Auth{})
-		if id == "" {
+		parentID, err := newParent.ID(fs.Auth)
+		if parentID == "" || err != nil {
 			logger.Error("ID of destination folder cannot be empty:", err.Error())
 			return fuse.EBADF
 		}
-		patchContent.Parent = &DriveItemParent{ID: id}
+		patchContent.Parent = &DriveItemParent{ID: parentID}
 	}
 
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
