@@ -135,14 +135,15 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
-	id, err := item.ensureID(fs.Auth)
-	if err != nil || id == "" {
+	id := item.ID(fs.Auth)
+	if id == "" {
 		// uploads will fail without an id
-		logger.Error("ID of item to move cannot be empty "+
-			"and we failed to obtain an ID. Error:", err.Error())
+		logger.Error("ID of item to move cannot be empty " +
+			"and we failed to obtain an ID.")
 		return fuse.EBADF
 	}
 
+	//TODO this is an unsafe allocation of patchContent, mutex is uninitialized
 	patchContent := DriveItem{} // totally empty to avoid sending extra data
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
 		// we are moving the item
@@ -151,17 +152,18 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
 		}
-		if newParent.ID == "" {
+		if newParent.ID(Auth{}) == "" {
 			logger.Error("ID of destination folder cannot be empty!")
 			return fuse.EBADF
 		}
-		patchContent.Parent = &DriveItemParent{ID: newParent.ID}
+		patchContent.Parent = &DriveItemParent{ID: newParent.ID(Auth{})}
 	}
 
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
-		// we are renaming the item
-		patchContent.Name = newBase
-		item.Name = newBase
+		// we are renaming the item...
+		// mutex for patchContent is uninitialized and we have the only copy
+		patchContent.NameInternal = newBase
+		item.SetName(newBase)
 	}
 
 	// if an item already exists at the new name, we'll need to purge it or the
@@ -170,12 +172,10 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	// don't actually care about the response content
 	jsonPatch, _ := json.Marshal(patchContent)
-	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
+	_, err := Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		logger.Error(err)
-		item.mutex.Lock()
-		defer item.mutex.Unlock()
-		item.Name = filepath.Base(oldName) // unrename things locally
+		item.SetName(filepath.Base(oldName)) // unrename things locally
 		return fuse.EREMOTEIO
 	}
 
@@ -219,7 +219,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 
 	for _, child := range children {
 		entry := fuse.DirEntry{
-			Name: child.Name,
+			Name: child.Name(),
 			Mode: child.Mode(),
 		}
 		c = append(c, entry)
@@ -235,8 +235,8 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 
 	// create a new folder on the server
 	newFolderPost := DriveItem{
-		Name:   filepath.Base(name),
-		Folder: &Folder{},
+		NameInternal: filepath.Base(name),
+		Folder:       &Folder{},
 	}
 	bytePayload, _ := json.Marshal(newFolderPost)
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
@@ -290,10 +290,10 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 	// check for if file has already been populated
 	if item.data == nil {
 		// it is unpopulated, grab from api
-		logger.Info("Fetching remote content for", item.Name)
+		logger.Info("Fetching remote content for", item.Name())
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
-			logger.Errorf("Failed to fetch content for '%s': %s\n", item.ID, err)
+			logger.Errorf("Failed to fetch content for '%s': %s\n", item.ID(Auth{}), err)
 			return nil, fuse.EREMOTEIO
 		}
 	}
@@ -329,7 +329,7 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 		return fuse.ENOENT
 	}
 
-	if item.ID != "" {
+	if item.ID(Auth{}) != "" {
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
 			logger.Error(err)

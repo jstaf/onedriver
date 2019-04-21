@@ -16,6 +16,7 @@ import (
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
 // DriveItem's ID and its path)
 type DriveItemParent struct {
+	//TODO restructure to use its own ID functions
 	ID   string `json:"id,omitempty"`
 	Path string `json:"path,omitempty"`
 	item *DriveItem
@@ -37,24 +38,28 @@ type Deleted struct {
 }
 
 // DriveItem represents a file or folder fetched from the Graph API. All struct
-// fields are pointers so as to avoid including them when marshaling to JSON.
+// fields are pointers so as to avoid including them when marshaling to JSON
+// if not present. Fields named "xxxxxInternal" should never be accessed, they
+// are there for JSON umarshaling/marshaling only. (They are not safe to access
+// concurrently.) This struct's methods are thread-safe and can be called
+// concurrently.
 type DriveItem struct {
-	nodefs.File   `json:"-"`
-	uploadSession *UploadSession   // current upload session, or nil
-	auth          *Auth            // only populated for root item
-	data          *[]byte          // empty by default
-	hasChanges    bool             // used to trigger an upload on flush
-	ID            string           `json:"id,omitempty"`
-	Name          string           `json:"name,omitempty"`
-	Size          uint64           `json:"size,omitempty"`
-	ModifyTime    *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	mode          uint32           // do not set manually
-	Parent        *DriveItemParent `json:"parentReference,omitempty"`
-	children      map[string]*DriveItem
-	mutex         *sync.RWMutex
-	Folder        *Folder  `json:"folder,omitempty"`
-	FileAPI       *File    `json:"file,omitempty"`
-	Deleted       *Deleted `json:"deleted,omitempty"`
+	nodefs.File     `json:"-"`
+	uploadSession   *UploadSession   // current upload session, or nil
+	auth            *Auth            // only populated for root item
+	data            *[]byte          // empty by default
+	hasChanges      bool             // used to trigger an upload on flush
+	IDInternal      string           `json:"id,omitempty"`
+	NameInternal    string           `json:"name,omitempty"`
+	SizeInternal    uint64           `json:"size,omitempty"`
+	ModTimeInternal *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	mode            uint32           // do not set manually
+	Parent          *DriveItemParent `json:"parentReference,omitempty"`
+	children        map[string]*DriveItem
+	mutex           *sync.RWMutex
+	Folder          *Folder  `json:"folder,omitempty"`
+	FileInternal    *File    `json:"file,omitempty"`
+	Deleted         *Deleted `json:"deleted,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -62,23 +67,23 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
 	return &DriveItem{
-		File: nodefs.NewDefaultFile(),
-		Name: name,
+		File:         nodefs.NewDefaultFile(),
+		NameInternal: name,
 		Parent: &DriveItemParent{
-			ID:   parent.ID,
-			Path: parent.Parent.Path + "/" + parent.Name,
+			ID:   parent.ID(Auth{}), // We should have this already.
+			Path: parent.Parent.Path + "/" + parent.Name(),
 			item: parent,
 		},
-		children:   make(map[string]*DriveItem),
-		mutex:      &sync.RWMutex{},
-		data:       &empty,
-		ModifyTime: &currentTime,
-		mode:       mode,
+		children:        make(map[string]*DriveItem),
+		mutex:           &sync.RWMutex{},
+		data:            &empty,
+		ModTimeInternal: &currentTime,
+		mode:            mode,
 	}
 }
 
 func (d DriveItem) String() string {
-	length := d.Size
+	length := d.Size()
 	if length > 10 {
 		length = 10
 	}
@@ -90,21 +95,75 @@ func (d *DriveItem) setParent(newParent *DriveItem) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.Parent = &DriveItemParent{
-		ID:   newParent.ID,
+		ID:   newParent.ID(Auth{}),
 		Path: newParent.Path(),
 		item: newParent,
 	}
 }
 
+// Name is used to ensure we access a copy
+func (d DriveItem) Name() string {
+	return d.NameInternal
+}
+
+// SetName sets the name of the item in a thread-safe manner.
+func (d *DriveItem) SetName(name string) {
+	d.mutex.Lock()
+	d.NameInternal = name
+	d.mutex.Unlock()
+}
+
+// ID uploads an empty file to obtain a Onedrive ID if it doesn't already have
+// one. This is necessary to avoid race conditions against uploads if the file
+// has not already been uploaded. You can use an empty Auth object if you're
+// sure that the item already has an ID or otherwise don't need to fetch an ID
+// (such as when deleting an item that is only local).
+func (d *DriveItem) ID(auth Auth) string {
+	metadata := *d // copy the item so we can access it's ID without locking the item itself
+	if metadata.IsDir() {
+		//TODO maybe retry the dir creation again server-side?
+		return metadata.IDInternal
+	}
+
+	if metadata.IDInternal == "" && auth.AccessToken != "" {
+		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
+			metadata.Parent.ID, metadata.Name())
+
+		resp, err := Put(uploadPath, auth, strings.NewReader(""))
+		if err != nil {
+			if strings.Contains(err.Error(), "nameAlreadyExists") {
+				// this likely got fired off just as an initial upload completed
+				// we probaby have the original ID by now
+				return metadata.IDInternal
+			}
+			return ""
+		}
+
+		// we use a new DriveItem to unmarshal things into or it will fuck
+		// with the existing object (namely its size)
+		unsafe := NewDriveItem(d.Name(), d.Mode(), d.Parent.item)
+		err = json.Unmarshal(resp, unsafe)
+		if err != nil {
+			return ""
+		}
+		// this is all we really wanted from this transaction
+		d.mutex.Lock()
+		d.IDInternal = unsafe.IDInternal
+		d.mutex.Unlock()
+		metadata.IDInternal = unsafe.IDInternal
+	}
+	return metadata.IDInternal
+}
+
 // Path returns an item's full Path
 func (d DriveItem) Path() string {
 	// special case when it's the root item
-	if d.Parent.Path == "" && d.Name == "root" {
+	if d.Parent.Path == "" && d.Name() == "root" {
 		return "/"
 	}
 
 	// all paths come prefixed with "/drive/root:"
-	prepath := strings.TrimPrefix(d.Parent.Path+"/"+d.Name, "/drive/root:")
+	prepath := strings.TrimPrefix(d.Parent.Path+"/"+d.Name(), "/drive/root:")
 	return strings.Replace(prepath, "//", "/", -1)
 }
 
@@ -134,7 +193,7 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	for _, child := range fetched.Children {
 		child.Parent.item = d
 		child.mutex = &sync.RWMutex{}
-		d.children[strings.ToLower(child.Name)] = child
+		d.children[strings.ToLower(child.Name())] = child
 	}
 
 	return d.children, nil
@@ -143,7 +202,7 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth Auth) error {
 	metadata := *d
-	body, err := Get("/me/drive/items/"+metadata.ID+"/content", auth)
+	body, err := Get("/me/drive/items/"+metadata.ID(auth)+"/content", auth)
 	if err != nil {
 		return err
 	}
@@ -175,7 +234,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	if offset+nWrite > int(d.Size)-1 {
+	if offset+nWrite > int(d.SizeInternal)-1 {
 		// we've exceeded the file size, overwrite via append
 		*d.data = append((*d.data)[:offset], data...)
 	} else {
@@ -183,7 +242,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 		copy((*d.data)[offset:], data)
 	}
 	// probably a better way to do this, but whatever
-	d.Size = uint64(len(*d.data))
+	d.SizeInternal = uint64(len(*d.data))
 	d.hasChanges = true
 
 	return uint32(nWrite), fuse.OK
@@ -195,46 +254,6 @@ func (d DriveItem) getRoot() *DriveItem {
 		parent = parent.Parent.item
 	}
 	return parent
-}
-
-// obtainID uploads an empty file to obtain a Onedrive ID if it doesn't already
-// have one. This is necessary to avoid race conditions against uploads if the
-// file has not already been uploaded.
-func (d *DriveItem) ensureID(auth Auth) (string, error) {
-	metadata := *d
-	if metadata.IsDir() {
-		//TODO maybe retry the dir creation again server-side?
-		return metadata.ID, nil
-	}
-
-	if metadata.ID == "" {
-		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
-			metadata.Parent.ID, metadata.Name)
-
-		resp, err := Put(uploadPath, auth, strings.NewReader(""))
-		if err != nil {
-			if strings.Contains(err.Error(), "nameAlreadyExists") {
-				// this likely got fired off just as an initial upload completed
-				// we probaby have the original ID by now
-				return metadata.ID, nil
-			}
-			return "", err
-		}
-
-		// we use a new DriveItem to unmarshal things into or it will fuck
-		// with the existing object (namely its size)
-		unsafe := NewDriveItem(d.Name, d.Mode(), d.Parent.item)
-		err = json.Unmarshal(resp, unsafe)
-		if err != nil {
-			return "", err
-		}
-		// this is all we really wanted from this transaction
-		d.mutex.Lock()
-		d.ID = unsafe.ID
-		d.mutex.Unlock()
-		metadata.ID = unsafe.ID
-	}
-	return metadata.ID, nil
 }
 
 // Flush is called when a file descriptor is closed. This is responsible for all
@@ -256,11 +275,11 @@ func (d *DriveItem) Flush() fuse.Status {
 // GetAttr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
 // of the "metadata fetch" operations.
 func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
-	out.Size = d.FakeSize()
+	out.Size = d.Size()
 	out.Nlink = d.NLink()
-	out.Atime = d.MTime()
-	out.Mtime = d.MTime()
-	out.Ctime = d.MTime()
+	out.Atime = d.ModTime()
+	out.Mtime = d.ModTime()
+	out.Ctime = d.ModTime()
 	out.Mode = d.Mode()
 	out.Owner = fuse.Owner{
 		Uid: uint32(os.Getuid()),
@@ -274,7 +293,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 	logger.Trace(d.Path())
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	d.ModifyTime = mtime
+	d.ModTimeInternal = mtime
 	return fuse.OK
 }
 
@@ -284,7 +303,7 @@ func (d *DriveItem) Truncate(size uint64) fuse.Status {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	*d.data = (*d.data)[:size]
-	d.Size = size
+	d.SizeInternal = size
 	d.hasChanges = true
 	return fuse.OK
 }
@@ -298,7 +317,7 @@ func (d DriveItem) IsDir() bool {
 // Mode returns the permissions/mode of the file.
 func (d DriveItem) Mode() uint32 {
 	if d.mode == 0 { // only 0 if fetched from Graph API
-		if d.FileAPI == nil { // nil if a folder
+		if d.FileInternal == nil { // nil if a folder
 			d.mode = fuse.S_IFDIR | 0755
 		} else {
 			d.mode = fuse.S_IFREG | 0644
@@ -320,9 +339,10 @@ func (d *DriveItem) Chmod(perms uint32) fuse.Status {
 	return fuse.OK
 }
 
-// MTime returns the Unix timestamp of last modification
-func (d DriveItem) MTime() uint64 {
-	return uint64(d.ModifyTime.Unix())
+// ModTime returns the Unix timestamp of last modification (to get a time.Time
+// struct, use time.Unix(int64(d.ModTime()), 0))
+func (d DriveItem) ModTime() uint64 {
+	return uint64(d.ModTimeInternal.Unix())
 }
 
 // NLink gives the number of hard links to an inode (or child count if a
@@ -341,11 +361,13 @@ func (d DriveItem) NLink() uint32 {
 	return 1
 }
 
-// FakeSize pretends that folders are 4096 bytes, even though they're 0 (since
+// Size pretends that folders are 4096 bytes, even though they're 0 (since
 // they actually don't exist).
-func (d DriveItem) FakeSize() uint64 {
+func (d DriveItem) Size() uint64 {
 	if d.IsDir() {
 		return 4096
 	}
-	return d.Size
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.SizeInternal
 }

@@ -54,7 +54,7 @@ func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 	sessionResp, _ := json.Marshal(UploadSessionPost{
 		ConflictBehavior: "replace",
 		FileSystemInfo: FileSystemInfo{
-			LastModifiedDateTime: *d.ModifyTime,
+			LastModifiedDateTime: time.Unix(int64(d.ModTime()), 0),
 		},
 	})
 
@@ -67,7 +67,7 @@ func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 		return nil, err
 	}
 
-	session := UploadSession{Size: d.Size}
+	session := UploadSession{Size: d.Size()}
 	err = json.Unmarshal(resp, &session)
 	if err != nil {
 		return nil, err
@@ -134,17 +134,16 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 func (d *DriveItem) Upload(auth Auth) error {
 	logger.Info(d.Path())
 
-	id, err := d.ensureID(auth)
-	if err != nil {
-		logger.Error("Could not obtain ID for upload! Error:", err.Error())
-		return err
+	id := d.ID(auth)
+	if id == "" {
+		logger.Error("Could not obtain ID for upload!")
+		return errors.New("Could not obtain ID")
 	}
 
-	// fakesize is used here because it operates on a copy
-	if d.FakeSize() <= 4*1024*1024 { // 4MB
+	if d.Size() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
 		d.mutex.RLock()
-		logger.Trace("Using simple upload for", d.Name)
+		logger.Trace("Using simple upload for", d.Name())
 		resp, err := Put("/me/drive/items/"+id+"/content", auth,
 			bytes.NewReader(*d.data))
 		d.mutex.RUnlock()
@@ -159,7 +158,7 @@ func (d *DriveItem) Upload(auth Auth) error {
 		return json.Unmarshal(resp, d)
 	}
 
-	logger.Info("Creating upload session for", d.Name)
+	logger.Info("Creating upload session for", d.Name())
 	session, err := d.createUploadSession(auth)
 	if err != nil {
 		logger.Error("Could not create upload session:", err)

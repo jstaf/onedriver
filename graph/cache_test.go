@@ -3,11 +3,8 @@ package graph
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"testing"
-
-	"github.com/hanwen/go-fuse/fuse"
 )
 
 func TestRootGet(t *testing.T) {
@@ -43,8 +40,8 @@ func TestSubdirGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if documents.Name != "Documents" {
-		t.Fatalf("Failed to fetch \"/Documents\". Got \"%s\" instead!\n", documents.Name)
+	if documents.Name() != "Documents" {
+		t.Fatalf("Failed to fetch \"/Documents\". Got \"%s\" instead!\n", documents.Name())
 	}
 }
 
@@ -76,64 +73,4 @@ func TestSamePointer(t *testing.T) {
 	if item == nil {
 		t.Fatal("Item was nil!")
 	}
-}
-
-func TestCacheWriteAppend(t *testing.T) {
-	// skip for now
-	t.SkipNow()
-
-	cache := NewCache(auth)
-	text := "test"
-
-	// copy our README.md into the cache
-	documents, _ := cache.Get("/Documents", auth)
-	newItem := NewDriveItem("README.md", 0644, documents)
-	content, _ := ioutil.ReadFile("README.md")
-	newItem.data = &content
-	cache.Insert("/Documents/README.md", auth, newItem)
-
-	item, err := cache.Get("/Documents/README.md", auth)
-	if err != nil {
-		t.Fatal("Failed to fetch item:", err)
-	}
-	err = item.FetchContent(auth)
-	if err != nil {
-		t.Fatal("Failed to fetch item content:", err)
-	}
-
-	startLen := item.Size
-	endLen := item.Size + uint64(len(text))
-	writeLen, status := item.Write([]byte(text), int64(startLen))
-	if status != fuse.OK {
-		t.Fatal("Error during write:", status)
-	}
-	if int(writeLen) != len(text) {
-		t.Fatalf("Write length did not match expected value: %d != %d\n",
-			writeLen, len(text))
-	}
-	if item.Size != endLen {
-		t.Fatalf("Size was not updated to proper length during write: %d != %d\n",
-			item.Size, endLen)
-	}
-
-	readItem, err := cache.Get("/Documents/README.md", auth)
-	if err != nil {
-		t.Fatal("Failed to fetch item:", err)
-	}
-
-	if readItem.Size != endLen {
-		t.Fatalf("Size does not reflect updated file, "+
-			"did the catch fetch an old copy of the item?: %d != %d\n",
-			item.Size, endLen)
-	}
-
-	//TODO this test is just plain wrong and does not reflect how fuse does reads
-	/*
-		readResult := make([]byte, len(text))
-		readItem.Read(readResult, int64(startLen))
-		if string(readResult) != text {
-			t.Fatalf("Unexpected read result \"%s\" != \"%s\"\n",
-				string(readResult), text)
-		}
-	*/
 }

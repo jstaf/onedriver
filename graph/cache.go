@@ -172,7 +172,7 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 
 // apply a server-side change to our local state
 func (c *Cache) applyDelta(item DriveItem) error {
-	logger.Trace("Applying delta for", item.Name)
+	logger.Trace("Applying delta for", item.Name())
 	//TODO stub
 	return nil
 }

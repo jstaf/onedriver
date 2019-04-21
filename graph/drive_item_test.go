@@ -41,7 +41,7 @@ func TestGetChildren(t *testing.T) {
 
 	var success bool
 	for _, item := range items {
-		if item.Name == "Documents" {
+		if item.Name() == "Documents" {
 			success = true
 			break
 		}
