@@ -56,6 +56,7 @@ type DriveItem struct {
 	mode            uint32           // do not set manually
 	Parent          *DriveItemParent `json:"parentReference,omitempty"`
 	children        map[string]*DriveItem
+	subdir          uint32 // used purely by NLink()
 	mutex           *sync.RWMutex
 	Folder          *Folder  `json:"folder,omitempty"`
 	FileInternal    *File    `json:"file,omitempty"`
@@ -205,6 +206,9 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	for _, child := range fetched.Children {
 		child.Parent.item = d
 		child.mutex = &sync.RWMutex{}
+		if child.IsDir() {
+			d.subdir++
+		}
 		d.children[strings.ToLower(child.Name())] = child
 	}
 
@@ -365,20 +369,11 @@ func (d DriveItem) ModTime() uint64 {
 // directory)
 func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
-		// technically 2 + number of subdirectories
-		var nSubdir uint32
-
-		// really hard to operate on the children safely
 		d.mutex.RLock()
-		children := d.children
-		d.mutex.RUnlock()
-		for _, v := range children {
-			value := v.Copy()
-			if value.IsDir() {
-				nSubdir++
-			}
-		}
-		return 2 + nSubdir
+		defer d.mutex.RUnlock()
+		// we precompute d.subdir due to mutex lock contention with NLink and
+		// other ops. d.subdir is modified by cache Insert/Delete and GetChildren.
+		return 2 + d.subdir
 	}
 	return 1
 }

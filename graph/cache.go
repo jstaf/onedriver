@@ -81,8 +81,18 @@ func (c *Cache) Delete(key string) {
 	// items that are only being fetched so they can be deleted.
 	parent, err := c.Get(filepath.Dir(key), Auth{})
 	if err == nil {
+		// is the key being deleted a directory?
+		item, err := c.Get(filepath.Dir(key), Auth{})
+		isDir := false
+		if err == nil {
+			isDir = item.IsDir()
+		}
+
 		parent.mutex.Lock()
 		delete(parent.children, filepath.Base(key))
+		if isDir {
+			parent.subdir--
+		}
 		parent.mutex.Unlock()
 	}
 }
@@ -98,6 +108,9 @@ func (c *Cache) Insert(key string, auth Auth, item *DriveItem) error {
 	item.setParent(parent)
 	parent.mutex.Lock()
 	parent.children[filepath.Base(key)] = item
+	if item.IsDir() {
+		parent.subdir++
+	}
 	parent.mutex.Unlock()
 	return nil
 }
