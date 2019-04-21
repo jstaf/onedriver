@@ -90,6 +90,22 @@ func goroutineID() uint64 {
 	return id
 }
 
+// Caller obtains the calling function's file and location at a certain point
+// in the stack.
+func Caller(level int) string {
+	// go runtime witchcraft
+	ptr, file, line, ok := runtime.Caller(level)
+	var functionName string
+	if ok {
+		functionName = funcName(ptr)
+	} else {
+		functionName = "(unknown source)"
+	}
+
+	return fmt.Sprintf("%d:%s:%d:%s",
+		goroutineID(), filepath.Base(file), line, functionName)
+}
+
 // Log a function's output at a various level, ignoring messages below the
 // currently configured level.
 func logger(level LogLevel, format string, args ...interface{}) {
@@ -115,19 +131,10 @@ func logger(level LogLevel, format string, args ...interface{}) {
 
 	preformatted := fmt.Sprintf(format, args...)
 
-	// go runtime witchcraft
-	ptr, file, line, ok := runtime.Caller(2)
-	var functionName string
-	if ok {
-		functionName = funcName(ptr)
-	} else {
-		functionName = "(unknown source)"
-	}
-
-	log.Printf("- %s - %d:%s:%d:%s - %s",
-		pad(prefix, 5),                                         // log level
-		goroutineID(), filepath.Base(file), line, functionName, // goroutine + function being logged
-		preformatted) // actual log message
+	log.Printf("- %s - %s - %s",
+		pad(prefix, 5), // log level
+		Caller(3),      // goroutine + function being logged
+		preformatted)   // actual log message
 }
 
 // Fatalf logs and kills the program. Uses printf formatting.

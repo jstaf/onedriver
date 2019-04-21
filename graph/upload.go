@@ -134,10 +134,10 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 func (d *DriveItem) Upload(auth Auth) error {
 	logger.Info(d.Path())
 
-	id := d.ID(auth)
-	if id == "" {
-		logger.Error("Could not obtain ID for upload!")
-		return errors.New("Could not obtain ID")
+	id, err := d.ID(auth)
+	if err != nil || id == "" {
+		logger.Error("Could not obtain ID for upload of:", d.Name())
+		return err
 	}
 
 	if d.Size() <= 4*1024*1024 { // 4MB

@@ -135,11 +135,11 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
-	id := item.ID(fs.Auth)
+	id, err := item.ID(fs.Auth)
 	if id == "" {
 		// uploads will fail without an id
-		logger.Error("ID of item to move cannot be empty " +
-			"and we failed to obtain an ID.")
+		logger.Error("ID of item to move cannot be empty "+
+			"and we failed to obtain an ID:", err.Error())
 		return fuse.EBADF
 	}
 
@@ -152,11 +152,12 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
 		}
-		if newParent.ID(Auth{}) == "" {
-			logger.Error("ID of destination folder cannot be empty!")
+		id, err := newParent.ID(Auth{})
+		if id == "" {
+			logger.Error("ID of destination folder cannot be empty:", err.Error())
 			return fuse.EBADF
 		}
-		patchContent.Parent = &DriveItemParent{ID: newParent.ID(Auth{})}
+		patchContent.Parent = &DriveItemParent{ID: id}
 	}
 
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
@@ -172,7 +173,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	// don't actually care about the response content
 	jsonPatch, _ := json.Marshal(patchContent)
-	_, err := Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
+	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		logger.Error(err)
 		item.SetName(filepath.Base(oldName)) // unrename things locally
@@ -293,7 +294,8 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		logger.Info("Fetching remote content for", item.Name())
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
-			logger.Errorf("Failed to fetch content for '%s': %s\n", item.ID(Auth{}), err)
+			id, _ := item.ID(Auth{})
+			logger.Errorf("Failed to fetch content for '%s': %s\n", id, err)
 			return nil, fuse.EREMOTEIO
 		}
 	}
@@ -329,7 +331,10 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 		return fuse.ENOENT
 	}
 
-	if item.ID(Auth{}) != "" {
+	// if no ID, the item is local-only, and does not need to be deleted on the
+	// server
+	id, _ := item.ID(Auth{})
+	if id != "" {
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
 			logger.Error(err)

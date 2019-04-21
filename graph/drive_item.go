@@ -66,11 +66,12 @@ type DriveItem struct {
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
+	parentID, _ := parent.ID(Auth{}) // we should have this already
 	return &DriveItem{
 		File:         nodefs.NewDefaultFile(),
 		NameInternal: name,
 		Parent: &DriveItemParent{
-			ID:   parent.ID(Auth{}), // We should have this already.
+			ID:   parentID,
 			Path: parent.Parent.Path + "/" + parent.Name(),
 			item: parent,
 		},
@@ -94,11 +95,20 @@ func (d DriveItem) String() string {
 func (d *DriveItem) setParent(newParent *DriveItem) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
+	id, _ := newParent.ID(Auth{})
 	d.Parent = &DriveItemParent{
-		ID:   newParent.ID(Auth{}),
+		ID:   id,
 		Path: newParent.Path(),
 		item: newParent,
 	}
+}
+
+// Copy is hack to absolutely ensure we are working with a copy during threaded
+// ops
+func (d DriveItem) Copy() DriveItem {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d
 }
 
 // Name is used to ensure we access a copy
@@ -118,11 +128,13 @@ func (d *DriveItem) SetName(name string) {
 // has not already been uploaded. You can use an empty Auth object if you're
 // sure that the item already has an ID or otherwise don't need to fetch an ID
 // (such as when deleting an item that is only local).
-func (d *DriveItem) ID(auth Auth) string {
-	metadata := *d // copy the item so we can access it's ID without locking the item itself
+func (d *DriveItem) ID(auth Auth) (string, error) {
+	// copy the item so we can access it's ID without locking the item itself
+	metadata := d.Copy()
 	if metadata.IsDir() {
-		//TODO maybe retry the dir creation again server-side?
-		return metadata.IDInternal
+		//TODO add checks for directory, perhpas retry the dir creation again
+		//server-side?
+		return metadata.IDInternal, nil
 	}
 
 	if metadata.IDInternal == "" && auth.AccessToken != "" {
@@ -134,17 +146,17 @@ func (d *DriveItem) ID(auth Auth) string {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// this likely got fired off just as an initial upload completed
 				// we probaby have the original ID by now
-				return metadata.IDInternal
+				return metadata.IDInternal, nil
 			}
-			return ""
+			return "", err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewDriveItem(d.Name(), d.Mode(), d.Parent.item)
+		unsafe := NewDriveItem(metadata.Name(), metadata.Mode(), metadata.Parent.item)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
-			return ""
+			return "", err
 		}
 		// this is all we really wanted from this transaction
 		d.mutex.Lock()
@@ -152,7 +164,7 @@ func (d *DriveItem) ID(auth Auth) string {
 		d.mutex.Unlock()
 		metadata.IDInternal = unsafe.IDInternal
 	}
-	return metadata.IDInternal
+	return metadata.IDInternal, nil
 }
 
 // Path returns an item's full Path
@@ -201,8 +213,12 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth Auth) error {
-	metadata := *d
-	body, err := Get("/me/drive/items/"+metadata.ID(auth)+"/content", auth)
+	id, err := d.ID(auth)
+	if err != nil {
+		logger.Error("Could not obtain ID:", err.Error())
+		return err
+	}
+	body, err := Get("/me/drive/items/"+id+"/content", auth)
 	if err != nil {
 		return err
 	}
@@ -351,8 +367,14 @@ func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
 		// technically 2 + number of subdirectories
 		var nSubdir uint32
-		for _, v := range d.children {
-			if v.IsDir() {
+
+		// really hard to operate on the children safely
+		d.mutex.RLock()
+		children := d.children
+		d.mutex.RUnlock()
+		for _, v := range children {
+			value := v.Copy()
+			if value.IsDir() {
 				nSubdir++
 			}
 		}

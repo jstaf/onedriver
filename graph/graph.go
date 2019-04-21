@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
+
+	"github.com/jstaf/onedriver/logger"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -22,6 +24,13 @@ type graphError struct {
 
 // Request performs an authenticated request to Microsoft Graph
 func Request(resource string, auth Auth, method string, content io.Reader) ([]byte, error) {
+	if auth.AccessToken == "" {
+		// a catch all condition to avoid wiping our auth by accident
+		logger.Error("Auth was empty and we attempted to make a request with it!",
+			"Guilty party was", logger.Caller(3), "called by", logger.Caller(4))
+		return nil, errors.New("Cannot make a request with empty auth")
+	}
+
 	auth.Refresh()
 
 	client := &http.Client{}
