@@ -209,8 +209,6 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 		return nil, fuse.EREMOTEIO
 	}
 
-	parent.mutex.RLock()
-	defer parent.mutex.RUnlock()
 	children, err := parent.GetChildren(fs.Auth)
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before

@@ -128,7 +128,6 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 	}
 	json.Unmarshal(body, &fetched)
 
-	d.mutex = &sync.RWMutex{}
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.children = make(map[string]*DriveItem)
@@ -143,7 +142,7 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth Auth) error {
-	metadata := d
+	metadata := *d
 	body, err := Get("/me/drive/items/"+metadata.ID+"/content", auth)
 	if err != nil {
 		return err
@@ -202,7 +201,7 @@ func (d DriveItem) getRoot() *DriveItem {
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded.
 func (d *DriveItem) ensureID(auth Auth) (string, error) {
-	metadata := d
+	metadata := *d
 	if metadata.IsDir() {
 		//TODO maybe retry the dir creation again server-side?
 		return metadata.ID, nil
@@ -296,20 +295,16 @@ func (d DriveItem) IsDir() bool {
 	return d.Mode()&fuse.S_IFDIR > 0
 }
 
-// Mode returns the permissions/mode of the file. Lazily initializes the
-// underlying mode field.
-func (d *DriveItem) Mode() uint32 {
-	metadata := d
-	if metadata.mode == 0 { // only 0 if fetched from Graph API
-		// cannot use mutex here or the whole program locks up
+// Mode returns the permissions/mode of the file.
+func (d DriveItem) Mode() uint32 {
+	if d.mode == 0 { // only 0 if fetched from Graph API
 		if d.FileAPI == nil { // nil if a folder
 			d.mode = fuse.S_IFDIR | 0755
 		} else {
 			d.mode = fuse.S_IFREG | 0644
 		}
-		metadata.mode = d.mode
 	}
-	return metadata.mode
+	return d.mode
 }
 
 // Chmod changes the mode of a file
@@ -334,10 +329,7 @@ func (d DriveItem) MTime() uint64 {
 // directory)
 func (d DriveItem) NLink() uint32 {
 	if d.IsDir() {
-		return 2
 		// technically 2 + number of subdirectories
-		d.mutex.RLock()
-		defer d.mutex.RUnlock()
 		var nSubdir uint32
 		for _, v := range d.children {
 			if v.IsDir() {

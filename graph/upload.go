@@ -143,16 +143,19 @@ func (d *DriveItem) Upload(auth Auth) error {
 	// fakesize is used here because it operates on a copy
 	if d.FakeSize() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
+		d.mutex.RLock()
 		logger.Trace("Using simple upload for", d.Name)
 		resp, err := Put("/me/drive/items/"+id+"/content", auth,
 			bytes.NewReader(*d.data))
+		d.mutex.RUnlock()
+
+		d.mutex.Lock()
+		defer d.mutex.Unlock()
 		if err != nil {
 			d.hasChanges = true
 			return err
 		}
 		// Unmarshal into existing item so we don't have to redownload file contents.
-		d.mutex.Lock()
-		defer d.mutex.Unlock()
 		return json.Unmarshal(resp, d)
 	}
 
