@@ -75,17 +75,22 @@ func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 	snapshot := make([]byte, session.Size)
 	copy(snapshot, *d.data)
 	session.data = &snapshot
+	d.mutex.Lock()
 	d.uploadSession = &session
+	d.mutex.Unlock()
 	return &session, nil
 }
 
 // cancel the upload session by deleting the temp file at the endpoint and
 // clearing the singleton field in the DriveItem
 func (d *DriveItem) cancelUploadSession(auth Auth) {
+	d.mutex.Lock()
 	if d.uploadSession != nil {
-		Delete(d.uploadSession.UploadURL, auth)
+		// dont care about result, this is purely us being polite to the server
+		go Delete(d.uploadSession.UploadURL, auth)
 	}
 	d.uploadSession = nil
+	d.mutex.Unlock()
 }
 
 // Internal method used for uploading individual chunks of a DriveItem. We have
