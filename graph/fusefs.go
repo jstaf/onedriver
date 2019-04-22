@@ -219,10 +219,12 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	}
 
 	for _, child := range children {
+		child.mutex.RLock() //TODO eliminate need for lock here
 		entry := fuse.DirEntry{
 			Name: child.Name(),
 			Mode: child.Mode(),
 		}
+		child.mutex.RUnlock()
 		c = append(c, entry)
 	}
 
