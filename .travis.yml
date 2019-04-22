@@ -25,7 +25,7 @@ script:
   - gunzip dmel.fa.gz
   - go test -covermode=count -coverprofile=coverage.out ./logger ./graph
   # travis will timeout if -race is run with -covermode=atomic, so we test separately
-  - go test -race
+  - go test -race ./logger ./graph
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
   - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
