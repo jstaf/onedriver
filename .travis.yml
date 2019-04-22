@@ -19,11 +19,11 @@ install:
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
 script:
-  - go build
+  - go build -race
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
-  - go test -covermode=count -coverprofile=coverage.out ./logger ./graph 
+  - go test -race -covermode=count -coverprofile=coverage.out ./logger ./graph 
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
   - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
