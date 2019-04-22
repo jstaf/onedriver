@@ -104,14 +104,6 @@ func (d *DriveItem) setParent(newParent *DriveItem) {
 	}
 }
 
-// Copy is hack to absolutely ensure we are working with a copy during threaded
-// ops
-func (d DriveItem) Copy() DriveItem {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
-	return d
-}
-
 // Name is used to ensure we access a copy
 func (d DriveItem) Name() string {
 	return d.NameInternal
@@ -131,30 +123,34 @@ func (d *DriveItem) SetName(name string) {
 // (such as when deleting an item that is only local).
 func (d *DriveItem) ID(auth Auth) (string, error) {
 	// copy the item so we can access it's ID without locking the item itself
-	metadata := d.Copy()
-	if metadata.IsDir() {
-		//TODO add checks for directory, perhpas retry the dir creation again
+	d.mutex.RLock()
+	cpy := *d
+	parentID := d.Parent.ID
+	d.mutex.RUnlock()
+
+	if cpy.IsDir() {
+		//TODO add checks for directory, perhaps retry the dir creation again
 		//server-side?
-		return metadata.IDInternal, nil
+		return cpy.IDInternal, nil
 	}
 
-	if metadata.IDInternal == "" && auth.AccessToken != "" {
-		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content",
-			metadata.Parent.ID, metadata.Name())
-
+	if cpy.IDInternal == "" && auth.AccessToken != "" {
+		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", parentID, cpy.Name())
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// this likely got fired off just as an initial upload completed
 				// we probaby have the original ID by now
-				return metadata.IDInternal, nil
+				d.mutex.RLock()
+				defer d.mutex.RUnlock()
+				return d.IDInternal, nil
 			}
 			return "", err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewDriveItem(metadata.Name(), metadata.Mode(), metadata.Parent.item)
+		unsafe := NewDriveItem(cpy.Name(), 0644, cpy.Parent.item)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
 			return "", err
@@ -163,9 +159,9 @@ func (d *DriveItem) ID(auth Auth) (string, error) {
 		d.mutex.Lock()
 		d.IDInternal = unsafe.IDInternal
 		d.mutex.Unlock()
-		metadata.IDInternal = unsafe.IDInternal
+		return unsafe.IDInternal, nil
 	}
-	return metadata.IDInternal, nil
+	return cpy.IDInternal, nil
 }
 
 // Path returns an item's full Path
