@@ -156,7 +156,7 @@ func Errorf(format string, args ...interface{}) {
 
 // Error logs at the Error level
 func Error(args ...interface{}) {
-	logger(ERROR, "%s\n", fmt.Sprintln(args...))
+	logger(ERROR, "%s", fmt.Sprintln(args...))
 }
 
 // Warnf logs at the Warn level, but allows formatting
