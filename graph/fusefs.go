@@ -183,7 +183,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 // Chown currently does nothing - it is not a valid option, since fuse is single-user anyways
 func (fs *FuseFs) Chown(name string, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
-	return fuse.EPERM
+	return fuse.ENOSYS
 }
 
 // Chmod changes mode purely for convenience/compatibility - it has no effect on
