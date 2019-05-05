@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -170,9 +171,19 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	jsonPatch, _ := json.Marshal(patchContent)
 	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
-		logger.Error(err)
-		item.SetName(filepath.Base(oldName)) // unrename things locally
-		return fuse.EREMOTEIO
+		if strings.Contains(err.Error(), "resourceModified") {
+			// Wait a second, then retry the request
+			time.Sleep(time.Second)
+			logger.Warn("Patch failed, retrying:", err.Error())
+			_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
+		}
+		if err != nil {
+			// if retrying the request failed to recover things, or the request
+			// failed due to another reason than the etag bug
+			logger.Error(err)
+			item.SetName(filepath.Base(oldName)) // unrename things locally
+			return fuse.EREMOTEIO
+		}
 	}
 
 	// rename local copy
