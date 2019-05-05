@@ -142,14 +142,17 @@ func (d *DriveItem) Upload(auth Auth) error {
 	size := d.Size()
 	if size <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
+		id, err := d.ID(auth)
+		if err != nil || id == "" {
+			d.mutex.Lock()
+			defer d.mutex.Unlock()
+			logger.Errorf("Could not obtain ID for upload of %s, error: %s\n", d.Name(), err)
+			d.hasChanges = true
+			return err
+		}
 
 		// creating a snapshot prevents lock contention during the actual http
 		// upload
-		id, err := d.ID(auth)
-		if err != nil || id == "" {
-			logger.Error("Could not obtain ID for upload of", d.Name(), ", error:", err)
-			return err
-		}
 		d.mutex.RLock()
 		logger.Trace("Using simple upload for", d.Name())
 		snapshot := make([]byte, size)
