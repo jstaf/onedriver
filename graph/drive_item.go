@@ -68,6 +68,8 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
 	parentID, _ := parent.ID(Auth{}) // we should have this already
+	parent.mutex.RLock()
+	defer parent.mutex.RUnlock()
 	return &DriveItem{
 		File:         nodefs.NewDefaultFile(),
 		NameInternal: name,
@@ -139,11 +141,25 @@ func (d *DriveItem) ID(auth Auth) (string, error) {
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
-				// this likely got fired off just as an initial upload completed
-				// we probaby have the original ID by now
+				// This likely got fired off just as an initial upload completed.
+				// Check both our local copy and the server.
+
+				// Do we have it (from another thread)?
 				d.mutex.RLock()
-				defer d.mutex.RUnlock()
-				return d.IDInternal, nil
+				id := d.IDInternal
+				path := d.Path()
+				if id != "" {
+					defer d.mutex.RUnlock()
+					return id, nil
+				}
+				d.mutex.RUnlock()
+
+				// Does the server have it?
+				latest, err := GetItem(path, auth)
+				if err == nil {
+					// hooray!
+					return latest.IDInternal, nil
+				}
 			}
 			return "", err
 		}

@@ -139,20 +139,17 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 func (d *DriveItem) Upload(auth Auth) error {
 	logger.Info(d.Path())
 
-	id, err := d.ID(auth)
-	if err != nil || id == "" {
-		d.mutex.RLock() //TODO why is this necessary???? arghhhh
-		logger.Error("Could not obtain ID for upload of:", d.Name())
-		d.mutex.RUnlock()
-		return err
-	}
-
 	size := d.Size()
 	if size <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
 
 		// creating a snapshot prevents lock contention during the actual http
 		// upload
+		id, err := d.ID(auth)
+		if err != nil || id == "" {
+			logger.Error("Could not obtain ID for upload of", d.Name(), ", error:", err)
+			return err
+		}
 		d.mutex.RLock()
 		logger.Trace("Using simple upload for", d.Name())
 		snapshot := make([]byte, size)
