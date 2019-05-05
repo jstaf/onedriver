@@ -143,8 +143,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		return fuse.EBADF
 	}
 
-	//TODO this is an unsafe allocation of patchContent, mutex is uninitialized
-	patchContent := DriveItem{} // totally empty to avoid sending extra data
+	patchContent := DriveItem{ConflictBehavior: "replace"} // wipe existing content
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
 		// we are moving the item
 		newParent, err := fs.items.Get(newDir, fs.Auth)
@@ -166,10 +165,6 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		patchContent.NameInternal = newBase
 		item.SetName(newBase)
 	}
-
-	// if an item already exists at the new name, we'll need to purge it or the
-	// server will refuse to perform the op
-	fs.Unlink(newName, nil)
 
 	// don't actually care about the response content
 	jsonPatch, _ := json.Marshal(patchContent)

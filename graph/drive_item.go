@@ -44,23 +44,24 @@ type Deleted struct {
 // concurrently.) This struct's methods are thread-safe and can be called
 // concurrently.
 type DriveItem struct {
-	nodefs.File     `json:"-"`
-	uploadSession   *UploadSession   // current upload session, or nil
-	auth            *Auth            // only populated for root item
-	data            *[]byte          // empty by default
-	hasChanges      bool             // used to trigger an upload on flush
-	IDInternal      string           `json:"id,omitempty"`
-	NameInternal    string           `json:"name,omitempty"`
-	SizeInternal    uint64           `json:"size,omitempty"`
-	ModTimeInternal *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	mode            uint32           // do not set manually
-	Parent          *DriveItemParent `json:"parentReference,omitempty"`
-	children        map[string]*DriveItem
-	subdir          uint32 // used purely by NLink()
-	mutex           *sync.RWMutex
-	Folder          *Folder  `json:"folder,omitempty"`
-	FileInternal    *File    `json:"file,omitempty"`
-	Deleted         *Deleted `json:"deleted,omitempty"`
+	nodefs.File      `json:"-"`
+	uploadSession    *UploadSession   // current upload session, or nil
+	auth             *Auth            // only populated for root item
+	data             *[]byte          // empty by default
+	hasChanges       bool             // used to trigger an upload on flush
+	IDInternal       string           `json:"id,omitempty"`
+	NameInternal     string           `json:"name,omitempty"`
+	SizeInternal     uint64           `json:"size,omitempty"`
+	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	mode             uint32           // do not set manually
+	Parent           *DriveItemParent `json:"parentReference,omitempty"`
+	children         map[string]*DriveItem
+	subdir           uint32 // used purely by NLink()
+	mutex            *sync.RWMutex
+	Folder           *Folder  `json:"folder,omitempty"`
+	FileInternal     *File    `json:"file,omitempty"`
+	Deleted          *Deleted `json:"deleted,omitempty"`
+	ConflictBehavior string   `json:"@microsoft.graph.conflictBehavior,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
