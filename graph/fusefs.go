@@ -44,7 +44,7 @@ func leadingSlash(path string) string {
 // FuseFs is a memory-backed filesystem for Microsoft Graph
 type FuseFs struct {
 	pathfs.FileSystem
-	Auth
+	*Auth
 	items *Cache
 }
 
@@ -53,7 +53,7 @@ type FuseFs struct {
 func NewFS() *FuseFs {
 	auth := Authenticate()
 	cache := NewCache(auth)
-	go cache.deltaLoop(&auth)
+	go cache.deltaLoop()
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       auth,
@@ -302,7 +302,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		logger.Info("Fetching remote content for", item.Name())
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
-			id, _ := item.ID(Auth{})
+			id, _ := item.ID(&Auth{})
 			logger.Errorf("Failed to fetch content for '%s': %s\n", id, err)
 			return nil, fuse.EREMOTEIO
 		}
@@ -341,7 +341,7 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server
-	id, _ := item.ID(Auth{})
+	id, _ := item.ID(&Auth{})
 	if id != "" {
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {

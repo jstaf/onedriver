@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
@@ -15,17 +16,22 @@ import (
 // constructor.
 type Cache struct {
 	root      *DriveItem
+	auth      *Auth
 	deltaLink string
+	items     sync.Map
 }
 
 // NewCache creates a new Cache
-func NewCache(auth Auth) *Cache {
-	cache := &Cache{}
+func NewCache(auth *Auth) *Cache {
+	cache := &Cache{
+		auth:  auth,
+		items: sync.Map{},
+	}
 	root, err := GetItem("/", auth)
 	if err != nil {
 		logger.Fatal("Could not fetch root item of filesystem!:", err)
 	}
-	root.auth = &auth
+	cache.InsertID(root.IDInternal, root) // safe to access InternalID
 	cache.root = root
 
 	// using token=latest because we don't care about existing items - they'll
@@ -37,7 +43,7 @@ func NewCache(auth Auth) *Cache {
 
 // Get fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
-func (c *Cache) Get(key string, auth Auth) (*DriveItem, error) {
+func (c *Cache) Get(key string, auth *Auth) (*DriveItem, error) {
 	last := c.root
 
 	// from the root directory, traverse the chain of items till we reach our
@@ -79,10 +85,10 @@ func (c *Cache) Delete(key string) {
 	key = strings.ToLower(key)
 	// Uses empty auth, since we actually don't want to waste time fetching
 	// items that are only being fetched so they can be deleted.
-	parent, err := c.Get(filepath.Dir(key), Auth{})
+	parent, err := c.Get(filepath.Dir(key), &Auth{})
 	if err == nil {
 		// is the key being deleted a directory?
-		item, err := c.Get(filepath.Dir(key), Auth{})
+		item, err := c.Get(filepath.Dir(key), &Auth{})
 		isDir := false
 		if err == nil {
 			isDir = item.IsDir()
@@ -99,7 +105,7 @@ func (c *Cache) Delete(key string) {
 
 // Insert lets us manually insert an item to the cache (like if it was created
 // locally). Overwrites a cached item if present.
-func (c *Cache) Insert(key string, auth Auth, item *DriveItem) error {
+func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	key = strings.ToLower(key)
 	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
@@ -116,7 +122,7 @@ func (c *Cache) Insert(key string, auth Auth, item *DriveItem) error {
 }
 
 // Move an item to a new position
-func (c *Cache) Move(oldPath string, newPath string, auth Auth) error {
+func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 	item, err := c.Get(oldPath, auth)
 	if err != nil {
 		return err
@@ -129,14 +135,30 @@ func (c *Cache) Move(oldPath string, newPath string, auth Auth) error {
 	return nil
 }
 
+// GetID fetches an item by its GraphID
+func (c *Cache) GetID(key string, auth *Auth) (*DriveItem, error) {
+	//TODO implement
+	return nil, nil
+}
+
+// DeleteID deletes an item from the cache by its ID
+func (c *Cache) DeleteID(key string) {
+	c.items.Delete(key)
+}
+
+// InsertID inserts an item by its ID into the cache
+func (c *Cache) InsertID(key string, item *DriveItem) {
+	c.items.Store(key, item)
+}
+
 // deltaLoop should be called as a goroutine
-func (c *Cache) deltaLoop(auth *Auth) {
+func (c *Cache) deltaLoop() {
 	logger.Trace("Starting delta goroutine...")
 	for { // eva
 		// get deltas
 		logger.Trace("Syncing deltas from server...")
 		for {
-			cont, err := c.pollDeltas(auth)
+			cont, err := c.pollDeltas(c.auth)
 			if err != nil {
 				logger.Error(err)
 				break
@@ -160,7 +182,7 @@ type deltaResponse struct {
 
 // Polls the delta endpoint and return whether or not to continue polling
 func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
-	resp, err := Get(c.deltaLink, *auth)
+	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
 		logger.Error("Could not fetch server deltas:", err)
 		return false, err

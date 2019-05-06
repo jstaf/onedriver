@@ -45,8 +45,8 @@ type Deleted struct {
 // concurrently.
 type DriveItem struct {
 	nodefs.File      `json:"-"`
+	cache            *Cache
 	uploadSession    *UploadSession   // current upload session, or nil
-	auth             *Auth            // only populated for root item
 	data             *[]byte          // empty by default
 	hasChanges       bool             // used to trigger an upload on flush
 	IDInternal       string           `json:"id,omitempty"`
@@ -68,7 +68,7 @@ type DriveItem struct {
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
-	parentID, _ := parent.ID(Auth{}) // we should have this already
+	parentID, _ := parent.ID(&Auth{}) // we should have this already
 	parent.mutex.RLock()
 	defer parent.mutex.RUnlock()
 	return &DriveItem{
@@ -99,7 +99,7 @@ func (d DriveItem) String() string {
 func (d *DriveItem) setParent(newParent *DriveItem) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	id, _ := newParent.ID(Auth{})
+	id, _ := newParent.ID(&Auth{})
 	d.Parent = &DriveItemParent{
 		ID:   id,
 		Path: newParent.Path(),
@@ -124,7 +124,7 @@ func (d *DriveItem) SetName(name string) {
 // has not already been uploaded. You can use an empty Auth object if you're
 // sure that the item already has an ID or otherwise don't need to fetch an ID
 // (such as when deleting an item that is only local).
-func (d *DriveItem) ID(auth Auth) (string, error) {
+func (d *DriveItem) ID(auth *Auth) (string, error) {
 	// copy the item so we can access it's ID without locking the item itself
 	d.mutex.RLock()
 	cpy := *d
@@ -200,7 +200,7 @@ type driveChildren struct {
 
 // GetChildren fetches all DriveItems that are children of resource at path.
 // Also initializes the children field.
-func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
+func (d *DriveItem) GetChildren(auth *Auth) (map[string]*DriveItem, error) {
 	//TODO will exit prematurely if *any* children are in the cache
 	if !d.IsDir() || d.children != nil {
 		return d.children, nil
@@ -229,7 +229,7 @@ func (d *DriveItem) GetChildren(auth Auth) (map[string]*DriveItem, error) {
 }
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
-func (d *DriveItem) FetchContent(auth Auth) error {
+func (d *DriveItem) FetchContent(auth *Auth) error {
 	id, err := d.ID(auth)
 	if err != nil {
 		logger.Error("Could not obtain ID:", err.Error())
@@ -281,14 +281,6 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	return uint32(nWrite), fuse.OK
 }
 
-func (d DriveItem) getRoot() *DriveItem {
-	parent := d.Parent.item
-	for parent.Parent.Path != "" {
-		parent = parent.Parent.item
-	}
-	return parent
-}
-
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
@@ -296,11 +288,10 @@ func (d *DriveItem) Flush() fuse.Status {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if d.hasChanges {
-		auth := *d.getRoot().auth
 		d.hasChanges = false
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
-		go d.Upload(auth)
+		go d.Upload(d.cache.auth)
 	}
 	return fuse.OK
 }

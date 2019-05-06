@@ -6,7 +6,7 @@ import (
 )
 
 func TestRequestUnauthenticated(t *testing.T) {
-	badAuth := Auth{
+	badAuth := &Auth{
 		// Set a renewal 1 year in the future so we don't accidentally overwrite
 		// our auth tokens
 		ExpiresAt: time.Now().Unix() + 60*60*24*365,

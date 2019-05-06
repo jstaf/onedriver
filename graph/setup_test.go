@@ -20,7 +20,7 @@ const (
 	TestDir  = mountLoc + "/onedriver_tests"
 )
 
-var auth Auth
+var auth *Auth
 
 // Tests are done in the main project directory with a mounted filesystem to
 // avoid having to repeatedly recreate auth_tokens.json and juggle mutliple auth

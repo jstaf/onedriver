@@ -48,7 +48,7 @@ type FileSystemInfo struct {
 
 // createUploadSession creates a new "upload session" resource on the server for
 // uploading big files.
-func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
+func (d *DriveItem) createUploadSession(auth *Auth) (*UploadSession, error) {
 	d.cancelUploadSession(auth) // THERE CAN ONLY BE ONE!
 
 	sessionResp, _ := json.Marshal(UploadSessionPost{
@@ -83,7 +83,7 @@ func (d *DriveItem) createUploadSession(auth Auth) (*UploadSession, error) {
 
 // cancel the upload session by deleting the temp file at the endpoint and
 // clearing the singleton field in the DriveItem
-func (d *DriveItem) cancelUploadSession(auth Auth) {
+func (d *DriveItem) cancelUploadSession(auth *Auth) {
 	d.mutex.Lock()
 	if d.uploadSession != nil {
 		// dont care about result, this is purely us being polite to the server
@@ -96,7 +96,7 @@ func (d *DriveItem) cancelUploadSession(auth Auth) {
 // Internal method used for uploading individual chunks of a DriveItem. We have
 // to make things this way because the internal Put func doesn't work all that
 // well when we need to add custom headers.
-func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error) {
+func (u UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, error) {
 	if u.UploadURL == "" {
 		return nil, -1, errors.New("uploadSession UploadURL cannot be empty")
 	}
@@ -136,7 +136,7 @@ func (u UploadSession) uploadChunk(auth Auth, offset uint64) ([]byte, int, error
 
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time.
-func (d *DriveItem) Upload(auth Auth) error {
+func (d *DriveItem) Upload(auth *Auth) error {
 	logger.Info(d.Path())
 
 	size := d.Size()

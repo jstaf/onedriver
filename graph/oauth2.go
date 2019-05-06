@@ -136,7 +136,7 @@ func getAuthTokens(authCode string) Auth {
 }
 
 // Authenticate performs first-time authentication to Graph
-func Authenticate() Auth {
+func Authenticate() *Auth {
 	var auth Auth
 	_, err := os.Stat(authFile)
 	if os.IsNotExist(err) {
@@ -149,5 +149,5 @@ func Authenticate() Auth {
 		auth.FromFile(authFile)
 		auth.Refresh()
 	}
-	return auth
+	return &auth
 }

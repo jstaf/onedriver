@@ -23,7 +23,7 @@ type graphError struct {
 }
 
 // Request performs an authenticated request to Microsoft Graph
-func Request(resource string, auth Auth, method string, content io.Reader) ([]byte, error) {
+func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
 	if auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
 		logger.Error("Auth was empty and we attempted to make a request with it!",
@@ -63,27 +63,27 @@ func Request(resource string, auth Auth, method string, content io.Reader) ([]by
 }
 
 // Get is a convenience wrapper around Request
-func Get(resource string, auth Auth) ([]byte, error) {
+func Get(resource string, auth *Auth) ([]byte, error) {
 	return Request(resource, auth, "GET", nil)
 }
 
 // Patch is a convenience wrapper around Request
-func Patch(resource string, auth Auth, content io.Reader) ([]byte, error) {
+func Patch(resource string, auth *Auth, content io.Reader) ([]byte, error) {
 	return Request(resource, auth, "PATCH", content)
 }
 
 // Post is a convenience wrapper around Request
-func Post(resource string, auth Auth, content io.Reader) ([]byte, error) {
+func Post(resource string, auth *Auth, content io.Reader) ([]byte, error) {
 	return Request(resource, auth, "POST", content)
 }
 
 // Put is a convenience wrapper around Request
-func Put(resource string, auth Auth, content io.Reader) ([]byte, error) {
+func Put(resource string, auth *Auth, content io.Reader) ([]byte, error) {
 	return Request(resource, auth, "PUT", content)
 }
 
 // Delete performs an HTTP delete
-func Delete(resource string, auth Auth) error {
+func Delete(resource string, auth *Auth) error {
 	_, err := Request(resource, auth, "DELETE", nil)
 	return err
 }
@@ -105,7 +105,7 @@ func ChildrenPath(path string) string {
 }
 
 // GetItem fetches a DriveItem by path
-func GetItem(path string, auth Auth) (*DriveItem, error) {
+func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
 	item := &DriveItem{
 		mutex: &sync.RWMutex{},
