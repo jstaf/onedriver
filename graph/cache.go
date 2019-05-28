@@ -5,7 +5,6 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
@@ -18,21 +17,19 @@ type Cache struct {
 	root      *DriveItem
 	auth      *Auth
 	deltaLink string
-	items     sync.Map
 }
 
 // NewCache creates a new Cache
 func NewCache(auth *Auth) *Cache {
 	cache := &Cache{
-		auth:  auth,
-		items: sync.Map{},
+		auth: auth,
 	}
 	root, err := GetItem("/", auth)
 	if err != nil {
 		logger.Fatal("Could not fetch root item of filesystem!:", err)
 	}
-	cache.InsertID(root.IDInternal, root) // safe to access InternalID
 	cache.root = root
+	root.cache = cache
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
@@ -133,22 +130,6 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 	}
 	c.Delete(oldPath)
 	return nil
-}
-
-// GetID fetches an item by its GraphID
-func (c *Cache) GetID(key string, auth *Auth) (*DriveItem, error) {
-	//TODO implement
-	return nil, nil
-}
-
-// DeleteID deletes an item from the cache by its ID
-func (c *Cache) DeleteID(key string) {
-	c.items.Delete(key)
-}
-
-// InsertID inserts an item by its ID into the cache
-func (c *Cache) InsertID(key string, item *DriveItem) {
-	c.items.Store(key, item)
 }
 
 // deltaLoop should be called as a goroutine

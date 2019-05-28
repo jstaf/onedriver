@@ -66,6 +66,10 @@ type DriveItem struct {
 
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
+	if parent == nil || parent.cache == nil {
+		logger.Fatal("Parent or parent cache cannot be nil:", parent.Name())
+	}
+
 	var empty []byte
 	currentTime := time.Now()
 	parentID, _ := parent.ID(&Auth{}) // we should have this already
@@ -74,6 +78,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	return &DriveItem{
 		File:         nodefs.NewDefaultFile(),
 		NameInternal: name,
+		cache:        parent.cache,
 		Parent: &DriveItemParent{
 			ID:   parentID,
 			Path: parent.Parent.Path + "/" + parent.Name(),
@@ -291,6 +296,10 @@ func (d *DriveItem) Flush() fuse.Status {
 		d.hasChanges = false
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
+		if d.cache == nil {
+			logger.Error("Driveitem cache ref cannot be nil!", d.Name())
+			return fuse.ENODATA
+		}
 		go d.Upload(d.cache.auth)
 	}
 	return fuse.OK
