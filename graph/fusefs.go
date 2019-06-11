@@ -117,7 +117,7 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 	}
 
 	item, err := fs.items.Get(name, fs.Auth)
-	if err != nil {
+	if err != nil || item == nil {
 		// this is where non-existent files are caught - called before any other
 		// method when accessing a file
 		return nil, fuse.ENOENT

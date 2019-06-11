@@ -88,7 +88,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	if item.children != nil {
 		for _, id := range item.children {
 			child := c.GetID(id)
-			children[child.Name()] = child
+			children[strings.ToLower(child.Name())] = child
 		}
 		return children, nil
 	}
@@ -118,11 +118,10 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		c.metadata.Store(child.IDInternal, child)
 
 		// store in result map
-		children[child.Name()] = child
+		children[strings.ToLower(child.Name())] = child
 
 		// store id in parent item and increment parents subdirectory count
-		childID, _ := child.ID(&Auth{})
-		item.children = append(item.children, childID)
+		item.children = append(item.children, child.IDInternal)
 		if child.IsDir() {
 			item.subdir++
 		}
@@ -148,6 +147,9 @@ func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*DriveItem,
 // not found, they are fetched.
 func (c *Cache) Get(path string, auth *Auth) (*DriveItem, error) {
 	lastID := c.root
+	if path == "/" {
+		return c.GetID(lastID), nil
+	}
 
 	// from the root directory, traverse the chain of items till we reach our
 	// target ID.
@@ -161,12 +163,13 @@ func (c *Cache) Get(path string, auth *Auth) (*DriveItem, error) {
 			return nil, err
 		}
 
-		item, exists := children[split[i]]
+		var exists bool // if we use ":=", item is shadowed
+		item, exists = children[split[i]]
 		if !exists {
 			// the item still doesn't exist after fetching from server. it
 			// doesn't exist
 			return nil, errors.New(strings.Join(split[:i+1], "/") +
-				"does not exist on server or in local cache")
+				" does not exist on server or in local cache")
 		}
 		lastID, _ = item.ID(&Auth{})
 	}
