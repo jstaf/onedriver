@@ -210,13 +210,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 	name = leadingSlash(name)
 	logger.Trace(name)
 
-	parent, err := fs.items.Get(name, fs.Auth)
-	if err != nil {
-		logger.Errorf("Error getting item \"%s\": %s\n", name, err)
-		return nil, fuse.EREMOTEIO
-	}
-
-	children, err := parent.GetChildren(fs.Auth)
+	children, err := fs.items.GetChildrenPath(name, fs.Auth)
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection

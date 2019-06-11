@@ -104,7 +104,13 @@ func ChildrenPath(path string) string {
 	return ResourcePath(path) + ":/children"
 }
 
-// GetItem fetches a DriveItem by path
+// ChildrenPathID returns the API resource path of an item's children
+func ChildrenPathID(id string) string {
+	return "/me/drive/items/" + id + "/children"
+}
+
+// GetItem fetches a DriveItem by path. Only used in special cases, like for the
+// root item.
 func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
 	item := &DriveItem{

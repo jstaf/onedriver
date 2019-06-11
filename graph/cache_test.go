@@ -21,15 +21,12 @@ func TestRootGet(t *testing.T) {
 
 func TestRootChildrenUpdate(t *testing.T) {
 	cache := NewCache(auth)
-	root, _ := cache.Get("/", auth)
-	_, err := root.GetChildren(auth)
+	children, err := cache.GetChildrenPath("/", auth)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	root.mutex.RLock()
-	defer root.mutex.RUnlock()
-	if _, exists := root.children["documents"]; !exists {
+	if _, exists := children["documents"]; !exists {
 		t.Fatal("Could not find documents folder.")
 	}
 }
@@ -47,13 +44,10 @@ func TestSubdirGet(t *testing.T) {
 
 func TestSubdirChildrenUpdate(t *testing.T) {
 	cache := NewCache(auth)
-	documents, err := cache.Get("/Documents", auth)
+	children, err := cache.GetChildrenPath("/Documents", auth)
 	failOnErr(t, err)
 
-	children, _ := documents.GetChildren(auth)
-	documents.mutex.RLock()
-	defer documents.mutex.RUnlock()
-	if _, exists := children["Documents"]; exists {
+	if _, exists := children["documents"]; exists {
 		log.Println("Documents directory found inside itself. " +
 			"Likely the cache did not traverse correctly.\n\nChildren:\n")
 		for key := range children {

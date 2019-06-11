@@ -16,10 +16,9 @@ import (
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
 // DriveItem's ID and its path)
 type DriveItemParent struct {
-	//TODO restructure to use its own ID functions
-	ID   string `json:"id,omitempty"`
+	//TODO Path is technically available, but we shouldn't use it
 	Path string `json:"path,omitempty"`
-	item *DriveItem
+	ID   string `json:"id,omitempty"`
 }
 
 // Folder is used for parsing only
@@ -55,8 +54,8 @@ type DriveItem struct {
 	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
 	mode             uint32           // do not set manually
 	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	children         map[string]*DriveItem
-	subdir           uint32 // used purely by NLink()
+	children         []string         // a slice of ids, nil when uninitialized
+	subdir           uint32           // used purely by NLink()
 	mutex            *sync.RWMutex
 	Folder           *Folder  `json:"folder,omitempty"`
 	FileInternal     *File    `json:"file,omitempty"`
@@ -66,25 +65,26 @@ type DriveItem struct {
 
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
-	if parent == nil || parent.cache == nil {
-		logger.Fatal("Parent or parent cache cannot be nil:", parent.Name())
+	itemParent := &DriveItemParent{ID: "", Path: ""}
+	if parent == nil {
+		logger.Warnf("While creating %s, parent was nil. Substituting empty data", name)
+	} else {
+		parent.mutex.RLock()
+		itemParent.ID = parent.IDInternal
+		itemParent.Path = parent.Path()
+		parent.mutex.RUnlock()
 	}
 
 	var empty []byte
 	currentTime := time.Now()
-	parentID, _ := parent.ID(&Auth{}) // we should have this already
 	parent.mutex.RLock()
 	defer parent.mutex.RUnlock()
 	return &DriveItem{
-		File:         nodefs.NewDefaultFile(),
-		NameInternal: name,
-		cache:        parent.cache,
-		Parent: &DriveItemParent{
-			ID:   parentID,
-			Path: parent.Parent.Path + "/" + parent.Name(),
-			item: parent,
-		},
-		children:        make(map[string]*DriveItem),
+		File:            nodefs.NewDefaultFile(),
+		NameInternal:    name,
+		cache:           parent.cache,
+		Parent:          itemParent,
+		children:        make([]string, 0),
 		mutex:           &sync.RWMutex{},
 		data:            &empty,
 		ModTimeInternal: &currentTime,
@@ -92,28 +92,15 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	}
 }
 
+// String is only used for debugging by go-fuse
 func (d DriveItem) String() string {
-	length := d.Size()
-	if length > 10 {
-		length = 10
-	}
-	return fmt.Sprintf("DriveItem(%x)", (*d.data)[:length])
+	return d.Name()
 }
 
-// Set an item's parent
-func (d *DriveItem) setParent(newParent *DriveItem) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	id, _ := newParent.ID(&Auth{})
-	d.Parent = &DriveItemParent{
-		ID:   id,
-		Path: newParent.Path(),
-		item: newParent,
-	}
-}
-
-// Name is used to ensure we access a copy
+// Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
+	d.mutex.RLock()
+	d.mutex.RUnlock()
 	return d.NameInternal
 }
 
@@ -172,7 +159,7 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewDriveItem(cpy.Name(), 0644, cpy.Parent.item)
+		unsafe := NewDriveItem(cpy.Name(), 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
 			return "", err
@@ -189,48 +176,13 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 // Path returns an item's full Path
 func (d DriveItem) Path() string {
 	// special case when it's the root item
-	if d.Parent.Path == "" && d.Name() == "root" {
+	if d.Parent.ID == "" && d.Name() == "root" {
 		return "/"
 	}
 
 	// all paths come prefixed with "/drive/root:"
 	prepath := strings.TrimPrefix(d.Parent.Path+"/"+d.Name(), "/drive/root:")
 	return strings.Replace(prepath, "//", "/", -1)
-}
-
-// only used for parsing
-type driveChildren struct {
-	Children []*DriveItem `json:"value"`
-}
-
-// GetChildren fetches all DriveItems that are children of resource at path.
-// Also initializes the children field.
-func (d *DriveItem) GetChildren(auth *Auth) (map[string]*DriveItem, error) {
-	//TODO will exit prematurely if *any* children are in the cache
-	if !d.IsDir() || d.children != nil {
-		return d.children, nil
-	}
-
-	body, err := Get(ChildrenPath(d.Path()), auth)
-	var fetched driveChildren
-	if err != nil {
-		return nil, err
-	}
-	json.Unmarshal(body, &fetched)
-
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	d.children = make(map[string]*DriveItem)
-	for _, child := range fetched.Children {
-		child.Parent.item = d
-		child.mutex = &sync.RWMutex{}
-		if child.IsDir() {
-			d.subdir++
-		}
-		d.children[strings.ToLower(child.Name())] = child
-	}
-
-	return d.children, nil
 }
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
