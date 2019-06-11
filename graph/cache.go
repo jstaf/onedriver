@@ -46,7 +46,10 @@ func NewCache(auth *Auth) *Cache {
 // GetID gets an item from the cache by ID. No fetching is performed. Result is
 // nil if no item is found.
 func (c *Cache) GetID(id string) *DriveItem {
-	entry, _ := c.metadata.Load(id)
+	entry, exists := c.metadata.Load(id)
+	if !exists {
+		return nil
+	}
 	item := entry.(*DriveItem)
 	return item
 }
