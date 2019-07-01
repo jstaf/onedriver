@@ -92,7 +92,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		for _, id := range item.children {
 			child := c.GetID(id)
 			if child == nil {
-				logger.Errorf("Failed to fetch child with ID \"%s\" from cache", id)
+				// will be nil if deleted or never existed
 				continue
 			}
 			children[strings.ToLower(child.Name())] = child
@@ -223,7 +223,7 @@ func (c *Cache) Delete(key string) {
 	if err != nil {
 		c.removeParent(item)
 	}
-	c.metadata.Delete(key)
+	c.metadata.Delete(item.ID())
 }
 
 // Insert lets us manually insert an item to the cache (like if it was created
