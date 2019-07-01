@@ -136,8 +136,8 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	logger.Trace(oldName, "->", newName)
 
 	item, _ := fs.items.Get(oldName, fs.Auth)
-	id, err := item.ID(fs.Auth)
-	if id == "" || err != nil {
+	id, err := item.RemoteID(fs.Auth)
+	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
 		logger.Error("ID of item to move cannot be empty "+
 			"and we failed to obtain an ID:", err.Error())
@@ -152,8 +152,8 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
 			return fuse.EREMOTEIO
 		}
-		parentID, err := newParent.ID(fs.Auth)
-		if parentID == "" || err != nil {
+		parentID, err := newParent.RemoteID(fs.Auth)
+		if isLocalID(parentID) || err != nil {
 			logger.Error("ID of destination folder cannot be empty:", err.Error())
 			return fuse.EBADF
 		}
@@ -296,8 +296,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		logger.Info("Fetching remote content for", item.Name())
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
-			id, _ := item.ID(&Auth{})
-			logger.Errorf("Failed to fetch content for '%s': %s\n", id, err)
+			logger.Errorf("Failed to fetch content for '%s': %s\n", item.ID(), err)
 			return nil, fuse.EREMOTEIO
 		}
 	}
@@ -317,7 +316,11 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	}
 
 	item := NewDriveItem(filepath.Base(name), mode, parent)
-	fs.items.Insert(name, fs.Auth, item)
+	logger.Tracef("Created \"%s\" as \"%s\"", name, item.ID())
+	err = fs.items.Insert(name, fs.Auth, item)
+	if err != nil {
+		logger.Error(err)
+	}
 
 	return item, fuse.OK
 }
@@ -335,8 +338,7 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server
-	id, _ := item.ID(&Auth{})
-	if id != "" {
+	if !isLocalID(item.ID()) {
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
 			logger.Error(err)

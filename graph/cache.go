@@ -32,7 +32,7 @@ func NewCache(auth *Auth) *Cache {
 		logger.Fatal("Could not fetch root item of filesystem!:", err)
 	}
 	root.cache = cache
-	cache.root, _ = root.ID(nil)
+	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
 	// using token=latest because we don't care about existing items - they'll
@@ -91,6 +91,10 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	if item.children != nil {
 		for _, id := range item.children {
 			child := c.GetID(id)
+			if child == nil {
+				logger.Errorf("Failed to fetch child with ID \"%s\" from cache", id)
+				continue
+			}
 			children[strings.ToLower(child.Name())] = child
 		}
 		return children, nil
@@ -142,8 +146,7 @@ func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*DriveItem,
 		return make(map[string]*DriveItem), err
 	}
 
-	id, _ := item.ID(auth)
-	return c.GetChildrenID(id, auth)
+	return c.GetChildrenID(item.ID(), auth)
 }
 
 // Get fetches a given DriveItem in the cache, if any items along the way are
@@ -174,7 +177,7 @@ func (c *Cache) Get(path string, auth *Auth) (*DriveItem, error) {
 			return nil, errors.New(strings.Join(split[:i+1], "/") +
 				" does not exist on server or in local cache")
 		}
-		lastID, _ = item.ID(&Auth{})
+		lastID = item.ID()
 	}
 	return item, nil
 }
@@ -195,7 +198,7 @@ func (c *Cache) setParent(item *DriveItem, parent *DriveItem) {
 // removeParent removes a given item from its parent
 func (c *Cache) removeParent(item *DriveItem) {
 	if item != nil { // item can be nil in some scenarios
-		id, _ := item.ID(&Auth{})
+		id := item.ID()
 		parent := c.GetID(item.Parent.ID)
 		parent.mutex.Lock()
 		for i, childID := range parent.children {
@@ -230,10 +233,12 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
 		return err
+	} else if parent == nil {
+		return errors.New("Parent of key was nil! Did we accidentally an ID for key?")
 	}
 
 	c.setParent(item, parent)
-	c.metadata.Store(key, item)
+	c.metadata.Store(item.ID(), item)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -66,23 +67,24 @@ type DriveItem struct {
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	itemParent := &DriveItemParent{ID: "", Path: ""}
+	var cache *Cache
 	if parent == nil {
 		logger.Warnf("While creating %s, parent was nil. Substituting empty data", name)
 	} else {
 		parent.mutex.RLock()
 		itemParent.ID = parent.IDInternal
 		itemParent.Path = parent.Path()
-		parent.mutex.RUnlock()
+		cache = parent.cache
+		defer parent.mutex.RUnlock()
 	}
 
 	var empty []byte
 	currentTime := time.Now()
-	parent.mutex.RLock()
-	defer parent.mutex.RUnlock()
 	return &DriveItem{
 		File:            nodefs.NewDefaultFile(),
+		IDInternal:      localID(),
 		NameInternal:    name,
-		cache:           parent.cache,
+		cache:           cache, //TODO: find a way to do uploads without this field
 		Parent:          itemParent,
 		children:        make([]string, 0),
 		mutex:           &sync.RWMutex{},
@@ -111,13 +113,38 @@ func (d *DriveItem) SetName(name string) {
 	d.mutex.Unlock()
 }
 
-// ID uploads an empty file to obtain a Onedrive ID if it doesn't already have
-// one. This is necessary to avoid race conditions against uploads if the file
-// has not already been uploaded. You can use an empty Auth object if you're
-// sure that the item already has an ID or otherwise don't need to fetch an ID
-// (such as when deleting an item that is only local).
-func (d *DriveItem) ID(auth *Auth) (string, error) {
-	// copy the item so we can access it's ID without locking the item itself
+var charset = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func randString(length int) string {
+	out := make([]byte, length)
+	for i := 0; i < length; i++ {
+		out[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(out)
+}
+
+func localID() string {
+	return "local-" + randString(20)
+}
+
+func isLocalID(id string) bool {
+	return strings.HasPrefix(id, "local-") || id == ""
+}
+
+// ID returns the internal ID of the item
+func (d *DriveItem) ID() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.IDInternal
+}
+
+// RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
+// have one. This is necessary to avoid race conditions against uploads if the
+// file has not already been uploaded. You can use an empty Auth object if
+// you're sure that the item already has an ID or otherwise don't need to fetch
+// an ID (such as when deleting an item that is only local).
+func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
+	// copy the item so we can access it's ID without locking the item later
 	d.mutex.RLock()
 	cpy := *d
 	parentID := d.Parent.ID
@@ -129,7 +156,7 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 		return cpy.IDInternal, nil
 	}
 
-	if cpy.IDInternal == "" && auth.AccessToken != "" {
+	if isLocalID(cpy.IDInternal) && auth.AccessToken != "" {
 		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", parentID, cpy.Name())
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
@@ -151,10 +178,14 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 				latest, err := GetItem(path, auth)
 				if err == nil {
 					// hooray!
+					d.mutex.Lock()
+					d.IDInternal = latest.IDInternal
+					d.mutex.Unlock()
 					return latest.IDInternal, nil
 				}
 			}
-			return "", err
+			// failed to obtain an ID, return whatever it was beforehand
+			return cpy.IDInternal, err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
@@ -162,7 +193,7 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 		unsafe := NewDriveItem(cpy.Name(), 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
-			return "", err
+			return cpy.IDInternal, err
 		}
 		// this is all we really wanted from this transaction
 		d.mutex.Lock()
@@ -187,7 +218,7 @@ func (d DriveItem) Path() string {
 
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth *Auth) error {
-	id, err := d.ID(auth)
+	id, err := d.RemoteID(auth)
 	if err != nil {
 		logger.Error("Could not obtain ID:", err.Error())
 		return err
