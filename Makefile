@@ -11,7 +11,10 @@ dmel.fa:
 # cache disabled to always force rerun of all tests
 # (some tests can fail due to race conditions (since all fuse ops are async))
 test: onedriver dmel.fa
-	go test -race -count=1 ./logger ./graph
+	go test -race -v -count=1 ./logger ./graph
+
+test_no_race: onedriver dmel.fa
+	go test -v -count=1 ./logger ./graph
 
 # for autocompletion by ide-clangd
 compile_flags.txt:
