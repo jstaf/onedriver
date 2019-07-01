@@ -53,7 +53,7 @@ type FuseFs struct {
 func NewFS() *FuseFs {
 	auth := Authenticate()
 	cache := NewCache(auth)
-	go cache.deltaLoop()
+	//go cache.deltaLoop() //TODO: disabled for now
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       auth,
@@ -249,15 +249,22 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	}
 
 	// create the new folder locally
-	_, code := fs.Create(name, 0, mode|fuse.S_IFDIR, context)
+	created, code := fs.Create(name, 0, mode|fuse.S_IFDIR, context)
 	if code != fuse.OK {
 		return code
 	}
 
-	// now unmarshal the response into the new folder so that it has an ID
-	// (otherwise things involving this folder will fail later)
-	item, _ := fs.items.Get(name, fs.Auth)
+	// Now unmarshal the response into the new folder so that it has an ID
+	// (otherwise things involving this folder will fail later). Mutexes are not
+	// required here since no other thread will proceed until the directory has
+	// been created.
+	item := created.(*DriveItem)
+	oldID := item.ID()
 	json.Unmarshal(resp, item)
+
+	// Move the directory to be stored under the non-local ID.
+	//TODO: eliminate the need for renames after Create()
+	fs.items.MoveID(oldID, item.ID())
 
 	return fuse.OK
 }

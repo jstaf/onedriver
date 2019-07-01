@@ -242,6 +242,30 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	return nil
 }
 
+// MoveID moves an item to a new ID name
+func (c *Cache) MoveID(oldID string, newID string) error {
+	item := c.GetID(oldID)
+	if item == nil {
+		return errors.New("Could not get item " + oldID)
+	}
+	c.DeleteID(oldID)
+
+	// need to rename the child under the parent
+	parent := c.GetID(item.Parent.ID)
+	parent.mutex.Lock()
+	for i, child := range parent.children {
+		if child == oldID {
+			parent.children[i] = newID
+			break
+		}
+	}
+	parent.mutex.Unlock()
+	item.IDInternal = newID
+
+	c.InsertID(newID, item)
+	return nil
+}
+
 // Move an item to a new position
 func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 	item, err := c.Get(oldPath, auth)

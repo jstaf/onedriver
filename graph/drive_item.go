@@ -143,6 +143,7 @@ func (d *DriveItem) ID() string {
 // file has not already been uploaded. You can use an empty Auth object if
 // you're sure that the item already has an ID or otherwise don't need to fetch
 // an ID (such as when deleting an item that is only local).
+//TODO: move this to cache methods, it's not needed here
 func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 	// copy the item so we can access it's ID without locking the item later
 	d.mutex.RLock()
@@ -178,10 +179,8 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				latest, err := GetItem(path, auth)
 				if err == nil {
 					// hooray!
-					d.mutex.Lock()
-					d.IDInternal = latest.IDInternal
-					d.mutex.Unlock()
-					return latest.IDInternal, nil
+					err := d.cache.MoveID(cpy.IDInternal, latest.IDInternal)
+					return latest.IDInternal, err
 				}
 			}
 			// failed to obtain an ID, return whatever it was beforehand
@@ -196,10 +195,8 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 			return cpy.IDInternal, err
 		}
 		// this is all we really wanted from this transaction
-		d.mutex.Lock()
-		d.IDInternal = unsafe.IDInternal
-		d.mutex.Unlock()
-		return unsafe.IDInternal, nil
+		err = d.cache.MoveID(cpy.IDInternal, unsafe.IDInternal)
+		return unsafe.IDInternal, err
 	}
 	return cpy.IDInternal, nil
 }
