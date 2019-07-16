@@ -135,18 +135,20 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
 	logger.Trace(oldName, "->", newName)
 
+	// grab item being renamed
 	item, _ := fs.items.Get(oldName, fs.Auth)
 	id, err := item.RemoteID(fs.Auth)
 	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
-		logger.Error("ID of item to move cannot be empty "+
-			"and we failed to obtain an ID:", err.Error())
+		logger.Error("ID of item to move cannot be local and we failed to obtain an ID:", err)
 		return fuse.EBADF
 	}
 
+	// start creating patch content for server
 	patchContent := DriveItem{ConflictBehavior: "replace"} // wipe existing content
+
 	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
-		// we are moving the item
+		// we are moving the item, add the new parent ID to the patch
 		newParent, err := fs.items.Get(newDir, fs.Auth)
 		if err != nil {
 			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
@@ -154,41 +156,46 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		}
 		parentID, err := newParent.RemoteID(fs.Auth)
 		if isLocalID(parentID) || err != nil {
-			logger.Error("ID of destination folder cannot be empty:", err.Error())
+			logger.Error("ID of destination folder cannot be local:", err)
 			return fuse.EBADF
 		}
 		patchContent.Parent = &DriveItemParent{ID: parentID}
 	}
 
 	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
-		// we are renaming the item...
+		// we are renaming the item, add the new name to the patch
 		// mutex for patchContent is uninitialized and we have the only copy
 		patchContent.NameInternal = newBase
 		item.SetName(newBase)
 	}
 
-	// don't actually care about the response content
+	// apply patch to server copy - note that we don't actually care about the
+	// response content
 	jsonPatch, _ := json.Marshal(patchContent)
 	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 	if err != nil {
 		if strings.Contains(err.Error(), "resourceModified") {
-			// Wait a second, then retry the request
+			// Wait a second, then retry the request. The Onedrive servers
+			// sometimes aren't quick enough here if the object has been
+			// recently created (<1 second ago).
 			time.Sleep(time.Second)
 			logger.Warn("Patch failed, retrying:", err.Error())
 			_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
-		}
-		if err != nil {
-			// if retrying the request failed to recover things, or the request
-			// failed due to another reason than the etag bug
-			logger.Error(err)
-			item.SetName(filepath.Base(oldName)) // unrename things locally
-			return fuse.EREMOTEIO
+			if err != nil {
+				// if retrying the request failed to recover things, or the request
+				// failed due to another reason than the etag bug
+				logger.Error(err)
+				item.SetName(filepath.Base(oldName)) // unrename things locally
+				return fuse.EREMOTEIO
+			}
 		}
 	}
 
-	// rename local copy
-	fs.items.Move(oldName, newName, fs.Auth)
-
+	// now rename local copy
+	if err := fs.items.Move(oldName, newName, fs.Auth); err != nil {
+		logger.Error("Failed to rename local item:", err)
+		return fuse.EIO
+	}
 	return fuse.OK
 }
 

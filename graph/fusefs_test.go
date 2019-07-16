@@ -2,6 +2,7 @@ package graph
 
 import (
 	"bufio"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -101,7 +102,13 @@ func TestRenameMove(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	failOnErr(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)
-	failOnErr(t, err)
+	if err != nil {
+		info, _ := ioutil.ReadDir(TestDir)
+		for _, item := range info {
+			fmt.Println(item.Name())
+		}
+		t.Fatal(err)
+	}
 	if st == nil {
 		t.Fatal("Renamed file does not exist")
 	}

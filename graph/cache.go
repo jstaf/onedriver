@@ -234,7 +234,7 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	if err != nil {
 		return err
 	} else if parent == nil {
-		return errors.New("Parent of key was nil! Did we accidentally an ID for key?")
+		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
 	}
 
 	c.setParent(item, parent)
@@ -246,9 +246,8 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 func (c *Cache) MoveID(oldID string, newID string) error {
 	item := c.GetID(oldID)
 	if item == nil {
-		return errors.New("Could not get item " + oldID)
+		return errors.New("Could not get item: " + oldID)
 	}
-	c.DeleteID(oldID)
 
 	// need to rename the child under the parent
 	parent := c.GetID(item.Parent.ID)
@@ -260,9 +259,13 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 		}
 	}
 	parent.mutex.Unlock()
+
+	item.mutex.Lock()
 	item.IDInternal = newID
+	item.mutex.Unlock()
 
 	c.InsertID(newID, item)
+	c.DeleteID(oldID)
 	return nil
 }
 
@@ -272,11 +275,13 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 	if err != nil {
 		return err
 	}
-	// insert first, so data is not lost in the event the insert fails
+
+	c.Delete(oldPath)
 	if err = c.Insert(newPath, auth, item); err != nil {
+		// insert failed, reinsert in old location
+		c.Insert(oldPath, auth, item)
 		return err
 	}
-	c.Delete(oldPath)
 	return nil
 }
 

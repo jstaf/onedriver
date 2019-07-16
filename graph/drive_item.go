@@ -68,9 +68,7 @@ type DriveItem struct {
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	itemParent := &DriveItemParent{ID: "", Path: ""}
 	var cache *Cache
-	if parent == nil {
-		logger.Warnf("While creating %s, parent was nil. Substituting empty data", name)
-	} else {
+	if parent != nil {
 		parent.mutex.RLock()
 		itemParent.ID = parent.IDInternal
 		itemParent.Path = parent.Path()

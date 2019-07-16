@@ -66,6 +66,7 @@ func TestMain(m *testing.M) {
 		log.Println("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}
+	logger.Info("Successfully unmounted fuse server.")
 	os.Exit(code)
 }
 
