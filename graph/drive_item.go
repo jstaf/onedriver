@@ -6,12 +6,12 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/jstaf/onedriver/logger"
+	mu "github.com/sasha-s/go-deadlock"
 )
 
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
@@ -57,7 +57,7 @@ type DriveItem struct {
 	Parent           *DriveItemParent `json:"parentReference,omitempty"`
 	children         []string         // a slice of ids, nil when uninitialized
 	subdir           uint32           // used purely by NLink()
-	mutex            *sync.RWMutex
+	mutex            *mu.RWMutex
 	Folder           *Folder  `json:"folder,omitempty"`
 	FileInternal     *File    `json:"file,omitempty"`
 	Deleted          *Deleted `json:"deleted,omitempty"`
@@ -85,7 +85,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		cache:           cache, //TODO: find a way to do uploads without this field
 		Parent:          itemParent,
 		children:        make([]string, 0),
-		mutex:           &sync.RWMutex{},
+		mutex:           &mu.RWMutex{},
 		data:            &empty,
 		ModTimeInternal: &currentTime,
 		mode:            mode,
@@ -99,8 +99,6 @@ func (d DriveItem) String() string {
 
 // Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
-	d.mutex.RLock()
-	d.mutex.RUnlock()
 	return d.NameInternal
 }
 

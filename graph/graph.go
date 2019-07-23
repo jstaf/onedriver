@@ -7,9 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sync"
 
 	"github.com/jstaf/onedriver/logger"
+	mu "github.com/sasha-s/go-deadlock"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -114,7 +114,7 @@ func ChildrenPathID(id string) string {
 func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
 	item := &DriveItem{
-		mutex: &sync.RWMutex{},
+		mutex: &mu.RWMutex{},
 	}
 	if err != nil {
 		return item, err

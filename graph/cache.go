@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
+	mu "github.com/sasha-s/go-deadlock"
 )
 
 // Cache caches DriveItems for a filesystem. This cache never expires so
@@ -120,7 +121,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	item.children = make([]string, 0)
 	for _, child := range fetched.Children {
 		// initialize item and store in cache
-		child.mutex = &sync.RWMutex{}
+		child.mutex = &mu.RWMutex{}
 		// we will always have an id after fetching from the server
 		c.metadata.Store(child.IDInternal, child)
 
