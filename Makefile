@@ -1,4 +1,4 @@
-.PHONY = test
+.PHONY = test, test_no_race
 
 # development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
