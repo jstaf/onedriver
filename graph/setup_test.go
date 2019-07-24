@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/jstaf/onedriver/logger"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	log "github.com/sirupsen/logrus"
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) {
 	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	log.SetOutput(logFile)
 	log.SetReportCaller(true)
+	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.TraceLevel)
 	log.Info("Test session start -----------------------------------")
 
