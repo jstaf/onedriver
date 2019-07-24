@@ -117,7 +117,7 @@ func LogrusFormatter() *log.TextFormatter {
 		FullTimestamp: true,
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			filename := fmt.Sprintf("%s:%d", strings.Replace(f.File, wd, "", -1), f.Line)
-			function := fmt.Sprintf("%d:%s()", goroutineID(), strings.Replace(f.Function, "github.com/jstaf/onedriver/", "", -1))
+			function := fmt.Sprintf("%04d:%s()", goroutineID(), strings.Replace(f.Function, "github.com/jstaf/onedriver/", "", -1))
 			return function, filename
 		},
 	}
