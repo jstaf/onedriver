@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/jstaf/onedriver.svg?branch=master)](https://travis-ci.org/jstaf/onedriver)
 [![Coverage Status](https://coveralls.io/repos/github/jstaf/onedriver/badge.svg?branch=master)](https://coveralls.io/github/jstaf/onedriver?branch=master)
-[![Go Report Card](https://goreportcard.com/report/github.com/jstaf/onedriver)](https://goreportcard.com/badge/github.com/jstaf/onedriver)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jstaf/onedriver)](https://goreportcard.com/report/github.com/jstaf/onedriver)
 
 onedriver
 ======================================
