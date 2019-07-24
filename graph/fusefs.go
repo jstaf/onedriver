@@ -10,7 +10,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
-	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
 )
 
 // these files will never exist, and we should ignore them
@@ -83,16 +83,18 @@ type Drive struct {
 // StatFs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (fs FuseFs) StatFs(name string) *fuse.StatfsOut {
-	logger.Trace(leadingSlash(name))
+	log.WithFields(log.Fields{"path": leadingSlash(name)}).Trace()
 	resp, err := Get("/me/drive", fs.Auth)
 	if err != nil {
-		logger.Error("Could not fetch filesystem details:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Could not fetch filesystem details.")
 	}
 	drive := Drive{}
 	json.Unmarshal(resp, &drive)
 
 	if drive.DriveType == "personal" {
-		logger.Warn("Personal OneDrive accounts do not show number of files, " +
+		log.Warn("Personal OneDrive accounts do not show number of files, " +
 			"inode counts reported by onedriver will be bogus.")
 	}
 
@@ -122,7 +124,7 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 		// method when accessing a file
 		return nil, fuse.ENOENT
 	}
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	attr := fuse.Attr{}
 	status := item.GetAttr(&attr)
@@ -133,14 +135,21 @@ func (fs *FuseFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.
 // Rename is used by mv operations (move, rename)
 func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
 	oldName, newName = leadingSlash(oldName), leadingSlash(newName)
-	logger.Trace(oldName, "->", newName)
+	log.WithFields(log.Fields{
+		"path": oldName,
+		"dest": newName,
+	}).Trace()
 
 	// grab item being renamed
 	item, _ := fs.items.Get(oldName, fs.Auth)
 	id, err := item.RemoteID(fs.Auth)
 	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
-		logger.Error("ID of item to move cannot be local and we failed to obtain an ID:", err)
+		log.WithFields(log.Fields{
+			"id": id,
+			"path": oldName,
+			"err": err,
+		}).Error("ID of item to move cannot be local and we failed to obtain an ID.")
 		return fuse.EBADF
 	}
 
@@ -151,12 +160,19 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		// we are moving the item, add the new parent ID to the patch
 		newParent, err := fs.items.Get(newDir, fs.Auth)
 		if err != nil {
-			logger.Errorf("Failed to fetch \"%s\": %s\n", newDir, err)
+			log.WithFields(log.Fields{
+				"path": newDir,
+				"err": err,
+			}).Errorf("Failed to fetch parent of item being moved.")
 			return fuse.EREMOTEIO
 		}
 		parentID, err := newParent.RemoteID(fs.Auth)
 		if isLocalID(parentID) || err != nil {
-			logger.Error("ID of destination folder cannot be local:", err)
+			log.WithFields(log.Fields{
+				"id": parentID,
+				"path": newDir,
+				"err": err,
+			}).Error("ID of destination folder cannot be local")
 			return fuse.EBADF
 		}
 		patchContent.Parent = &DriveItemParent{ID: parentID}
@@ -179,12 +195,16 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			// sometimes aren't quick enough here if the object has been
 			// recently created (<1 second ago).
 			time.Sleep(time.Second)
-			logger.Warn("Patch failed, retrying:", err.Error())
+			log.WithFields(log.Fields{
+				"path": oldName,
+				"dest": newName,
+				"err": err,
+			}).Warn("Patch failed, retrying.")
 			_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 			if err != nil {
 				// if retrying the request failed to recover things, or the request
 				// failed due to another reason than the etag bug
-				logger.Error(err)
+				log.Error(err)
 				item.SetName(filepath.Base(oldName)) // unrename things locally
 				return fuse.EREMOTEIO
 			}
@@ -193,7 +213,11 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 
 	// now rename local copy
 	if err := fs.items.Move(oldName, newName, fs.Auth); err != nil {
-		logger.Error("Failed to rename local item:", err)
+		log.WithFields(log.Fields{
+			"path": oldName,
+			"dest": newName,
+			"err": err,
+		}).Error("Failed to rename local item")
 		return fuse.EIO
 	}
 	return fuse.OK
@@ -215,13 +239,16 @@ func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code f
 // OpenDir returns a list of directory entries
 func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	children, err := fs.items.GetChildrenPath(name, fs.Auth)
 	if err != nil {
 		// not an item not found error (GetAttr() will always be called before
 		// OpenDir()), something has happened to our connection
-		logger.Errorf("Error during OpenDir(\"%s\"): %s\n", name, err)
+		log.WithFields(log.Fields{
+			"path": name,
+			"err": err,
+		}).Error("Error during OpenDir()")
 		return nil, fuse.EREMOTEIO
 	}
 
@@ -241,7 +268,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 // Mkdir creates a directory, mode is ignored
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	// create a new folder on the server
 	newFolderPost := DriveItem{
@@ -251,7 +278,10 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	bytePayload, _ := json.Marshal(newFolderPost)
 	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
 	if err != nil {
-		logger.Error("Error during directory creation:", err)
+		log.WithFields(log.Fields{
+			"path": name,
+			"err": err,
+		}).Error("Error during directory creation:")
 		return fuse.EREMOTEIO
 	}
 
@@ -279,11 +309,14 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 // Rmdir removes a directory
 func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	err := Delete(ResourcePath(name), fs.Auth)
 	if err != nil {
-		logger.Error("Error during delete:", err)
+		log.WithFields(log.Fields{
+			"path": name,
+			"err": err,
+		}).Error("Error during delete")
 		return fuse.EREMOTEIO
 	}
 
@@ -295,22 +328,31 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 // Open populates a DriveItem's Data field with actual data
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
 		// We know the file exists, GetAttr() has already been called
-		logger.Error("Error while getting item", err)
+		log.WithFields(log.Fields{
+			"path": name,
+			"err": err,
+		}).Error("Error fetching item from cache")
 		return nil, fuse.EREMOTEIO
 	}
 
 	// check for if file has already been populated
 	if item.data == nil {
 		// it is unpopulated, grab from api
-		logger.Info("Fetching remote content for", item.Name())
+		log.WithFields(log.Fields{
+			"path": name,
+		}).Info("Fetching remote content for item from API")
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
-			logger.Errorf("Failed to fetch content for '%s': %s\n", item.ID(), err)
+			log.WithFields(log.Fields{
+				"err": err,
+				"id": item.ID(),
+				"path": name,
+			}).Error("Failed to fetch remote content")
 			return nil, fuse.EREMOTEIO
 		}
 	}
@@ -320,20 +362,30 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 // Create a new local file. The server doesn't have this yet.
 func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	// fetch details about the new item's parent (need the ID from the remote)
 	parent, err := fs.items.Get(filepath.Dir(name), fs.Auth)
 	if err != nil {
-		logger.Error("Error while fetching parent:", err)
+		log.WithFields(log.Fields{
+			"path": name,
+			"err": err,
+		}).Error("Error while fetching parent.")
 		return nil, fuse.EREMOTEIO
 	}
 
 	item := NewDriveItem(filepath.Base(name), mode, parent)
-	logger.Tracef("Created \"%s\" as \"%s\"", name, item.ID())
+	log.WithFields(log.Fields{
+		"path": name,
+		"id": item.ID(),
+	}).Trace("Created item")
 	err = fs.items.Insert(name, fs.Auth, item)
 	if err != nil {
-		logger.Error(err)
+		log.WithFields(log.Fields{
+			"err": err,
+			"path": name,
+			"id": item.ID(),
+		}).Error("Failed to insert item into cache.")
 	}
 
 	return item, fuse.OK
@@ -342,7 +394,7 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 // Unlink deletes a file
 func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) {
 	name = leadingSlash(name)
-	logger.Trace(name)
+	log.WithFields(log.Fields{"path": name}).Trace()
 
 	item, err := fs.items.Get(name, fs.Auth)
 	// allow safely calling Unlink on items that don't actually exist
@@ -355,7 +407,10 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 	if !isLocalID(item.ID()) {
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
-			logger.Error(err)
+			log.WithFields(log.Fields{
+				"err": err,
+				"path": name,
+			}).Error("Failed to delete item on server. Aborting op.")
 			return fuse.EREMOTEIO
 		}
 	}

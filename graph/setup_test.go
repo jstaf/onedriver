@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -9,10 +8,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/jstaf/onedriver/logger"
-
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -52,21 +50,21 @@ func TestMain(m *testing.M) {
 
 	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	log.SetOutput(logFile)
-	logger.SetLogLevel(logger.TRACE)
-	logger.Info("Test session start -----------------------------------")
+	log.SetLevel(log.TraceLevel)
+	log.Info("Test session start -----------------------------------")
 
 	// run tests
 	code := m.Run()
 
-	logger.Info("Test session end -----------------------------------")
+	log.Info("Test session end -----------------------------------")
 
 	// unmount
 	err := server.Unmount()
 	if err != nil {
-		log.Println("Failed to unmount test fuse server, attempting lazy unmount")
+		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}
-	logger.Info("Successfully unmounted fuse server.")
+	log.Info("Successfully unmounted fuse server.")
 	os.Exit(code)
 }
 

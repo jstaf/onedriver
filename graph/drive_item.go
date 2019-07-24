@@ -10,7 +10,7 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
 )
 
@@ -99,7 +99,7 @@ func (d DriveItem) String() string {
 
 // Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
-	//FIXME: using locks here results in a double mutex lock for some ops (such as
+	//FIXME using locks here results in a double mutex lock for some ops (such as
 	// when name is used inside another op)
 	return d.NameInternal
 }
@@ -130,9 +130,9 @@ func isLocalID(id string) bool {
 }
 
 // ID returns the internal ID of the item
-func (d *DriveItem) ID() string {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
+func (d DriveItem) ID() string {
+    //TODO removing the RLock here while using the ID in more places for loggging.
+    //Probably need to readd it.
 	return d.IDInternal
 }
 
@@ -215,7 +215,11 @@ func (d DriveItem) Path() string {
 func (d *DriveItem) FetchContent(auth *Auth) error {
 	id, err := d.RemoteID(auth)
 	if err != nil {
-		logger.Error("Could not obtain ID:", err.Error())
+		log.WithFields(log.Fields{
+			"id": d.ID(),
+			"name": d.Name(),
+			"err": err,
+		}).Error("Could not obtain remote ID.")
 		return err
 	}
 	body, err := Get("/me/drive/items/"+id+"/content", auth)
@@ -237,7 +241,12 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	if end > len(*d.data) {
 		end = len(*d.data)
 	}
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), int64(end)-off, off)
+	log.WithFields(log.Fields{
+		"id": d.ID(),
+		"path": d.Path(),
+		"bufsize": int64(end)-off,
+		"offset": off,
+	}).Trace("Read file")
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -246,7 +255,12 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), nWrite, off)
+	log.WithFields(log.Fields{
+		"id": d.ID(),
+		"path": d.Path(),
+		"bufsize": nWrite,
+		"offset": off,
+	}).Tracef("Write file")
 
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -267,7 +281,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if d.hasChanges {
@@ -275,7 +289,10 @@ func (d *DriveItem) Flush() fuse.Status {
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
 		if d.cache == nil {
-			logger.Error("Driveitem cache ref cannot be nil!", d.Name())
+			log.WithFields(log.Fields{
+				"id": d.ID(),
+				"name": d.Name(),
+			}).Error("Driveitem cache ref cannot be nil!")
 			return fuse.ENODATA
 		}
 		go d.Upload(d.cache.auth)
@@ -301,7 +318,7 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.ModTimeInternal = mtime
@@ -310,7 +327,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	*d.data = (*d.data)[:size]
@@ -339,7 +356,7 @@ func (d DriveItem) Mode() uint32 {
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
 	d.mutex.Lock()
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms

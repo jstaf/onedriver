@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
 )
 
@@ -26,8 +27,10 @@ type graphError struct {
 func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
 	if auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
-		logger.Error("Auth was empty and we attempted to make a request with it!",
-			"Guilty party was", logger.Caller(3), "called by", logger.Caller(4))
+		log.WithFields(log.Fields{
+			"caller": logger.Caller(3),
+			"calledBy": logger.Caller(4),
+		}).Error("Auth was empty and we attempted to make a request with it!")
 		return nil, errors.New("Cannot make a request with empty auth")
 	}
 

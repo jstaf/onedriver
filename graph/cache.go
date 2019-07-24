@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
 )
 
@@ -30,7 +30,9 @@ func NewCache(auth *Auth) *Cache {
 
 	root, err := GetItem("/", auth)
 	if err != nil {
-		logger.Fatal("Could not fetch root item of filesystem!:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Fatal("Could not fetch root item of filesystem!")
 	}
 	root.cache = cache
 	cache.root = root.ID()
@@ -77,13 +79,17 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	item := c.GetID(id)
 	children := make(map[string]*DriveItem)
 	if item == nil {
-		msg := id + " does not exist in cache"
-		logger.Error(msg)
-		return children, errors.New(msg)
+		log.WithFields(log.Fields{
+			"id": id,
+		}).Error("Item not found in cache")
+		return children, errors.New(id + " not found in cache")
 	} else if !item.IsDir() {
 		// Normal files are treated as empty folders. This only gets called if
 		// we messed up and tried to get the children of a plain-old file.
-		logger.Warn("Attepted to get children of ordinary file")
+		log.WithFields(log.Fields{
+			"id": id,
+			"path": item.Path(),
+		}).Warn("Attepted to get children of ordinary file")
 		return children, nil
 	}
 
@@ -235,6 +241,10 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	if err != nil {
 		return err
 	} else if parent == nil {
+		log.WithFields(log.Fields{
+			"key": key,
+			"path": item.Path(),
+		}).Error("Parent of key was nil! Did we accidentally use an ID for the key?")
 		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
 	}
 
@@ -288,21 +298,21 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 
 // deltaLoop should be called as a goroutine
 func (c *Cache) deltaLoop() {
-	logger.Trace("Starting delta goroutine...")
+	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		logger.Trace("Syncing deltas from server...")
+		log.Trace("Syncing deltas from server.")
 		for {
 			cont, err := c.pollDeltas(c.auth)
 			if err != nil {
-				logger.Error(err)
+				log.Error(err)
 				break
 			}
 			if !cont {
 				break
 			}
 		}
-		logger.Trace("Sync complete!")
+		log.Trace("Sync complete!")
 
 		// go to sleep until next poll interval
 		time.Sleep(30 * time.Second)
@@ -319,7 +329,9 @@ type deltaResponse struct {
 func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
-		logger.Error("Could not fetch server deltas:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Could not fetch server deltas.")
 		return false, err
 	}
 
@@ -342,7 +354,9 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 
 // apply a server-side change to our local state
 func (c *Cache) applyDelta(item DriveItem) error {
-	logger.Trace("Applying delta for", item.Name())
+	log.WithFields(log.Fields{
+		"name": item.Name(),
+	}).Trace("Applying delta")
 	//TODO stub
 	return nil
 }
