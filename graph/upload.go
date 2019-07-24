@@ -141,8 +141,6 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		"path": d.Path(),
 	}).Info("Uploading item")
 
-	//FIXME calling d.Size() later results in a double deadlock
-	size := d.Size()
 	if d.Size() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
 		id, err := d.RemoteID(auth)
@@ -159,12 +157,12 @@ func (d *DriveItem) Upload(auth *Auth) error {
 
 		// creating a snapshot prevents lock contention during the actual http
 		// upload
-		d.mutex.RLock()
 		log.WithFields(log.Fields{
 			"path": d.Path(),
-			"size": size,
+			"size": d.Size(),
 		}).Trace("Using simple upload strategy (size below upload session threshold).")
-		snapshot := make([]byte, size)
+		snapshot := make([]byte, d.Size()) // d.Size() will acquire a lock
+		d.mutex.RLock()
 		copy(snapshot, *d.data)
 		d.mutex.RUnlock()
 
@@ -183,14 +181,14 @@ func (d *DriveItem) Upload(auth *Auth) error {
 
 	log.WithFields(log.Fields{
 		"path": d.Path(),
-		"size": size,
+		"size": d.Size(),
 	}).Info("Creating upload session.")
 	session, err := d.createUploadSession(auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
 			"path": d.Path(),
-			"size": size,
+			"size": d.Size(),
 		}).Error("Could not create upload session.")
 		return err
 	}
