@@ -281,7 +281,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Trace()
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if d.hasChanges {
@@ -327,7 +327,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Trace()
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	*d.data = (*d.data)[:size]
@@ -356,7 +356,7 @@ func (d DriveItem) Mode() uint32 {
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Trace()
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms

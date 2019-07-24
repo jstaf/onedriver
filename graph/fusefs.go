@@ -83,7 +83,7 @@ type Drive struct {
 // StatFs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (fs FuseFs) StatFs(name string) *fuse.StatfsOut {
-	log.WithFields(log.Fields{"path": leadingSlash(name)}).Trace()
+	log.WithFields(log.Fields{"path": leadingSlash(name)}).Debug()
 	resp, err := Get("/me/drive", fs.Auth)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -138,7 +138,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	log.WithFields(log.Fields{
 		"path": oldName,
 		"dest": newName,
-	}).Trace()
+	}).Debug()
 
 	// grab item being renamed
 	item, _ := fs.items.Get(oldName, fs.Auth)
@@ -239,7 +239,7 @@ func (fs *FuseFs) Chmod(name string, mode uint32, context *fuse.Context) (code f
 // OpenDir returns a list of directory entries
 func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	children, err := fs.items.GetChildrenPath(name, fs.Auth)
 	if err != nil {
@@ -268,7 +268,7 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 // Mkdir creates a directory, mode is ignored
 func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	// create a new folder on the server
 	newFolderPost := DriveItem{
@@ -309,7 +309,7 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 // Rmdir removes a directory
 func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	err := Delete(ResourcePath(name), fs.Auth)
 	if err != nil {
@@ -328,7 +328,7 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 // Open populates a DriveItem's Data field with actual data
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	item, err := fs.items.Get(name, fs.Auth)
 	if err != nil {
@@ -362,7 +362,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 // Create a new local file. The server doesn't have this yet.
 func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	// fetch details about the new item's parent (need the ID from the remote)
 	parent, err := fs.items.Get(filepath.Dir(name), fs.Auth)
@@ -375,10 +375,6 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	}
 
 	item := NewDriveItem(filepath.Base(name), mode, parent)
-	log.WithFields(log.Fields{
-		"path": name,
-		"id": item.ID(),
-	}).Trace("Created item")
 	err = fs.items.Insert(name, fs.Auth, item)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -394,7 +390,7 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 // Unlink deletes a file
 func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) {
 	name = leadingSlash(name)
-	log.WithFields(log.Fields{"path": name}).Trace()
+	log.WithFields(log.Fields{"path": name}).Debug()
 
 	item, err := fs.items.Get(name, fs.Auth)
 	// allow safely calling Unlink on items that don't actually exist
