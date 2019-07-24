@@ -99,6 +99,8 @@ func (d DriveItem) String() string {
 
 // Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
+	//FIXME: using locks here results in a double mutex lock for some ops (such as
+	// when name is used inside another op)
 	return d.NameInternal
 }
 
