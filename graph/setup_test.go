@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/jstaf/onedriver/logger"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
 

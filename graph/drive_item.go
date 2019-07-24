@@ -69,11 +69,12 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	itemParent := &DriveItemParent{ID: "", Path: ""}
 	var cache *Cache
 	if parent != nil {
-		parent.mutex.RLock()
-		itemParent.ID = parent.IDInternal
+		itemParent.ID = parent.ID()
 		itemParent.Path = parent.Path()
+		
+		parent.mutex.RLock()
 		cache = parent.cache
-		defer parent.mutex.RUnlock()
+		parent.mutex.RUnlock()
 	}
 
 	var empty []byte
@@ -99,8 +100,8 @@ func (d DriveItem) String() string {
 
 // Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
-	//FIXME using locks here results in a double mutex lock for some ops (such as
-	// when name is used inside another op)
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return d.NameInternal
 }
 
@@ -131,8 +132,8 @@ func isLocalID(id string) bool {
 
 // ID returns the internal ID of the item
 func (d DriveItem) ID() string {
-    //TODO removing the RLock here while using the ID in more places for loggging.
-    //Probably need to readd it.
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return d.IDInternal
 }
 
@@ -164,17 +165,12 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				d.mutex.RLock()
-				id := d.IDInternal
-				path := d.Path()
-				if id != "" {
-					defer d.mutex.RUnlock()
+				if id := d.ID(); !isLocalID(id) {
 					return id, nil
 				}
-				d.mutex.RUnlock()
 
 				// Does the server have it?
-				latest, err := GetItem(path, auth)
+				latest, err := GetItem(d.Path(), auth)
 				if err == nil {
 					// hooray!
 					err := d.cache.MoveID(cpy.IDInternal, latest.IDInternal)
@@ -236,10 +232,9 @@ func (d *DriveItem) FetchContent(auth *Auth) error {
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
-	if end > len(*d.data) {
-		end = len(*d.data)
+	if size := int(d.Size()); end > size {
+		// d.Size() called once for one fewer RLock
+		end = size
 	}
 	log.WithFields(log.Fields{
 		"id": d.ID(),
@@ -247,6 +242,9 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 		"bufsize": int64(end)-off,
 		"offset": off,
 	}).Trace("Read file")
+	
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 

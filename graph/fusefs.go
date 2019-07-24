@@ -146,9 +146,9 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
 		log.WithFields(log.Fields{
-			"id": id,
+			"id":   id,
 			"path": oldName,
-			"err": err,
+			"err":  err,
 		}).Error("ID of item to move cannot be local and we failed to obtain an ID.")
 		return fuse.EBADF
 	}
@@ -162,16 +162,16 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		if err != nil {
 			log.WithFields(log.Fields{
 				"path": newDir,
-				"err": err,
+				"err":  err,
 			}).Errorf("Failed to fetch parent of item being moved.")
 			return fuse.EREMOTEIO
 		}
 		parentID, err := newParent.RemoteID(fs.Auth)
 		if isLocalID(parentID) || err != nil {
 			log.WithFields(log.Fields{
-				"id": parentID,
+				"id":   parentID,
 				"path": newDir,
-				"err": err,
+				"err":  err,
 			}).Error("ID of destination folder cannot be local")
 			return fuse.EBADF
 		}
@@ -182,7 +182,6 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		// we are renaming the item, add the new name to the patch
 		// mutex for patchContent is uninitialized and we have the only copy
 		patchContent.NameInternal = newBase
-		item.SetName(newBase)
 	}
 
 	// apply patch to server copy - note that we don't actually care about the
@@ -198,14 +197,17 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 			log.WithFields(log.Fields{
 				"path": oldName,
 				"dest": newName,
-				"err": err,
+				"err":  err,
 			}).Warn("Patch failed, retrying.")
 			_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
 			if err != nil {
 				// if retrying the request failed to recover things, or the request
 				// failed due to another reason than the etag bug
-				log.Error(err)
-				item.SetName(filepath.Base(oldName)) // unrename things locally
+				log.WithFields(log.Fields{
+					"path": oldName,
+					"dest": newName,
+					"err":  err,
+				}).Warn("Second patch attempt failed, aborting op.")
 				return fuse.EREMOTEIO
 			}
 		}
@@ -216,7 +218,7 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		log.WithFields(log.Fields{
 			"path": oldName,
 			"dest": newName,
-			"err": err,
+			"err":  err,
 		}).Error("Failed to rename local item")
 		return fuse.EIO
 	}
@@ -247,18 +249,16 @@ func (fs *FuseFs) OpenDir(name string, context *fuse.Context) (c []fuse.DirEntry
 		// OpenDir()), something has happened to our connection
 		log.WithFields(log.Fields{
 			"path": name,
-			"err": err,
+			"err":  err,
 		}).Error("Error during OpenDir()")
 		return nil, fuse.EREMOTEIO
 	}
 
 	for _, child := range children {
-		child.mutex.RLock() //TODO eliminate need for lock here
 		entry := fuse.DirEntry{
 			Name: child.Name(),
 			Mode: child.Mode(),
 		}
-		child.mutex.RUnlock()
 		c = append(c, entry)
 	}
 
@@ -280,7 +280,7 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
-			"err": err,
+			"err":  err,
 		}).Error("Error during directory creation:")
 		return fuse.EREMOTEIO
 	}
@@ -315,7 +315,7 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
-			"err": err,
+			"err":  err,
 		}).Error("Error during delete")
 		return fuse.EREMOTEIO
 	}
@@ -335,7 +335,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		// We know the file exists, GetAttr() has already been called
 		log.WithFields(log.Fields{
 			"path": name,
-			"err": err,
+			"err":  err,
 		}).Error("Error fetching item from cache")
 		return nil, fuse.EREMOTEIO
 	}
@@ -349,8 +349,8 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		err = item.FetchContent(fs.Auth)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"err": err,
-				"id": item.ID(),
+				"err":  err,
+				"id":   item.ID(),
 				"path": name,
 			}).Error("Failed to fetch remote content")
 			return nil, fuse.EREMOTEIO
@@ -369,7 +369,7 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
-			"err": err,
+			"err":  err,
 		}).Error("Error while fetching parent.")
 		return nil, fuse.EREMOTEIO
 	}
@@ -378,9 +378,9 @@ func (fs *FuseFs) Create(name string, flags uint32, mode uint32, context *fuse.C
 	err = fs.items.Insert(name, fs.Auth, item)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"err": err,
+			"err":  err,
 			"path": name,
-			"id": item.ID(),
+			"id":   item.ID(),
 		}).Error("Failed to insert item into cache.")
 	}
 
@@ -404,7 +404,7 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 		err = Delete(ResourcePath(name), fs.Auth)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"err": err,
+				"err":  err,
 				"path": name,
 			}).Error("Failed to delete item on server. Aborting op.")
 			return fuse.EREMOTEIO

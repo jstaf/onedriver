@@ -120,7 +120,7 @@ func (u UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, erro
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
-	log.Info("Uploading", frags)
+	log.Info("Uploading ", frags)
 	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
+	log "github.com/sirupsen/logrus"
 )
 
 // Cache caches DriveItems for a filesystem. This cache never expires so
@@ -87,7 +87,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		// Normal files are treated as empty folders. This only gets called if
 		// we messed up and tried to get the children of a plain-old file.
 		log.WithFields(log.Fields{
-			"id": id,
+			"id":   id,
 			"path": item.Path(),
 		}).Warn("Attepted to get children of ordinary file")
 		return children, nil
@@ -230,7 +230,9 @@ func (c *Cache) Delete(key string) {
 	if err != nil {
 		c.removeParent(item)
 	}
-	c.metadata.Delete(item.ID())
+	if item != nil {
+		c.metadata.Delete(item.ID())
+	}
 }
 
 // Insert lets us manually insert an item to the cache (like if it was created
@@ -242,7 +244,7 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 		return err
 	} else if parent == nil {
 		log.WithFields(log.Fields{
-			"key": key,
+			"key":  key,
 			"path": item.Path(),
 		}).Error("Parent of key was nil! Did we accidentally use an ID for the key?")
 		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
@@ -253,11 +255,17 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	return nil
 }
 
-// MoveID moves an item to a new ID name
+// MoveID moves an item to a new ID name. Also responsible for handling the
+// actual overwrite of the item's IDInternal field
 func (c *Cache) MoveID(oldID string, newID string) error {
 	item := c.GetID(oldID)
 	if item == nil {
-		return errors.New("Could not get item: " + oldID)
+		// It may have already been renamed. This is not an error. We assume
+		// that IDs will never collide. Re-perform the op if this is the case.
+		if item = c.GetID(newID); item == nil {
+			// nope, it just doesn't exist
+			return errors.New("Could not get item: " + oldID)
+		}
 	}
 
 	// need to rename the child under the parent
@@ -287,12 +295,17 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 		return err
 	}
 
-	c.Delete(oldPath)
+	// insert and THEN delete (to avoid corruption on failed insert)
+	// item is being renamed, gotta rename the item's NameInternal field
+	if newBase := filepath.Base(newPath); filepath.Base(oldPath) != newBase {
+		item.SetName(newBase)
+	}
 	if err = c.Insert(newPath, auth, item); err != nil {
 		// insert failed, reinsert in old location
 		c.Insert(oldPath, auth, item)
 		return err
 	}
+	c.Delete(oldPath)
 	return nil
 }
 
