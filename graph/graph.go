@@ -7,9 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sync"
 
 	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
+	mu "github.com/sasha-s/go-deadlock"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -26,8 +27,10 @@ type graphError struct {
 func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
 	if auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
-		logger.Error("Auth was empty and we attempted to make a request with it!",
-			"Guilty party was", logger.Caller(3), "called by", logger.Caller(4))
+		log.WithFields(log.Fields{
+			"caller": logger.Caller(3),
+			"calledBy": logger.Caller(4),
+		}).Error("Auth was empty and we attempted to make a request with it!")
 		return nil, errors.New("Cannot make a request with empty auth")
 	}
 
@@ -104,11 +107,17 @@ func ChildrenPath(path string) string {
 	return ResourcePath(path) + ":/children"
 }
 
-// GetItem fetches a DriveItem by path
+// ChildrenPathID returns the API resource path of an item's children
+func ChildrenPathID(id string) string {
+	return "/me/drive/items/" + id + "/children"
+}
+
+// GetItem fetches a DriveItem by path. Only used in special cases, like for the
+// root item.
 func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
 	item := &DriveItem{
-		mutex: &sync.RWMutex{},
+		mutex: &mu.RWMutex{},
 	}
 	if err != nil {
 		return item, err

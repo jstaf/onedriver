@@ -101,7 +101,6 @@ func TestRenameMove(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	failOnErr(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)
-	failOnErr(t, err)
 	if st == nil {
 		t.Fatal("Renamed file does not exist")
 	}

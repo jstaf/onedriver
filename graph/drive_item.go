@@ -3,23 +3,23 @@ package graph
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
+	mu "github.com/sasha-s/go-deadlock"
 )
 
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
 // DriveItem's ID and its path)
 type DriveItemParent struct {
-	//TODO restructure to use its own ID functions
-	ID   string `json:"id,omitempty"`
+	//TODO Path is technically available, but we shouldn't use it
 	Path string `json:"path,omitempty"`
-	item *DriveItem
+	ID   string `json:"id,omitempty"`
 }
 
 // Folder is used for parsing only
@@ -55,9 +55,9 @@ type DriveItem struct {
 	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
 	mode             uint32           // do not set manually
 	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	children         map[string]*DriveItem
-	subdir           uint32 // used purely by NLink()
-	mutex            *sync.RWMutex
+	children         []string         // a slice of ids, nil when uninitialized
+	subdir           uint32           // used purely by NLink()
+	mutex            *mu.RWMutex
 	Folder           *Folder  `json:"folder,omitempty"`
 	FileInternal     *File    `json:"file,omitempty"`
 	Deleted          *Deleted `json:"deleted,omitempty"`
@@ -66,54 +66,42 @@ type DriveItem struct {
 
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
-	if parent == nil || parent.cache == nil {
-		logger.Fatal("Parent or parent cache cannot be nil:", parent.Name())
+	itemParent := &DriveItemParent{ID: "", Path: ""}
+	var cache *Cache
+	if parent != nil {
+		itemParent.ID = parent.ID()
+		itemParent.Path = parent.Path()
+		
+		parent.mutex.RLock()
+		cache = parent.cache
+		parent.mutex.RUnlock()
 	}
 
 	var empty []byte
 	currentTime := time.Now()
-	parentID, _ := parent.ID(&Auth{}) // we should have this already
-	parent.mutex.RLock()
-	defer parent.mutex.RUnlock()
 	return &DriveItem{
-		File:         nodefs.NewDefaultFile(),
-		NameInternal: name,
-		cache:        parent.cache,
-		Parent: &DriveItemParent{
-			ID:   parentID,
-			Path: parent.Parent.Path + "/" + parent.Name(),
-			item: parent,
-		},
-		children:        make(map[string]*DriveItem),
-		mutex:           &sync.RWMutex{},
+		File:            nodefs.NewDefaultFile(),
+		IDInternal:      localID(),
+		NameInternal:    name,
+		cache:           cache, //TODO: find a way to do uploads without this field
+		Parent:          itemParent,
+		children:        make([]string, 0),
+		mutex:           &mu.RWMutex{},
 		data:            &empty,
 		ModTimeInternal: &currentTime,
 		mode:            mode,
 	}
 }
 
+// String is only used for debugging by go-fuse
 func (d DriveItem) String() string {
-	length := d.Size()
-	if length > 10 {
-		length = 10
-	}
-	return fmt.Sprintf("DriveItem(%x)", (*d.data)[:length])
+	return d.Name()
 }
 
-// Set an item's parent
-func (d *DriveItem) setParent(newParent *DriveItem) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	id, _ := newParent.ID(&Auth{})
-	d.Parent = &DriveItemParent{
-		ID:   id,
-		Path: newParent.Path(),
-		item: newParent,
-	}
-}
-
-// Name is used to ensure we access a copy
+// Name is used to ensure thread-safe access to the NameInternal field.
 func (d DriveItem) Name() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return d.NameInternal
 }
 
@@ -124,13 +112,39 @@ func (d *DriveItem) SetName(name string) {
 	d.mutex.Unlock()
 }
 
-// ID uploads an empty file to obtain a Onedrive ID if it doesn't already have
-// one. This is necessary to avoid race conditions against uploads if the file
-// has not already been uploaded. You can use an empty Auth object if you're
-// sure that the item already has an ID or otherwise don't need to fetch an ID
-// (such as when deleting an item that is only local).
-func (d *DriveItem) ID(auth *Auth) (string, error) {
-	// copy the item so we can access it's ID without locking the item itself
+var charset = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func randString(length int) string {
+	out := make([]byte, length)
+	for i := 0; i < length; i++ {
+		out[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(out)
+}
+
+func localID() string {
+	return "local-" + randString(20)
+}
+
+func isLocalID(id string) bool {
+	return strings.HasPrefix(id, "local-") || id == ""
+}
+
+// ID returns the internal ID of the item
+func (d DriveItem) ID() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.IDInternal
+}
+
+// RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
+// have one. This is necessary to avoid race conditions against uploads if the
+// file has not already been uploaded. You can use an empty Auth object if
+// you're sure that the item already has an ID or otherwise don't need to fetch
+// an ID (such as when deleting an item that is only local).
+//TODO: move this to cache methods, it's not needed here
+func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
+	// copy the item so we can access it's ID without locking the item later
 	d.mutex.RLock()
 	cpy := *d
 	parentID := d.Parent.ID
@@ -142,7 +156,7 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 		return cpy.IDInternal, nil
 	}
 
-	if cpy.IDInternal == "" && auth.AccessToken != "" {
+	if isLocalID(cpy.IDInternal) && auth.AccessToken != "" {
 		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", parentID, cpy.Name())
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
@@ -151,37 +165,32 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				d.mutex.RLock()
-				id := d.IDInternal
-				path := d.Path()
-				if id != "" {
-					defer d.mutex.RUnlock()
+				if id := d.ID(); !isLocalID(id) {
 					return id, nil
 				}
-				d.mutex.RUnlock()
 
 				// Does the server have it?
-				latest, err := GetItem(path, auth)
+				latest, err := GetItem(d.Path(), auth)
 				if err == nil {
 					// hooray!
-					return latest.IDInternal, nil
+					err := d.cache.MoveID(cpy.IDInternal, latest.IDInternal)
+					return latest.IDInternal, err
 				}
 			}
-			return "", err
+			// failed to obtain an ID, return whatever it was beforehand
+			return cpy.IDInternal, err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewDriveItem(cpy.Name(), 0644, cpy.Parent.item)
+		unsafe := NewDriveItem(cpy.Name(), 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
-			return "", err
+			return cpy.IDInternal, err
 		}
 		// this is all we really wanted from this transaction
-		d.mutex.Lock()
-		d.IDInternal = unsafe.IDInternal
-		d.mutex.Unlock()
-		return unsafe.IDInternal, nil
+		err = d.cache.MoveID(cpy.IDInternal, unsafe.IDInternal)
+		return unsafe.IDInternal, err
 	}
 	return cpy.IDInternal, nil
 }
@@ -189,7 +198,7 @@ func (d *DriveItem) ID(auth *Auth) (string, error) {
 // Path returns an item's full Path
 func (d DriveItem) Path() string {
 	// special case when it's the root item
-	if d.Parent.Path == "" && d.Name() == "root" {
+	if d.Parent.ID == "" && d.Name() == "root" {
 		return "/"
 	}
 
@@ -198,46 +207,15 @@ func (d DriveItem) Path() string {
 	return strings.Replace(prepath, "//", "/", -1)
 }
 
-// only used for parsing
-type driveChildren struct {
-	Children []*DriveItem `json:"value"`
-}
-
-// GetChildren fetches all DriveItems that are children of resource at path.
-// Also initializes the children field.
-func (d *DriveItem) GetChildren(auth *Auth) (map[string]*DriveItem, error) {
-	//TODO will exit prematurely if *any* children are in the cache
-	if !d.IsDir() || d.children != nil {
-		return d.children, nil
-	}
-
-	body, err := Get(ChildrenPath(d.Path()), auth)
-	var fetched driveChildren
-	if err != nil {
-		return nil, err
-	}
-	json.Unmarshal(body, &fetched)
-
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	d.children = make(map[string]*DriveItem)
-	for _, child := range fetched.Children {
-		child.Parent.item = d
-		child.mutex = &sync.RWMutex{}
-		if child.IsDir() {
-			d.subdir++
-		}
-		d.children[strings.ToLower(child.Name())] = child
-	}
-
-	return d.children, nil
-}
-
 // FetchContent fetches a DriveItem's content and initializes the .Data field.
 func (d *DriveItem) FetchContent(auth *Auth) error {
-	id, err := d.ID(auth)
+	id, err := d.RemoteID(auth)
 	if err != nil {
-		logger.Error("Could not obtain ID:", err.Error())
+		log.WithFields(log.Fields{
+			"id": d.ID(),
+			"name": d.Name(),
+			"err": err,
+		}).Error("Could not obtain remote ID.")
 		return err
 	}
 	body, err := Get("/me/drive/items/"+id+"/content", auth)
@@ -254,12 +232,19 @@ func (d *DriveItem) FetchContent(auth *Auth) error {
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
+	if size := int(d.Size()); end > size {
+		// d.Size() called once for one fewer RLock
+		end = size
+	}
+	log.WithFields(log.Fields{
+		"id": d.ID(),
+		"path": d.Path(),
+		"bufsize": int64(end)-off,
+		"offset": off,
+	}).Trace("Read file")
+	
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
-	if end > len(*d.data) {
-		end = len(*d.data)
-	}
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), int64(end)-off, off)
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
 }
 
@@ -268,7 +253,12 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
-	logger.Tracef("%s: %d bytes at offset %d\n", d.Path(), nWrite, off)
+	log.WithFields(log.Fields{
+		"id": d.ID(),
+		"path": d.Path(),
+		"bufsize": nWrite,
+		"offset": off,
+	}).Tracef("Write file")
 
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -289,7 +279,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush() fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if d.hasChanges {
@@ -297,7 +287,10 @@ func (d *DriveItem) Flush() fuse.Status {
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
 		if d.cache == nil {
-			logger.Error("Driveitem cache ref cannot be nil!", d.Name())
+			log.WithFields(log.Fields{
+				"id": d.ID(),
+				"name": d.Name(),
+			}).Error("Driveitem cache ref cannot be nil!")
 			return fuse.ENODATA
 		}
 		go d.Upload(d.cache.auth)
@@ -323,7 +316,7 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 
 // Utimens sets the access/modify times of a file
 func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.ModTimeInternal = mtime
@@ -332,7 +325,7 @@ func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
 
 // Truncate cuts a file in place
 func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	*d.data = (*d.data)[:size]
@@ -361,7 +354,7 @@ func (d DriveItem) Mode() uint32 {
 
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
-	logger.Trace(d.Path())
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	if d.IsDir() {
 		d.mode = fuse.S_IFDIR | perms

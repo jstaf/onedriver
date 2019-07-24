@@ -5,16 +5,19 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/jstaf/onedriver/logger"
+	mu "github.com/sasha-s/go-deadlock"
+	log "github.com/sirupsen/logrus"
 )
 
 // Cache caches DriveItems for a filesystem. This cache never expires so
 // that local changes can persist. Should be created using the NewCache()
 // constructor.
 type Cache struct {
-	root      *DriveItem
+	metadata  sync.Map
+	root      string // the id of the filesystem's root item
 	auth      *Auth
 	deltaLink string
 }
@@ -24,79 +27,211 @@ func NewCache(auth *Auth) *Cache {
 	cache := &Cache{
 		auth: auth,
 	}
+
 	root, err := GetItem("/", auth)
 	if err != nil {
-		logger.Fatal("Could not fetch root item of filesystem!:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Fatal("Could not fetch root item of filesystem!")
 	}
-	cache.root = root
 	root.cache = cache
+	cache.root = root.ID()
+	cache.InsertID(cache.root, root)
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
 	cache.deltaLink = "/me/drive/root/delta?token=latest"
+
 	// deltaloop is started manually
 	return cache
 }
 
-// Get fetches a given DriveItem in the cache, if any items along the way are
-// not found, they are fetched.
-func (c *Cache) Get(key string, auth *Auth) (*DriveItem, error) {
-	last := c.root
-
-	// from the root directory, traverse the chain of items till we reach our
-	// target key
-	key = strings.ToLower(key)
-	key = strings.TrimSuffix(key, "/")
-	split := strings.Split(key, "/")[1:] // omit leading "/"
-	for i := 0; i < len(split); i++ {
-		last.mutex.RLock()
-		item, exists := last.children[split[i]]
-		last.mutex.RUnlock()
-		if !exists {
-			if auth.AccessToken == "" {
-				return last, errors.New("Auth was empty and \"" +
-					filepath.Join(last.Path(), split[i]) +
-					"\" was not in cache. Could not fetch item as a result.")
-			}
-
-			// we have an auth token and can try to fetch an item's children
-			children, err := last.GetChildren(auth)
-			if err != nil {
-				return last, err
-			}
-			last.mutex.RLock()
-			item, exists = children[split[i]]
-			last.mutex.RUnlock()
-			if !exists {
-				// this time, we know the key *really* doesn't exist
-				return nil, errors.New(filepath.Join(last.Path(), split[i]) + " does not exist.")
-			}
-		}
-		last = item
+// GetID gets an item from the cache by ID. No fetching is performed. Result is
+// nil if no item is found.
+func (c *Cache) GetID(id string) *DriveItem {
+	entry, exists := c.metadata.Load(id)
+	if !exists {
+		return nil
 	}
-	return last, nil
+	item := entry.(*DriveItem)
+	return item
 }
 
-// Delete an item from the cache
+// InsertID inserts a single item into the cache by ID
+func (c *Cache) InsertID(id string, item *DriveItem) {
+	c.metadata.Store(id, item)
+}
+
+// DeleteID deletes an item from the cache
+func (c *Cache) DeleteID(id string) {
+	c.metadata.Delete(id)
+}
+
+// only used for parsing
+type driveChildren struct {
+	Children []*DriveItem `json:"value"`
+}
+
+// GetChildrenID grabs all DriveItems that are the children of the given ID. If
+// items are not found, they are fetched.
+func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, error) {
+	// fetch item and catch common errors
+	item := c.GetID(id)
+	children := make(map[string]*DriveItem)
+	if item == nil {
+		log.WithFields(log.Fields{
+			"id": id,
+		}).Error("Item not found in cache")
+		return children, errors.New(id + " not found in cache")
+	} else if !item.IsDir() {
+		// Normal files are treated as empty folders. This only gets called if
+		// we messed up and tried to get the children of a plain-old file.
+		log.WithFields(log.Fields{
+			"id":   id,
+			"path": item.Path(),
+		}).Warn("Attepted to get children of ordinary file")
+		return children, nil
+	}
+
+	// If item.children is not nil, it means we have the item's children
+	// already and can fetch them directly from the cache
+	if item.children != nil {
+		for _, id := range item.children {
+			child := c.GetID(id)
+			if child == nil {
+				// will be nil if deleted or never existed
+				continue
+			}
+			children[strings.ToLower(child.Name())] = child
+		}
+		return children, nil
+	}
+
+	// check that we have a valid auth before proceeding
+	if auth == nil || auth.AccessToken == "" {
+		return nil, errors.New("Auth was nil/zero and children of \"" +
+			item.Path() +
+			"\" were not in cache. Could not fetch item as a result.")
+	}
+
+	// We haven't fetched the children for this item yet, get them from the
+	// server.
+	body, err := Get(ChildrenPathID(id), auth)
+	var fetched driveChildren
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal(body, &fetched)
+
+	item.mutex.Lock()
+	item.children = make([]string, 0)
+	for _, child := range fetched.Children {
+		// initialize item and store in cache
+		child.mutex = &mu.RWMutex{}
+		// we will always have an id after fetching from the server
+		c.metadata.Store(child.IDInternal, child)
+
+		// store in result map
+		children[strings.ToLower(child.Name())] = child
+
+		// store id in parent item and increment parents subdirectory count
+		item.children = append(item.children, child.IDInternal)
+		if child.IsDir() {
+			item.subdir++
+		}
+	}
+	item.mutex.Unlock()
+
+	return children, nil
+}
+
+// GetChildrenPath grabs all DriveItems that are the children of the resource at
+// the path. If items are not found, they are fetched.
+func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*DriveItem, error) {
+	item, err := c.Get(path, auth)
+	if err != nil {
+		return make(map[string]*DriveItem), err
+	}
+
+	return c.GetChildrenID(item.ID(), auth)
+}
+
+// Get fetches a given DriveItem in the cache, if any items along the way are
+// not found, they are fetched.
+func (c *Cache) Get(path string, auth *Auth) (*DriveItem, error) {
+	lastID := c.root
+	if path == "/" {
+		return c.GetID(lastID), nil
+	}
+
+	// from the root directory, traverse the chain of items till we reach our
+	// target ID.
+	path = strings.TrimSuffix(strings.ToLower(path), "/")
+	split := strings.Split(path, "/")[1:] //omit leading "/"
+	var item *DriveItem
+	for i := 0; i < len(split); i++ {
+		// fetches children
+		children, err := c.GetChildrenID(lastID, auth)
+		if err != nil {
+			return nil, err
+		}
+
+		var exists bool // if we use ":=", item is shadowed
+		item, exists = children[split[i]]
+		if !exists {
+			// the item still doesn't exist after fetching from server. it
+			// doesn't exist
+			return nil, errors.New(strings.Join(split[:i+1], "/") +
+				" does not exist on server or in local cache")
+		}
+		lastID = item.ID()
+	}
+	return item, nil
+}
+
+// addToParent adds an object as a child of a parent
+func (c *Cache) setParent(item *DriveItem, parent *DriveItem) {
+	parent.mutex.Lock()
+	if item.IsDir() {
+		parent.subdir++
+	}
+	item.mutex.Lock()
+	parent.children = append(parent.children, item.IDInternal)
+	item.Parent.ID = parent.IDInternal
+	parent.mutex.Unlock()
+	item.mutex.Unlock()
+}
+
+// removeParent removes a given item from its parent
+func (c *Cache) removeParent(item *DriveItem) {
+	if item != nil { // item can be nil in some scenarios
+		id := item.ID()
+		parent := c.GetID(item.Parent.ID)
+		parent.mutex.Lock()
+		for i, childID := range parent.children {
+			if childID == id {
+				parent.children = append(parent.children[:i], parent.children[i+1:]...)
+				break
+			}
+		}
+		if item.IsDir() {
+			parent.subdir--
+		}
+		parent.mutex.Unlock()
+	}
+}
+
+// Delete an item from the cache by path
 func (c *Cache) Delete(key string) {
 	key = strings.ToLower(key)
 	// Uses empty auth, since we actually don't want to waste time fetching
 	// items that are only being fetched so they can be deleted.
-	parent, err := c.Get(filepath.Dir(key), &Auth{})
-	if err == nil {
-		// is the key being deleted a directory?
-		item, err := c.Get(filepath.Dir(key), &Auth{})
-		isDir := false
-		if err == nil {
-			isDir = item.IsDir()
-		}
-
-		parent.mutex.Lock()
-		delete(parent.children, filepath.Base(key))
-		if isDir {
-			parent.subdir--
-		}
-		parent.mutex.Unlock()
+	item, err := c.Get(key, &Auth{})
+	if err != nil {
+		c.removeParent(item)
+	}
+	if item != nil {
+		c.metadata.Delete(item.ID())
 	}
 }
 
@@ -107,14 +242,49 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
 		return err
+	} else if parent == nil {
+		log.WithFields(log.Fields{
+			"key":  key,
+			"path": item.Path(),
+		}).Error("Parent of key was nil! Did we accidentally use an ID for the key?")
+		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
 	}
-	item.setParent(parent)
+
+	c.setParent(item, parent)
+	c.metadata.Store(item.ID(), item)
+	return nil
+}
+
+// MoveID moves an item to a new ID name. Also responsible for handling the
+// actual overwrite of the item's IDInternal field
+func (c *Cache) MoveID(oldID string, newID string) error {
+	item := c.GetID(oldID)
+	if item == nil {
+		// It may have already been renamed. This is not an error. We assume
+		// that IDs will never collide. Re-perform the op if this is the case.
+		if item = c.GetID(newID); item == nil {
+			// nope, it just doesn't exist
+			return errors.New("Could not get item: " + oldID)
+		}
+	}
+
+	// need to rename the child under the parent
+	parent := c.GetID(item.Parent.ID)
 	parent.mutex.Lock()
-	parent.children[filepath.Base(key)] = item
-	if item.IsDir() {
-		parent.subdir++
+	for i, child := range parent.children {
+		if child == oldID {
+			parent.children[i] = newID
+			break
+		}
 	}
 	parent.mutex.Unlock()
+
+	item.mutex.Lock()
+	item.IDInternal = newID
+	item.mutex.Unlock()
+
+	c.InsertID(newID, item)
+	c.DeleteID(oldID)
 	return nil
 }
 
@@ -124,8 +294,15 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 	if err != nil {
 		return err
 	}
-	// insert first, so data is not lost in the event the insert fails
+
+	// insert and THEN delete (to avoid corruption on failed insert)
+	// item is being renamed, gotta rename the item's NameInternal field
+	if newBase := filepath.Base(newPath); filepath.Base(oldPath) != newBase {
+		item.SetName(newBase)
+	}
 	if err = c.Insert(newPath, auth, item); err != nil {
+		// insert failed, reinsert in old location
+		c.Insert(oldPath, auth, item)
 		return err
 	}
 	c.Delete(oldPath)
@@ -134,21 +311,21 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 
 // deltaLoop should be called as a goroutine
 func (c *Cache) deltaLoop() {
-	logger.Trace("Starting delta goroutine...")
+	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		logger.Trace("Syncing deltas from server...")
+		log.Trace("Syncing deltas from server.")
 		for {
 			cont, err := c.pollDeltas(c.auth)
 			if err != nil {
-				logger.Error(err)
+				log.Error(err)
 				break
 			}
 			if !cont {
 				break
 			}
 		}
-		logger.Trace("Sync complete!")
+		log.Trace("Sync complete!")
 
 		// go to sleep until next poll interval
 		time.Sleep(30 * time.Second)
@@ -165,7 +342,9 @@ type deltaResponse struct {
 func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
-		logger.Error("Could not fetch server deltas:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Could not fetch server deltas.")
 		return false, err
 	}
 
@@ -188,7 +367,9 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 
 // apply a server-side change to our local state
 func (c *Cache) applyDelta(item DriveItem) error {
-	logger.Trace("Applying delta for", item.Name())
+	log.WithFields(log.Fields{
+		"name": item.Name(),
+	}).Trace("Applying delta")
 	//TODO stub
 	return nil
 }

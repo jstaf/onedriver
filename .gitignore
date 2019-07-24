@@ -3,7 +3,8 @@ compile_flags.txt
 mount/
 *.json
 *.bak
-*.log
+*.log*
+*.race.*
 *.fa
 *.gz
 onedriver

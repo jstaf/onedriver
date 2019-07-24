@@ -20,7 +20,7 @@ func TestRequestUnauthenticated(t *testing.T) {
 func TestGetItem(t *testing.T) {
 	item, err := GetItem("/", auth)
 	if item.Name() != "root" {
-		t.Fatal("Failed to fetch directory root. Addtional errors:", err)
+		t.Fatal("Failed to fetch directory root. Additional errors:", err)
 	}
 
 	item, err = GetItem("/lkjfsdlfjdwjkfl", auth)

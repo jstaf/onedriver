@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jstaf/onedriver/logger"
+	log "github.com/sirupsen/logrus"
 )
 
 // 10MB is the recommended upload size according to the graph API docs
@@ -120,13 +120,13 @@ func (u UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, erro
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
-	logger.Info("Uploading", frags)
+	log.Info("Uploading ", frags)
 	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)
 	if err != nil {
 		// this is a serious error, not simply one with a non-200 return code
-		logger.Error("Error during file upload, terminating upload session.")
+		log.Error("Error during file upload, terminating upload session.")
 		return nil, -1, err
 	}
 	defer resp.Body.Close()
@@ -137,25 +137,32 @@ func (u UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, erro
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time.
 func (d *DriveItem) Upload(auth *Auth) error {
-	logger.Info(d.Path())
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+	}).Info("Uploading item")
 
-	size := d.Size()
-	if size <= 4*1024*1024 { // 4MB
+	if d.Size() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
-		id, err := d.ID(auth)
-		if err != nil || id == "" {
+		id, err := d.RemoteID(auth)
+		if err != nil || isLocalID(id) {
 			d.mutex.Lock()
-			defer d.mutex.Unlock()
-			logger.Errorf("Could not obtain ID for upload of %s, error: %s\n", d.Name(), err)
 			d.hasChanges = true
+			d.mutex.Unlock()
+			log.WithFields(log.Fields{
+				"err": err,
+				"path": d.Path(),
+			}).Errorf("Could not obtain remote ID for upload.")
 			return err
 		}
 
 		// creating a snapshot prevents lock contention during the actual http
 		// upload
+		log.WithFields(log.Fields{
+			"path": d.Path(),
+			"size": d.Size(),
+		}).Trace("Using simple upload strategy (size below upload session threshold).")
+		snapshot := make([]byte, d.Size()) // d.Size() will acquire a lock
 		d.mutex.RLock()
-		logger.Trace("Using simple upload for", d.Name())
-		snapshot := make([]byte, size)
 		copy(snapshot, *d.data)
 		d.mutex.RUnlock()
 
@@ -172,10 +179,17 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		return json.Unmarshal(resp, d)
 	}
 
-	logger.Info("Creating upload session for", d.Name())
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"size": d.Size(),
+	}).Info("Creating upload session.")
 	session, err := d.createUploadSession(auth)
 	if err != nil {
-		logger.Error("Could not create upload session:", err)
+		log.WithFields(log.Fields{
+			"err": err,
+			"path": d.Path(),
+			"size": d.Size(),
+		}).Error("Could not create upload session.")
 		return err
 	}
 
@@ -183,8 +197,12 @@ func (d *DriveItem) Upload(auth *Auth) error {
 	for i := 0; i < nchunks; i++ {
 		resp, status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
 		if err != nil {
-			logger.Errorf("Error while uploading chunk %d of %d: %s\n", i, nchunks, err)
-			logger.Error("Cancelling upload session...")
+			log.WithFields(log.Fields{
+				"path": d.Path(),
+				"chunk": i,
+				"nchunks": nchunks,
+				"err": err,
+			}).Error("Error during chunk upload, cancelling upload session.")
 			d.cancelUploadSession(auth)
 			d.hasChanges = true
 			return err
@@ -192,12 +210,19 @@ func (d *DriveItem) Upload(auth *Auth) error {
 
 		// retry server-side failures with an exponential back-off strategy
 		for backoff := 1; status >= 500; backoff *= 2 {
-			logger.Error("The OneDrive server is having issues, "+
-				"retrying upload in %ds...", backoff)
+			log.WithFields(log.Fields{
+				"path": d.Path(),
+				"chunk": i,
+				"nchunks": nchunks,
+			}).Error("The OneDrive server is having issues, "+
+				"retrying upload in %ds.", backoff)
 			resp, status, err = session.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil {
-				logger.Error(resp)
-				logger.Error("Failed while retrying upload. Killing upload session...")
+				log.WithFields(log.Fields{
+					"path": d.Path(),
+					"response": resp,
+					"err": err,
+				}).Error("Failed while retrying upload. Killing upload session.")
 				d.cancelUploadSession(auth)
 				d.hasChanges = true
 				return err
@@ -206,17 +231,27 @@ func (d *DriveItem) Upload(auth *Auth) error {
 
 		// handle client-side errors
 		if status == 404 {
-			logger.Error("Upload session expired, cancelling upload.")
+			log.WithFields(log.Fields{
+				"path": d.Path(),
+				"code": status,
+			}).Error("Upload session expired, cancelling upload.")
 			d.uploadSession = nil // nothing to delete on the server
 			d.hasChanges = true
 			return errors.New("Upload session expired")
 		} else if status >= 400 {
-			logger.Errorf("Error %d during upload: %s\n", status, resp)
+			log.WithFields(log.Fields{
+				"code": status,
+				"response": resp,
+			}).Errorf("Error code %d during upload. "+
+				"Onedriver doesn't know how to handle this case yet. "+
+				"Please file a bug report!", status)
 			d.hasChanges = true
 			return errors.New(string(resp))
 		}
 	}
 
-	logger.Infof("Upload of %s completed!", d.Path())
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+	}).Info("Upload completed!")
 	return nil
 }

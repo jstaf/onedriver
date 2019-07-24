@@ -1,4 +1,4 @@
-.PHONY = test
+.PHONY = test, test_no_race
 
 # development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
@@ -11,7 +11,11 @@ dmel.fa:
 # cache disabled to always force rerun of all tests
 # (some tests can fail due to race conditions (since all fuse ops are async))
 test: onedriver dmel.fa
-	go test -race -count=1 ./logger ./graph
+	rm -f fusefs_tests.race*
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -count=1 ./graph
+
+test_no_race: onedriver dmel.fa
+	go test -v -count=1 ./graph
 
 # for autocompletion by ide-clangd
 compile_flags.txt:

@@ -8,7 +8,7 @@ addons:
 
 language: go
 go:
-  - "1.11"
+  - "1.12"
 env:
   - GO111MODULE=on
 
@@ -23,7 +23,7 @@ script:
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
-  - go test -covermode=count -coverprofile=coverage.out ./logger ./graph
+  - go test -v -covermode=count -coverprofile=coverage.out ./graph
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
   - aws s3 cp fusefs_tests.log s3://fusefs-travis/
