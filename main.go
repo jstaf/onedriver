@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"runtime"
+	"strings"
 
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
@@ -53,8 +55,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	wd, _ := os.Getwd()
+	wd += "/"
 	log.SetLevel(logger.StringToLevel(*logLevel))
-	log.SetReportCaller(true) //TODO use custom hook later for this
+	log.SetReportCaller(true)
+	log.SetFormatter(&log.TextFormatter{
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			filename := fmt.Sprintf("%s:%d", strings.Replace(f.File, wd, "", -1), f.Line)
+			function := strings.Replace(f.Function, "github.com/jstaf/onedriver/", "", -1) + "()"
+			return function, filename
+		},
+	})
 
 	if len(flag.Args()) != 1 {
 		// no mountpoint provided
