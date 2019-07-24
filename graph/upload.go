@@ -141,6 +141,8 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		"path": d.Path(),
 	}).Info("Uploading item")
 
+	//FIXME calling d.Size() later results in a double deadlock
+	size := d.Size()
 	if d.Size() <= 4*1024*1024 { // 4MB
 		// size is small enough that we can use a single PUT request
 		id, err := d.RemoteID(auth)
@@ -160,9 +162,9 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		d.mutex.RLock()
 		log.WithFields(log.Fields{
 			"path": d.Path(),
-			"size": d.Size(),
+			"size": size,
 		}).Trace("Using simple upload strategy (size below upload session threshold).")
-		snapshot := make([]byte, d.Size())
+		snapshot := make([]byte, size)
 		copy(snapshot, *d.data)
 		d.mutex.RUnlock()
 
@@ -181,14 +183,14 @@ func (d *DriveItem) Upload(auth *Auth) error {
 
 	log.WithFields(log.Fields{
 		"path": d.Path(),
-		"size": d.Size(),
+		"size": size,
 	}).Info("Creating upload session.")
 	session, err := d.createUploadSession(auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
 			"path": d.Path(),
-			"size": d.Size(),
+			"size": size,
 		}).Error("Could not create upload session.")
 		return err
 	}
@@ -244,7 +246,7 @@ func (d *DriveItem) Upload(auth *Auth) error {
 				"response": resp,
 			}).Errorf("Error code %d during upload. "+
 				"Onedriver doesn't know how to handle this case yet. "+
-				"Please file a bug report!")
+				"Please file a bug report!", status)
 			d.hasChanges = true
 			return errors.New(string(resp))
 		}
