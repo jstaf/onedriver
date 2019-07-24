@@ -7,7 +7,7 @@ onedriver
 
 Onedriver is a native Linux client for Microsoft Onedrive.
 
-## Why onedriver?
+## Why Onedriver?
 
 "There's a few Onedrive clients available now, why did you write another one?"
 
@@ -68,10 +68,24 @@ ls -l mount
 fusermount -u mount
 ```
 
-## Running tests
+### Running tests
 
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account
 # at the path /onedriver_tests
 make test
+```
+
+### Troubleshooting the build/deadlocks
+
+It's possible that there may be a deadlock or segfault that I haven't caught in 
+my tests. If this happens, the onedriver filesystem and subsequent ops may hang
+indefinitely (ops will hang while the kernel waits for the dead onedriver 
+process to respond). When this happens, you can cleanly unmount the filesystem 
+with the following:
+
+```bash
+# in new terminal window
+fusermount -uz mount
+killall make
 ```
