@@ -68,3 +68,7 @@ func TestSamePointer(t *testing.T) {
 		t.Fatal("Item was nil!")
 	}
 }
+
+//TODO test setting a parent multiple times
+
+//TODO test removing a parent multiple times

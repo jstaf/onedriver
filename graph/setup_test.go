@@ -50,6 +50,7 @@ func TestMain(m *testing.M) {
 	// unmount with "device or resource busy"
 
 	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	defer logFile.Close()
 	log.SetOutput(logFile)
 	log.SetReportCaller(true)
 	log.SetFormatter(logger.LogrusFormatter())

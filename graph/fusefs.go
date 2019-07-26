@@ -53,7 +53,7 @@ type FuseFs struct {
 func NewFS() *FuseFs {
 	auth := Authenticate()
 	cache := NewCache(auth)
-	//go cache.deltaLoop() //TODO: disabled for now
+	//go cache.deltaLoop(time.Second * 30)
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Auth:       auth,

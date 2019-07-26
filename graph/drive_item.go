@@ -10,8 +10,8 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
-	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
+	log "github.com/sirupsen/logrus"
 )
 
 // DriveItemParent describes a DriveItem's parent in the Graph API (just another
@@ -71,7 +71,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	if parent != nil {
 		itemParent.ID = parent.ID()
 		itemParent.Path = parent.Path()
-		
+
 		parent.mutex.RLock()
 		cache = parent.cache
 		parent.mutex.RUnlock()
@@ -212,9 +212,9 @@ func (d *DriveItem) FetchContent(auth *Auth) error {
 	id, err := d.RemoteID(auth)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"id": d.ID(),
+			"id":   d.ID(),
 			"name": d.Name(),
-			"err": err,
+			"err":  err,
 		}).Error("Could not obtain remote ID.")
 		return err
 	}
@@ -237,12 +237,12 @@ func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 		end = size
 	}
 	log.WithFields(log.Fields{
-		"id": d.ID(),
-		"path": d.Path(),
-		"bufsize": int64(end)-off,
-		"offset": off,
+		"id":      d.ID(),
+		"path":    d.Path(),
+		"bufsize": int64(end) - off,
+		"offset":  off,
 	}).Trace("Read file")
-	
+
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
@@ -254,10 +254,10 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	nWrite := len(data)
 	offset := int(off)
 	log.WithFields(log.Fields{
-		"id": d.ID(),
-		"path": d.Path(),
+		"id":      d.ID(),
+		"path":    d.Path(),
 		"bufsize": nWrite,
-		"offset": off,
+		"offset":  off,
 	}).Tracef("Write file")
 
 	d.mutex.Lock()
@@ -281,20 +281,21 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 func (d *DriveItem) Flush() fuse.Status {
 	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
-	defer d.mutex.Unlock()
 	if d.hasChanges {
 		d.hasChanges = false
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
 		if d.cache == nil {
+			d.mutex.Unlock() // must unlock for log to work
 			log.WithFields(log.Fields{
-				"id": d.ID(),
+				"id":   d.ID(),
 				"name": d.Name(),
 			}).Error("Driveitem cache ref cannot be nil!")
 			return fuse.ENODATA
 		}
 		go d.Upload(d.cache.auth)
 	}
+	d.mutex.Unlock()
 	return fuse.OK
 }
 

@@ -57,13 +57,77 @@ func (c *Cache) GetID(id string) *DriveItem {
 	return item
 }
 
-// InsertID inserts a single item into the cache by ID
+// InsertID inserts a single item into the cache by ID and sets its parent using
+// the Item.Parent.ID, if set. Must be called after DeleteID, if being used to
+// rename/move an item.
 func (c *Cache) InsertID(id string, item *DriveItem) {
 	c.metadata.Store(id, item)
+
+	if item.Parent == nil {
+		log.WithFields(log.Fields{
+			"id": id,
+		}).Error("Somehow the parent ID was not set.")
+		return
+	}
+
+	item.mutex.RLock()
+	parentID := item.Parent.ID
+	item.mutex.RUnlock()
+	if parentID == "" {
+		// root item, or parent not set
+		return
+	}
+	parent := c.GetID(parentID)
+	if parent == nil {
+		log.WithFields(log.Fields{
+			"id":   parentID,
+			"name": item.Name(),
+		}).Error("Parent item could not be found when setting parent.")
+		return
+	}
+
+	// check if the item has already been added to the parent
+	// Lock order is super key here, must go parent->child or the deadlock
+	// detector screams at us.
+	parent.mutex.Lock()
+	defer parent.mutex.Unlock()
+	for _, child := range parent.children {
+		if child == id {
+			// exit early, child cannot be added twice
+			return
+		}
+	}
+
+	// add to parent
+	item.mutex.Lock()
+	defer item.mutex.Unlock()
+	if item.IsDir() {
+		parent.subdir++
+	}
+	parent.children = append(parent.children, item.IDInternal)
+	item.Parent.ID = parent.IDInternal
 }
 
-// DeleteID deletes an item from the cache
+// DeleteID deletes an item from the cache, and removes it from its parent. Must
+// be called before InsertID if being used to rename/move an item.
 func (c *Cache) DeleteID(id string) {
+	if item := c.GetID(id); item != nil {
+		item.mutex.RLock()
+		parent := c.GetID(item.Parent.ID)
+		item.mutex.RUnlock()
+
+		parent.mutex.Lock()
+		for i, childID := range parent.children {
+			if childID == id {
+				parent.children = append(parent.children[:i], parent.children[i+1:]...)
+				if item.IsDir() {
+					parent.subdir--
+				}
+				break
+			}
+		}
+		parent.mutex.Unlock()
+	}
 	c.metadata.Delete(id)
 }
 
@@ -189,56 +253,23 @@ func (c *Cache) Get(path string, auth *Auth) (*DriveItem, error) {
 	return item, nil
 }
 
-// addToParent adds an object as a child of a parent
-func (c *Cache) setParent(item *DriveItem, parent *DriveItem) {
-	parent.mutex.Lock()
-	if item.IsDir() {
-		parent.subdir++
-	}
-	item.mutex.Lock()
-	parent.children = append(parent.children, item.IDInternal)
-	item.Parent.ID = parent.IDInternal
-	parent.mutex.Unlock()
-	item.mutex.Unlock()
-}
-
-// removeParent removes a given item from its parent
-func (c *Cache) removeParent(item *DriveItem) {
-	if item != nil { // item can be nil in some scenarios
-		id := item.ID()
-		parent := c.GetID(item.Parent.ID)
-		parent.mutex.Lock()
-		for i, childID := range parent.children {
-			if childID == id {
-				parent.children = append(parent.children[:i], parent.children[i+1:]...)
-				break
-			}
-		}
-		if item.IsDir() {
-			parent.subdir--
-		}
-		parent.mutex.Unlock()
-	}
-}
-
-// Delete an item from the cache by path
+// Delete an item from the cache by path. Must be called before Insert if being
+// used to move/rename an item.
 func (c *Cache) Delete(key string) {
-	key = strings.ToLower(key)
-	// Uses empty auth, since we actually don't want to waste time fetching
-	// items that are only being fetched so they can be deleted.
-	item, err := c.Get(key, &Auth{})
-	if err != nil {
-		c.removeParent(item)
-	}
+	item, _ := c.Get(strings.ToLower(key), nil)
 	if item != nil {
-		c.metadata.Delete(item.ID())
+		c.DeleteID(item.ID())
 	}
 }
 
 // Insert lets us manually insert an item to the cache (like if it was created
-// locally). Overwrites a cached item if present.
+// locally). Overwrites a cached item if present. Must be called after delete if
+// being used to move/rename an item.
 func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 	key = strings.ToLower(key)
+
+	// set the item.Parent.ID properly if the item hasn't been in the cache
+	// before or is being moved.
 	parent, err := c.Get(filepath.Dir(key), auth)
 	if err != nil {
 		return err
@@ -250,8 +281,14 @@ func (c *Cache) Insert(key string, auth *Auth, item *DriveItem) error {
 		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
 	}
 
-	c.setParent(item, parent)
-	c.metadata.Store(item.ID(), item)
+	// Coded this way to make sure locks are in the same order for the deadlock
+	// detector (lock ordering needs to be the same as InsertID: Parent->Child).
+	parentID := parent.ID()
+	item.mutex.Lock()
+	item.Parent.ID = parentID
+	item.mutex.Unlock()
+
+	c.InsertID(item.ID(), item)
 	return nil
 }
 
@@ -283,8 +320,8 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	item.IDInternal = newID
 	item.mutex.Unlock()
 
-	c.InsertID(newID, item)
 	c.DeleteID(oldID)
+	c.InsertID(newID, item)
 	return nil
 }
 
@@ -295,27 +332,28 @@ func (c *Cache) Move(oldPath string, newPath string, auth *Auth) error {
 		return err
 	}
 
-	// insert and THEN delete (to avoid corruption on failed insert)
-	// item is being renamed, gotta rename the item's NameInternal field
+	c.Delete(oldPath)
 	if newBase := filepath.Base(newPath); filepath.Base(oldPath) != newBase {
 		item.SetName(newBase)
 	}
-	if err = c.Insert(newPath, auth, item); err != nil {
+	if err := c.Insert(newPath, auth, item); err != nil {
 		// insert failed, reinsert in old location
+		item.SetName(filepath.Base(oldPath))
 		c.Insert(oldPath, auth, item)
 		return err
 	}
-	c.Delete(oldPath)
 	return nil
 }
 
 // deltaLoop should be called as a goroutine
-func (c *Cache) deltaLoop() {
+func (c *Cache) deltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		log.Trace("Syncing deltas from server.")
+		log.Debug("Syncing deltas from server.")
 		for {
+			//TODO should poll and dedup deltas here, then act on them in a
+			// separate block
 			cont, err := c.pollDeltas(c.auth)
 			if err != nil {
 				log.Error(err)
@@ -325,10 +363,8 @@ func (c *Cache) deltaLoop() {
 				break
 			}
 		}
-		log.Trace("Sync complete!")
-
-		// go to sleep until next poll interval
-		time.Sleep(30 * time.Second)
+		log.Debug("Sync complete!")
+		time.Sleep(interval)
 	}
 }
 
@@ -351,6 +387,8 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 	page := deltaResponse{}
 	json.Unmarshal(resp, &page)
 	for _, item := range page.Values {
+		//TODO should dedup deltas here, and use the last one received as
+		// recommended by API documentation
 		c.applyDelta(item)
 	}
 
@@ -368,8 +406,35 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 // apply a server-side change to our local state
 func (c *Cache) applyDelta(item DriveItem) error {
 	log.WithFields(log.Fields{
+		"id":   item.ID(),
 		"name": item.Name(),
-	}).Trace("Applying delta")
+	}).Debug("Applying delta")
+
+	// diagnose and act on what type of delta we're dealing with
+
+	// do we have it at all?
+	if parent := c.GetID(item.Parent.ID); parent == nil {
+		// Nothing needs to be applied, item not in cache, so latest copy will
+		// be pulled down next time it's accessed.
+		log.WithFields(log.Fields{
+			"name":     item.Name(),
+			"parentID": item.Parent.ID,
+			"delta":    "skip",
+		}).Trace("Skipping delta, item's parent not in cache.")
+		return nil
+	}
+
+	// was it deleted?
+	if item.Deleted != nil {
+		log.WithFields(log.Fields{
+			"id":    item.ID(),
+			"name":  item.Name(),
+			"delta": "delete",
+		}).Info("Applying server-side deletion of item")
+		c.DeleteID(item.ID())
+		return nil
+	}
+
 	//TODO stub
 	return nil
 }
