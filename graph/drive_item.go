@@ -67,14 +67,9 @@ type DriveItem struct {
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	itemParent := &DriveItemParent{ID: "", Path: ""}
-	var cache *Cache
 	if parent != nil {
 		itemParent.ID = parent.ID()
 		itemParent.Path = parent.Path()
-
-		parent.mutex.RLock()
-		cache = parent.cache
-		parent.mutex.RUnlock()
 	}
 
 	var empty []byte
@@ -83,7 +78,6 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		File:            nodefs.NewDefaultFile(),
 		IDInternal:      localID(),
 		NameInternal:    name,
-		cache:           cache,
 		Parent:          itemParent,
 		children:        make([]string, 0),
 		mutex:           &mu.RWMutex{},
@@ -354,11 +348,13 @@ func (d DriveItem) IsDir() bool {
 
 // Mode returns the permissions/mode of the file.
 func (d DriveItem) Mode() uint32 {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	if d.mode == 0 { // only 0 if fetched from Graph API
 		if d.FileInternal == nil { // nil if a folder
-			d.mode = fuse.S_IFDIR | 0755
+			return fuse.S_IFDIR | 0755
 		} else {
-			d.mode = fuse.S_IFREG | 0644
+			return fuse.S_IFREG | 0644
 		}
 	}
 	return d.mode
@@ -367,8 +363,9 @@ func (d DriveItem) Mode() uint32 {
 // Chmod changes the mode of a file
 func (d *DriveItem) Chmod(perms uint32) fuse.Status {
 	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+	isDir := d.IsDir() // holds an rlock
 	d.mutex.Lock()
-	if d.IsDir() {
+	if isDir {
 		d.mode = fuse.S_IFDIR | perms
 	} else {
 		d.mode = fuse.S_IFREG | perms

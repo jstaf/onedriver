@@ -61,6 +61,10 @@ func (c *Cache) GetID(id string) *DriveItem {
 // the Item.Parent.ID, if set. Must be called after DeleteID, if being used to
 // rename/move an item.
 func (c *Cache) InsertID(id string, item *DriveItem) {
+	// make sure the item knows about the cache itself, then insert
+	item.mutex.Lock()
+	item.cache = c
+	item.mutex.Unlock()
 	c.metadata.Store(id, item)
 
 	parentID := item.ParentID()
@@ -91,13 +95,10 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 	}
 
 	// add to parent
-	item.mutex.Lock()
-	defer item.mutex.Unlock()
 	if item.IsDir() {
 		parent.subdir++
 	}
-	parent.children = append(parent.children, item.IDInternal)
-	item.Parent.ID = parent.IDInternal
+	parent.children = append(parent.children, item.ID())
 }
 
 // DeleteID deletes an item from the cache, and removes it from its parent. Must
