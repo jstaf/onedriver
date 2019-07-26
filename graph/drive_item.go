@@ -83,7 +83,7 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		File:            nodefs.NewDefaultFile(),
 		IDInternal:      localID(),
 		NameInternal:    name,
-		cache:           cache, //TODO: find a way to do uploads without this field
+		cache:           cache,
 		Parent:          itemParent,
 		children:        make([]string, 0),
 		mutex:           &mu.RWMutex{},
@@ -154,20 +154,15 @@ func (d DriveItem) ParentID() string {
 // an ID (such as when deleting an item that is only local).
 //TODO: move this to cache methods, it's not needed here
 func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
-	// copy the item so we can access it's ID without locking the item later
-	d.mutex.RLock()
-	cpy := *d
-	parentID := d.Parent.ID
-	d.mutex.RUnlock()
-
-	if cpy.IsDir() {
-		//TODO add checks for directory, perhaps retry the dir creation again
-		//server-side?
-		return cpy.IDInternal, nil
+	if d.IsDir() {
+		// Directories are always created with an ID. (And this method is only
+		// really used for files anyways...)
+		return d.ID(), nil
 	}
 
-	if isLocalID(cpy.IDInternal) && auth.AccessToken != "" {
-		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", parentID, cpy.Name())
+	originalID := d.ID()
+	if isLocalID(originalID) && auth.AccessToken != "" {
+		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", d.ParentID(), d.Name())
 		resp, err := Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
@@ -183,37 +178,43 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				latest, err := GetItem(d.Path(), auth)
 				if err == nil {
 					// hooray!
-					err := d.cache.MoveID(cpy.IDInternal, latest.IDInternal)
+					err := d.cache.MoveID(originalID, latest.IDInternal)
 					return latest.IDInternal, err
 				}
 			}
 			// failed to obtain an ID, return whatever it was beforehand
-			return cpy.IDInternal, err
+			return originalID, err
 		}
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewDriveItem(cpy.Name(), 0644, nil)
+		unsafe := NewDriveItem(d.Name(), 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
-			return cpy.IDInternal, err
+			return originalID, err
 		}
 		// this is all we really wanted from this transaction
-		err = d.cache.MoveID(cpy.IDInternal, unsafe.IDInternal)
+		err = d.cache.MoveID(originalID, unsafe.IDInternal)
 		return unsafe.IDInternal, err
 	}
-	return cpy.IDInternal, nil
+	return originalID, nil
 }
 
 // Path returns an item's full Path
 func (d DriveItem) Path() string {
 	// special case when it's the root item
-	if d.Parent.ID == "" && d.Name() == "root" {
+	name := d.Name()
+	if d.ParentID() == "" && name == "root" {
 		return "/"
 	}
 
 	// all paths come prefixed with "/drive/root:"
-	prepath := strings.TrimPrefix(d.Parent.Path+"/"+d.Name(), "/drive/root:")
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	if d.Parent == nil {
+		return name
+	}
+	prepath := strings.TrimPrefix(d.Parent.Path+"/"+name, "/drive/root:")
 	return strings.Replace(prepath, "//", "/", -1)
 }
 
