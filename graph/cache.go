@@ -63,16 +63,7 @@ func (c *Cache) GetID(id string) *DriveItem {
 func (c *Cache) InsertID(id string, item *DriveItem) {
 	c.metadata.Store(id, item)
 
-	if item.Parent == nil {
-		log.WithFields(log.Fields{
-			"id": id,
-		}).Error("Somehow the parent ID was not set.")
-		return
-	}
-
-	item.mutex.RLock()
-	parentID := item.Parent.ID
-	item.mutex.RUnlock()
+	parentID := item.ParentID()
 	if parentID == "" {
 		// root item, or parent not set
 		return
@@ -80,8 +71,9 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 	parent := c.GetID(parentID)
 	if parent == nil {
 		log.WithFields(log.Fields{
-			"id":   parentID,
-			"name": item.Name(),
+			"parentID":  parentID,
+			"childID":   id,
+			"childName": item.Name(),
 		}).Error("Parent item could not be found when setting parent.")
 		return
 	}
@@ -112,10 +104,7 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 // be called before InsertID if being used to rename/move an item.
 func (c *Cache) DeleteID(id string) {
 	if item := c.GetID(id); item != nil {
-		item.mutex.RLock()
-		parent := c.GetID(item.Parent.ID)
-		item.mutex.RUnlock()
-
+		parent := c.GetID(item.ParentID())
 		parent.mutex.Lock()
 		for i, childID := range parent.children {
 			if childID == id {
@@ -306,7 +295,7 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	}
 
 	// need to rename the child under the parent
-	parent := c.GetID(item.Parent.ID)
+	parent := c.GetID(item.ParentID())
 	parent.mutex.Lock()
 	for i, child := range parent.children {
 		if child == oldID {
@@ -413,12 +402,12 @@ func (c *Cache) applyDelta(item DriveItem) error {
 	// diagnose and act on what type of delta we're dealing with
 
 	// do we have it at all?
-	if parent := c.GetID(item.Parent.ID); parent == nil {
+	if parent := c.GetID(item.ParentID()); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
 		log.WithFields(log.Fields{
 			"name":     item.Name(),
-			"parentID": item.Parent.ID,
+			"parentID": item.ParentID(),
 			"delta":    "skip",
 		}).Trace("Skipping delta, item's parent not in cache.")
 		return nil

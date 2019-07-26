@@ -137,6 +137,16 @@ func (d DriveItem) ID() string {
 	return d.IDInternal
 }
 
+// ParentID returns the ID of this item's parent.
+func (d DriveItem) ParentID() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	if d.Parent == nil {
+		return ""
+	}
+	return d.Parent.ID
+}
+
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded. You can use an empty Auth object if
