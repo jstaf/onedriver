@@ -309,9 +309,9 @@ func (d *DriveItem) Flush() fuse.Status {
 func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 	out.Size = d.Size()
 	out.Nlink = d.NLink()
-	out.Atime = d.ModTime()
 	out.Mtime = d.ModTime()
-	out.Ctime = d.ModTime()
+	out.Atime = out.Mtime
+	out.Ctime = out.Mtime
 	out.Mode = d.Mode()
 	out.Owner = fuse.Owner{
 		Uid: uint32(os.Getuid()),
@@ -353,9 +353,8 @@ func (d DriveItem) Mode() uint32 {
 	if d.mode == 0 { // only 0 if fetched from Graph API
 		if d.FileInternal == nil { // nil if a folder
 			return fuse.S_IFDIR | 0755
-		} else {
-			return fuse.S_IFREG | 0644
 		}
+		return fuse.S_IFREG | 0644
 	}
 	return d.mode
 }
@@ -377,6 +376,8 @@ func (d *DriveItem) Chmod(perms uint32) fuse.Status {
 // ModTime returns the Unix timestamp of last modification (to get a time.Time
 // struct, use time.Unix(int64(d.ModTime()), 0))
 func (d DriveItem) ModTime() uint64 {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
 	return uint64(d.ModTimeInternal.Unix())
 }
 
