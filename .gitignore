@@ -5,6 +5,7 @@ mount/
 *.bak
 *.log*
 *.race.*
+*.pdf
 *.fa
 *.gz
 onedriver

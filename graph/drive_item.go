@@ -228,6 +228,9 @@ func (d *DriveItem) FetchContent(auth *Auth) error {
 		return err
 	}
 	d.mutex.Lock()
+	// this check is here in case the onedrive file sizes are WRONG.
+	// (it happens)
+	d.SizeInternal = uint64(len(body))
 	d.data = &body
 	d.File = nodefs.NewDefaultFile()
 	d.mutex.Unlock()
@@ -237,15 +240,30 @@ func (d *DriveItem) FetchContent(auth *Auth) error {
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
-	if size := int(d.Size()); end > size {
+	oend := end
+	size := int(d.Size())
+	if int(off) > size {
+		log.WithFields(log.Fields{
+			"id":        d.ID(),
+			"path":      d.Path(),
+			"bufsize":   int64(end) - off,
+			"file_size": size,
+			"offset":    off,
+		}).Error("Offset was beyond file end (Onedrive metadata was wrong)! " +
+			"Refusing op to avoid a segfault.")
+		return fuse.ReadResultData(make([]byte, 0)), fuse.EINVAL
+	}
+	if end > size {
 		// d.Size() called once for one fewer RLock
 		end = size
 	}
 	log.WithFields(log.Fields{
-		"id":      d.ID(),
-		"path":    d.Path(),
-		"bufsize": int64(end) - off,
-		"offset":  off,
+		"id":               d.ID(),
+		"path":             d.Path(),
+		"original_bufsize": int64(oend) - off,
+		"bufsize":          int64(end) - off,
+		"file_size":        size,
+		"offset":           off,
 	}).Trace("Read file")
 
 	d.mutex.RLock()
@@ -298,7 +316,10 @@ func (d *DriveItem) Flush() fuse.Status {
 			}).Error("Driveitem cache ref cannot be nil!")
 			return fuse.ENODATA
 		}
-		go d.Upload(d.cache.auth)
+		auth := d.cache.auth
+		d.mutex.Unlock()
+		go d.Upload(auth)
+		return fuse.OK
 	}
 	d.mutex.Unlock()
 	return fuse.OK
