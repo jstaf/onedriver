@@ -1,12 +1,23 @@
 package graph
 
+/*
+#cgo linux pkg-config: webkit2gtk-4.0 libgnomeui-2.0
+#include <stdlib.h>
+#include <time.h>
+#include "thumbnail.h"
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	bolt "github.com/etcd-io/bbolt"
 	mu "github.com/sasha-s/go-deadlock"
@@ -137,6 +148,30 @@ type driveChildren struct {
 	Children []*DriveItem `json:"value"`
 }
 
+// yes im a bad person for using a global variable here, but this is far more
+// efficient than grepping /etc/mtab multiple times
+var mountPoint string
+
+func getMountPoint() string {
+	if mountPoint != "" {
+		return mountPoint
+	}
+
+	mtab, _ := ioutil.ReadFile("/etc/mtab")
+	re := regexp.MustCompile(`pathfs.pathInode (\S+)`)
+	match := re.FindSubmatch(mtab)
+	if match != nil {
+		mountPoint = string(match[1])
+		return string(match[1])
+	}
+	return ""
+}
+
+// uri is used to determine the true uri for a file
+func uri(path string) string {
+	return "file://" + getMountPoint() + path
+}
+
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If
 // items are not found, they are fetched.
 func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, error) {
@@ -204,6 +239,18 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		if child.IsDir() {
 			item.subdir++
 		}
+
+		// create a "failed thumbnail" so that GNOME will not attempt to
+		// download and thumbnail the remote items we just downloaded metadata
+		// for
+		itemURI := uri(child.Path())
+		log.WithFields(log.Fields{
+			"name": child.Name(),
+			"uri":  itemURI,
+		}).Debug("Creating failed thumbnail for item to prevent unintended downloads.")
+		cItemURI := C.CString(itemURI)
+		defer C.free(unsafe.Pointer(cItemURI))
+		C.fail_thumbnail(cItemURI, (C.time_t)(child.ModTime()))
 	}
 	item.mutex.Unlock()
 
