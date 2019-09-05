@@ -9,7 +9,7 @@ import (
 
 func TestRootGet(t *testing.T) {
 	cache := NewCache(auth)
-	root, err := cache.Get("/", auth)
+	root, err := cache.GetPath("/", auth)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestRootChildrenUpdate(t *testing.T) {
 
 func TestSubdirGet(t *testing.T) {
 	cache := NewCache(auth)
-	documents, err := cache.Get("/Documents", auth)
+	documents, err := cache.GetPath("/Documents", auth)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +59,8 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 
 func TestSamePointer(t *testing.T) {
 	cache := NewCache(auth)
-	item, _ := cache.Get("/Documents", auth)
-	item2, _ := cache.Get("/Documents", auth)
+	item, _ := cache.GetPath("/Documents", auth)
+	item2, _ := cache.GetPath("/Documents", auth)
 	if item != item2 {
 		t.Fatalf("Pointers to cached items do not match: %p != %p\n", item, item2)
 	}
