@@ -354,7 +354,7 @@ func (d DriveItem) Mode() uint32 {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	if d.mode == 0 { // only 0 if fetched from Graph API
-		if d.FileInternal == nil { // nil if a folder
+		if d.Folder != nil {
 			return fuse.S_IFDIR | 0755
 		}
 		return fuse.S_IFREG | 0644

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -24,9 +25,11 @@ func TestMode(t *testing.T) {
 			item.Mode(), 0755|fuse.S_IFDIR)
 	}
 
-	item, _ = GetItem("/Getting Started with Onedrive.pdf", auth)
+	fname := "/onedriver_tests/test_mode.txt"
+	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	item, _ = GetItem(fname, auth)
 	if item.Mode() != uint32(0644|fuse.S_IFREG) {
-		t.Fatalf("mode of intro PDF wrong: %o != %o",
+		t.Fatalf("mode of file wrong: %o != %o",
 			item.Mode(), 0644|fuse.S_IFREG)
 	}
 }
@@ -37,8 +40,11 @@ func TestIsDir(t *testing.T) {
 	if !item.IsDir() {
 		t.Fatal("/Documents not detected as a directory")
 	}
-	item, _ = GetItem("/Getting Started with Onedrive.pdf", auth)
+
+	fname := "/onedriver_tests/test_is_dir.txt"
+	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	item, _ = GetItem(fname, auth)
 	if item.IsDir() {
-		t.Fatal("Intro to Onedrive.pdf not detected as a file")
+		t.Fatal("file created with mode 644 not detected as a file")
 	}
 }
