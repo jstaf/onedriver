@@ -32,7 +32,7 @@ cp %{name}* %{buildroot}/%{_bindir}
 
 %files
 %defattr(-,root,root,-)
-%attr(755, root, root) %{_bindir}/%{name}*
+%attr(755, root, root) %{_bindir}/%{name}
 
 %changelog
 * Sat Sep 7 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.3
