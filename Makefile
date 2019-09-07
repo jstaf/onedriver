@@ -1,8 +1,22 @@
-.PHONY = test, test_no_race
+.PHONY = all, test, test_no_race, rpm, clean
 
 # development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
-	go build -race
+	go build
+
+all: onedriver test onedriver.deb rpm
+
+# kind of a yucky build using nfpm - will be replaced later with a real .deb
+# build pipeline
+onedriver.deb: onedriver
+	nfpm pkg --target $@
+
+rpm: onedriver.spec
+	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
+	spectool -g -R $<
+	# skip generation of debuginfo package
+	rpmbuild -bb --define "debug_package %{nil}" $<
+	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
 
 # a large text file for us to test upload sessions with. #science
 dmel.fa:
@@ -20,3 +34,9 @@ test_no_race: onedriver dmel.fa
 # for autocompletion by ide-clangd
 compile_flags.txt:
 	pkg-config --cflags gtk+-3.0 webkit2gtk-4.0 | sed 's/ /\n/g' > $@
+
+# will literally purge everything: all built artifacts, all logs, all tests,
+# all files tests depend on, all auth tokens... EVERYTHING
+clean:
+	fusermount -uz mount/
+	rm -f *.db *.rpm *.deb *.log *.fa *.gz onedriver auth_tokens.json

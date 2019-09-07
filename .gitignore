@@ -9,4 +9,6 @@ mount/
 *.fa
 *.gz
 *.db
+*.rpm
+*.deb
 onedriver

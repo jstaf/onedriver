@@ -35,7 +35,7 @@ func main() {
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to Onedrive and then exit. Useful for running tests.")
 	logLevel := flag.String("log", "debug", "Set logging level/verbosity. "+
-		"Can be one of: fatal, error, warn, info, trace")
+		"Can be one of: fatal, error, warn, info, debug, trace")
 	version := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
 	flag.BoolP("help", "h", false, "Display usage and help.")
