@@ -212,31 +212,6 @@ func (d DriveItem) Path() string {
 	return strings.Replace(prepath, "//", "/", -1)
 }
 
-// FetchContent fetches a DriveItem's content and initializes the .Data field.
-func (d *DriveItem) FetchContent(auth *Auth) error {
-	id, err := d.RemoteID(auth)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"id":   d.ID(),
-			"name": d.Name(),
-			"err":  err,
-		}).Error("Could not obtain remote ID.")
-		return err
-	}
-	body, err := Get("/me/drive/items/"+id+"/content", auth)
-	if err != nil {
-		return err
-	}
-	d.mutex.Lock()
-	// this check is here in case the onedrive file sizes are WRONG.
-	// (it happens)
-	d.SizeInternal = uint64(len(body))
-	d.data = &body
-	d.File = nodefs.NewDefaultFile()
-	d.mutex.Unlock()
-	return nil
-}
-
 // Read from a DriveItem like a file
 func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
@@ -297,6 +272,13 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	d.hasChanges = true
 
 	return uint32(nWrite), fuse.OK
+}
+
+// HasContent returns whether the file has been populated with data
+func (d *DriveItem) HasContent() bool {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.data != nil
 }
 
 // Flush is called when a file descriptor is closed. This is responsible for all

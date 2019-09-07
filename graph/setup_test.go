@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
@@ -30,8 +31,13 @@ func TestMain(m *testing.M) {
 	// failed and didn't clean themselves up)
 	exec.Command("fusermount", "-u", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
+	// wipe all cached data from previous tests
+	toDelete, _ := filepath.Glob("test*.db")
+	for _, db := range toDelete {
+		os.Remove(db)
+	}
 
-	fusefs := NewFS()
+	fusefs := NewFS("test.db")
 	auth = fusefs.Auth
 	fs := pathfs.NewPathNodeFs(fusefs, nil)
 	server, _, _ := nodefs.MountRoot(mountLoc, fs.Root(), nil)

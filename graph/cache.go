@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	bolt "github.com/etcd-io/bbolt"
 	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
@@ -16,15 +18,25 @@ import (
 // constructor.
 type Cache struct {
 	metadata  sync.Map
-	root      string // the id of the filesystem's root item
+	db        *bolt.DB
 	auth      *Auth
+	root      string // the id of the filesystem's root item
 	deltaLink string
 }
 
 // NewCache creates a new Cache
-func NewCache(auth *Auth) *Cache {
+func NewCache(auth *Auth, dbpath string) *Cache {
+	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
+	if err != nil {
+		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
+	}
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("content"))
+		return err
+	})
 	cache := &Cache{
 		auth: auth,
+		db:   db,
 	}
 
 	root, err := GetItem("/", auth)
@@ -332,4 +344,34 @@ func (c *Cache) MovePath(oldPath string, newPath string, auth *Auth) error {
 		return err
 	}
 	return nil
+}
+
+// GetContent read a file's content from disk.
+func (c *Cache) GetContent(id string) []byte {
+	var content []byte // nil
+	c.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("content"))
+		if tmp := b.Get([]byte(id)); tmp != nil {
+			content = make([]byte, len(tmp))
+			copy(content, tmp)
+		}
+		return nil
+	})
+	return content
+}
+
+// InsertContent writes file content to disk.
+func (c *Cache) InsertContent(id string, content []byte) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("content"))
+		return b.Put([]byte(id), content)
+	})
+}
+
+// DeleteContent deletes content from disk.
+func (c *Cache) DeleteContent(id string) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("content"))
+		return b.Delete([]byte(id))
+	})
 }

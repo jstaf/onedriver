@@ -66,7 +66,7 @@ func main() {
 	log.Info("onedriver v", onedriverVersion)
 
 	// setup filesystem
-	fs := pathfs.NewPathNodeFs(graph.NewFS(), nil)
+	fs := pathfs.NewPathNodeFs(graph.NewFS("onedriver.db"), nil)
 	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
 	if err != nil {
 		log.Error(err)

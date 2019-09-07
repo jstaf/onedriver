@@ -50,9 +50,9 @@ type FuseFs struct {
 
 // NewFS initializes a new Graph Filesystem to be used by go-fuse.
 // Each method is executed concurrently as a goroutine.
-func NewFS() *FuseFs {
+func NewFS(dbpath string) *FuseFs {
 	auth := Authenticate()
-	cache := NewCache(auth)
+	cache := NewCache(auth, dbpath)
 	//go cache.deltaLoop(time.Second * 30)
 	return &FuseFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
@@ -325,7 +325,9 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	return fuse.OK
 }
 
-// Open populates a DriveItem's Data field with actual data
+// Open fetches a DriveItem's content and initializes the .Data field with
+// actual data from the server. Data is loaded into memory on Open, and
+// persisted to disk on Flush.
 func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = leadingSlash(name)
 	log.WithFields(log.Fields{"path": name}).Debug()
@@ -340,22 +342,62 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		return nil, fuse.EREMOTEIO
 	}
 
-	// check for if file has already been populated
-	if item.data == nil {
-		// it is unpopulated, grab from api
+	if item.HasContent() {
+		// somehow we already have data
+		return item, fuse.OK
+	}
+
+	// try grabbing from disk
+	id := item.ID()
+	if content := fs.items.GetContent(id); content != nil {
+		// TODO should verify from cache using hash from server
 		log.WithFields(log.Fields{
 			"path": name,
-		}).Info("Fetching remote content for item from API")
-		err = item.FetchContent(fs.Auth)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"err":  err,
-				"id":   item.ID(),
-				"path": name,
-			}).Error("Failed to fetch remote content")
-			return nil, fuse.EREMOTEIO
-		}
+			"id":   id,
+		}).Info("Found content in cache.")
+
+		item.mutex.Lock()
+		defer item.mutex.Unlock()
+		// this check is here in case the onedrive file sizes are WRONG.
+		// (it happens)
+		item.SizeInternal = uint64(len(content))
+		item.data = &content
+		item.File = nodefs.NewDefaultFile()
+		return item, fuse.OK
 	}
+
+	// didn't have it on disk, now try api
+	log.WithFields(log.Fields{
+		"path": name,
+	}).Info("Fetching remote content for item from API")
+
+	id, err = item.RemoteID(fs.Auth)
+	if err != nil || id == "" {
+		log.WithFields(log.Fields{
+			"id":   id,
+			"name": item.Name(),
+			"err":  err,
+		}).Error("Could not obtain remote ID.")
+		return nil, fuse.EREMOTEIO
+	}
+
+	body, err := Get("/me/drive/items/"+id+"/content", fs.Auth)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err":  err,
+			"id":   id,
+			"path": name,
+		}).Error("Failed to fetch remote content")
+		return nil, fuse.EREMOTEIO
+	}
+
+	item.mutex.Lock()
+	defer item.mutex.Unlock()
+	// this check is here in case the onedrive file sizes are WRONG.
+	// (it happens)
+	item.SizeInternal = uint64(len(body))
+	item.data = &body
+	item.File = nodefs.NewDefaultFile()
 	return item, fuse.OK
 }
 
