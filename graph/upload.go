@@ -149,7 +149,7 @@ func (d *DriveItem) Upload(auth *Auth) error {
 			d.hasChanges = true
 			d.mutex.Unlock()
 			log.WithFields(log.Fields{
-				"err": err,
+				"err":  err,
 				"path": d.Path(),
 			}).Errorf("Could not obtain remote ID for upload.")
 			return err
@@ -186,7 +186,7 @@ func (d *DriveItem) Upload(auth *Auth) error {
 	session, err := d.createUploadSession(auth)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"err": err,
+			"err":  err,
 			"path": d.Path(),
 			"size": d.Size(),
 		}).Error("Could not create upload session.")
@@ -198,10 +198,10 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		resp, status, err := session.uploadChunk(auth, uint64(i)*chunkSize)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"path": d.Path(),
-				"chunk": i,
+				"path":    d.Path(),
+				"chunk":   i,
 				"nchunks": nchunks,
-				"err": err,
+				"err":     err,
 			}).Error("Error during chunk upload, cancelling upload session.")
 			d.cancelUploadSession(auth)
 			d.hasChanges = true
@@ -211,17 +211,17 @@ func (d *DriveItem) Upload(auth *Auth) error {
 		// retry server-side failures with an exponential back-off strategy
 		for backoff := 1; status >= 500; backoff *= 2 {
 			log.WithFields(log.Fields{
-				"path": d.Path(),
-				"chunk": i,
+				"path":    d.Path(),
+				"chunk":   i,
 				"nchunks": nchunks,
 			}).Error("The OneDrive server is having issues, "+
 				"retrying upload in %ds.", backoff)
 			resp, status, err = session.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil {
 				log.WithFields(log.Fields{
-					"path": d.Path(),
+					"path":     d.Path(),
 					"response": resp,
-					"err": err,
+					"err":      err,
 				}).Error("Failed while retrying upload. Killing upload session.")
 				d.cancelUploadSession(auth)
 				d.hasChanges = true
@@ -240,7 +240,7 @@ func (d *DriveItem) Upload(auth *Auth) error {
 			return errors.New("Upload session expired")
 		} else if status >= 400 {
 			log.WithFields(log.Fields{
-				"code": status,
+				"code":     status,
 				"response": resp,
 			}).Errorf("Error code %d during upload. "+
 				"Onedriver doesn't know how to handle this case yet. "+
