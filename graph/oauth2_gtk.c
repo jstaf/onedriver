@@ -1,14 +1,8 @@
+#include <gtk/gtk.h>
 #include <stdio.h>
 #include <string.h>
-
-#if defined(__linux__)
-#include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
-#else
-#include <stdlib.h>
-#endif
 
-#if defined(__linux__)
 static WebKitWebView *web_view_static = NULL;
 static char *auth_redirect_value = NULL;
 
@@ -24,14 +18,11 @@ static gboolean close_web_view_cb(WebKitWebView *web_view, GtkWidget *window) {
   gtk_widget_destroy(window);
   return TRUE;
 }
-#endif
 
 /**
  * Open a popup GTK auth window and return the final redirect location.
  */
 char *webkit_auth_window(char *auth_url) {
-#if defined(__linux__)
-  // linux - hooray, we can auth via an embedded browser!
   printf("Performing initial authentication to Microsoft Graph (OneDrive API). "
          "The authentication window can be closed once you are redirected "
          "to a blank page (after \"Let this app access your info?\").\n");
@@ -58,15 +49,6 @@ char *webkit_auth_window(char *auth_url) {
   if (!auth_redirect_value) {
     auth_redirect_value = "";
   }
-#else
-  // unfortunately on windows or mac... CLI only
-  printf("Please visit the following url:\n%s\n\n", auth_url);
-
-  char *auth_redirect_value = malloc(2048);
-  printf("Please enter the redirect URL once you are redirected to a blank page "
-         "(after \"Let this app access your info?\"):\n");
-  fgets(auth_redirect_value, 2048, stdin);
-#endif
 
   return auth_redirect_value;
 }

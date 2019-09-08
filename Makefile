@@ -1,6 +1,5 @@
 .PHONY = all, test, test_no_race, rpm, clean
 
-# development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
 	go build
 
@@ -38,5 +37,5 @@ compile_flags.txt:
 # will literally purge everything: all built artifacts, all logs, all tests,
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
-	fusermount -uz mount/
+	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.log *.fa *.gz onedriver auth_tokens.json
