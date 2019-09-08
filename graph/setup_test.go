@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 	os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-u", mountLoc).Run()
+	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 	// wipe all cached data from previous tests
 	toDelete, _ := filepath.Glob("test*.db")

@@ -141,6 +141,13 @@ func (d DriveItem) ParentID() string {
 	return d.Parent.ID
 }
 
+// GetCache is used for thread-safe access to the cache field
+func (d DriveItem) GetCache() *Cache {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.cache
+}
+
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded. You can use an empty Auth object if
@@ -172,7 +179,7 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				latest, err := GetItem(d.Path(), auth)
 				if err == nil {
 					// hooray!
-					err := d.cache.MoveID(originalID, latest.IDInternal)
+					err := d.GetCache().MoveID(originalID, latest.IDInternal)
 					return latest.IDInternal, err
 				}
 			}
@@ -188,8 +195,9 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 			return originalID, err
 		}
 		// this is all we really wanted from this transaction
-		err = d.cache.MoveID(originalID, unsafe.IDInternal)
-		return unsafe.IDInternal, err
+		newID := unsafe.ID()
+		err = d.GetCache().MoveID(originalID, newID)
+		return newID, err
 	}
 	return originalID, nil
 }
@@ -288,19 +296,19 @@ func (d *DriveItem) Flush() fuse.Status {
 	d.mutex.Lock()
 	if d.hasChanges {
 		d.hasChanges = false
+		d.mutex.Unlock()
+
 		// ensureID() is no longer used here to make upload dispatch even faster
 		// (since upload is using ensureID() internally)
-		if d.cache == nil {
-			d.mutex.Unlock() // must unlock for log to work
+		cache := d.GetCache()
+		if cache == nil {
 			log.WithFields(log.Fields{
 				"id":   d.ID(),
 				"name": d.Name(),
 			}).Error("Driveitem cache ref cannot be nil!")
 			return fuse.ENODATA
 		}
-		auth := d.cache.auth
-		d.mutex.Unlock()
-		go d.Upload(auth)
+		go d.Upload(cache.auth)
 		return fuse.OK
 	}
 	d.mutex.Unlock()

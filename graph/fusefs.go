@@ -1,11 +1,9 @@
 package graph
 
 import (
-	"bytes"
 	"encoding/json"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -153,73 +151,44 @@ func (fs *FuseFs) Rename(oldName string, newName string, context *fuse.Context) 
 		return fuse.EBADF
 	}
 
-	// start creating patch content for server
-	patchContent := DriveItem{ConflictBehavior: "replace"} // wipe existing content
-
-	if newDir := filepath.Dir(newName); filepath.Dir(oldName) != newDir {
-		// we are moving the item, add the new parent ID to the patch
-		newParent, err := fs.items.GetPath(newDir, fs.Auth)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"path": newDir,
-				"err":  err,
-			}).Errorf("Failed to fetch parent of item being moved.")
-			return fuse.EREMOTEIO
-		}
-		parentID, err := newParent.RemoteID(fs.Auth)
-		if isLocalID(parentID) || err != nil {
-			log.WithFields(log.Fields{
-				"id":   parentID,
-				"path": newDir,
-				"err":  err,
-			}).Error("ID of destination folder cannot be local")
-			return fuse.EBADF
-		}
-		patchContent.Parent = &DriveItemParent{ID: parentID}
-	}
-
-	if newBase := filepath.Base(newName); filepath.Base(oldName) != newBase {
-		// we are renaming the item, add the new name to the patch
-		// mutex for patchContent is uninitialized and we have the only copy
-		patchContent.NameInternal = newBase
-	}
-
-	// apply patch to server copy - note that we don't actually care about the
-	// response content
-	jsonPatch, _ := json.Marshal(patchContent)
-	_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
+	// perform remote rename
+	newParent, err := fs.items.GetPath(filepath.Dir(newName), fs.Auth)
 	if err != nil {
-		if strings.Contains(err.Error(), "resourceModified") {
-			// Wait a second, then retry the request. The Onedrive servers
-			// sometimes aren't quick enough here if the object has been
-			// recently created (<1 second ago).
-			time.Sleep(time.Second)
-			log.WithFields(log.Fields{
-				"path": oldName,
-				"dest": newName,
-				"err":  err,
-			}).Warn("Patch failed, retrying.")
-			_, err = Patch("/me/drive/items/"+id, fs.Auth, bytes.NewReader(jsonPatch))
-			if err != nil {
-				// if retrying the request failed to recover things, or the request
-				// failed due to another reason than the etag bug
-				log.WithFields(log.Fields{
-					"path": oldName,
-					"dest": newName,
-					"err":  err,
-				}).Warn("Second patch attempt failed, aborting op.")
-				return fuse.EREMOTEIO
-			}
-		}
+		log.WithFields(log.Fields{
+			"path": filepath.Dir(newName),
+			"err":  err,
+		}).Error("Failed to fetch new parent item.")
+		return fuse.ENOENT
+	}
+
+	parentID := newParent.ID()
+	if isLocalID(parentID) || err != nil {
+		// should never be reached, but being extra safe here
+		log.WithFields(log.Fields{
+			"id":   parentID,
+			"path": filepath.Dir(newName),
+			"err":  err,
+		}).Error("ID of destination folder cannot be local.")
+		return fuse.EBADF
+	}
+
+	err = Rename(id, filepath.Base(newName), parentID, fs.Auth)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"id":       id,
+			"parentID": parentID,
+			"err":      err,
+		}).Error("Failed to rename remote item.")
+		return fuse.EREMOTEIO
 	}
 
 	// now rename local copy
-	if err := fs.items.MovePath(oldName, newName, fs.Auth); err != nil {
+	if err = fs.items.MovePath(oldName, newName, fs.Auth); err != nil {
 		log.WithFields(log.Fields{
 			"path": oldName,
 			"dest": newName,
 			"err":  err,
-		}).Error("Failed to rename local item")
+		}).Error("Failed to rename local item.")
 		return fuse.EIO
 	}
 	return fuse.OK
@@ -271,12 +240,7 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 	log.WithFields(log.Fields{"path": name}).Debug()
 
 	// create a new folder on the server
-	newFolderPost := DriveItem{
-		NameInternal: filepath.Base(name),
-		Folder:       &Folder{},
-	}
-	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(ChildrenPath(filepath.Dir(name)), fs.Auth, bytes.NewReader(bytePayload))
+	item, err := Mkdir(name, fs.Auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
@@ -291,18 +255,11 @@ func (fs *FuseFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.St
 		return code
 	}
 
-	// Now unmarshal the response into the new folder so that it has an ID
-	// (otherwise things involving this folder will fail later). Mutexes are not
-	// required here since no other thread will proceed until the directory has
-	// been created.
-	item := created.(*DriveItem)
-	oldID := item.ID()
-	json.Unmarshal(resp, item)
-
 	// Move the directory to be stored under the non-local ID.
 	//TODO: eliminate the need for renames after Create()
-	fs.items.MoveID(oldID, item.ID())
-
+	if fs.items.MoveID(created.(*DriveItem).ID(), item.ID()) != nil {
+		return fuse.EIO
+	}
 	return fuse.OK
 }
 
@@ -311,8 +268,7 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	name = leadingSlash(name)
 	log.WithFields(log.Fields{"path": name}).Debug()
 
-	err := Delete(ResourcePath(name), fs.Auth)
-	if err != nil {
+	if err := Remove(name, fs.Auth); err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
 			"err":  err,
@@ -321,7 +277,6 @@ func (fs *FuseFs) Rmdir(name string, context *fuse.Context) fuse.Status {
 	}
 
 	fs.items.DeletePath(name)
-
 	return fuse.OK
 }
 
@@ -381,7 +336,7 @@ func (fs *FuseFs) Open(name string, flags uint32, context *fuse.Context) (file n
 		return nil, fuse.EREMOTEIO
 	}
 
-	body, err := Get("/me/drive/items/"+id+"/content", fs.Auth)
+	body, err := GetItemContent(id, fs.Auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":  err,
@@ -443,8 +398,7 @@ func (fs *FuseFs) Unlink(name string, context *fuse.Context) (code fuse.Status) 
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server
 	if !isLocalID(item.ID()) {
-		err = Delete(ResourcePath(name), fs.Auth)
-		if err != nil {
+		if err = Remove(name, fs.Auth); err != nil {
 			log.WithFields(log.Fields{
 				"err":  err,
 				"path": name,

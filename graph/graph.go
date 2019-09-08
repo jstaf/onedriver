@@ -2,15 +2,19 @@
 package graph
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/jstaf/onedriver/logger"
-	log "github.com/sirupsen/logrus"
 	mu "github.com/sasha-s/go-deadlock"
+	log "github.com/sirupsen/logrus"
 )
 
 const graphURL = "https://graph.microsoft.com/v1.0"
@@ -28,7 +32,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 	if auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
 		log.WithFields(log.Fields{
-			"caller": logger.Caller(3),
+			"caller":   logger.Caller(3),
 			"calledBy": logger.Caller(4),
 		}).Error("Auth was empty and we attempted to make a request with it!")
 		return nil, errors.New("Cannot make a request with empty auth")
@@ -124,4 +128,59 @@ func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	}
 	err = json.Unmarshal(body, item)
 	return item, err
+}
+
+// GetItemContent retrieves an item's content from the Graph endpoint.
+func GetItemContent(id string, auth *Auth) ([]byte, error) {
+	return Get("/me/drive/items/"+id+"/content", auth)
+}
+
+// Remove a directory or file (does both rmdir and unlink).
+func Remove(path string, auth *Auth) error {
+	return Delete(ResourcePath(path), auth)
+}
+
+// Mkdir creates a directory on the server.
+func Mkdir(path string, auth *Auth) (*DriveItem, error) {
+	// create a new folder on the server
+	newFolderPost := DriveItem{
+		NameInternal: filepath.Base(path),
+		Folder:       &Folder{},
+	}
+	bytePayload, _ := json.Marshal(newFolderPost)
+	resp, err := Post(ChildrenPath(filepath.Dir(path)), auth, bytes.NewReader(bytePayload))
+	if err != nil {
+		return nil, err
+	}
+
+	item := NewDriveItem(filepath.Base(path), 0755, nil)
+	err = json.Unmarshal(resp, &item)
+	return item, err
+}
+
+// Rename moves and/or renames an item on the server. The itemName and parentID
+// arguments correspond to the *new* basename or id of the parent.
+func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
+	// start creating patch content for server
+	// mutex does not need to be initialized since it is never used locally
+	patchContent := DriveItem{
+		ConflictBehavior: "replace", // overwrite existing content at new location
+		NameInternal:     itemName,
+		Parent: &DriveItemParent{
+			ID: parentID,
+		},
+	}
+
+	// apply patch to server copy - note that we don't actually care about the
+	// response content, only if it returns an error
+	jsonPatch, _ := json.Marshal(patchContent)
+	_, err := Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
+	if err != nil && strings.Contains(err.Error(), "resourceModified") {
+		// Wait a second, then retry the request. The Onedrive servers sometimes
+		// aren't quick enough here if the object has been recently created
+		// (<1 second ago).
+		time.Sleep(time.Second)
+		_, err = Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
+	}
+	return err
 }
