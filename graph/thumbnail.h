@@ -1,3 +1,5 @@
+#pragma once
+
 #include <time.h>
 
-void fail_thumbnail(const char *uri, time_t mtime);
+void fail_thumbnail(const char* uri, time_t mtime);

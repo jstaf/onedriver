@@ -1,6 +1,5 @@
-.PHONY = all, test, test_no_race, rpm, clean
+.PHONY = all, test, test_no_race, rpm, clean, clean_thumbnails
 
-# development copy with race detection - for a normal copy, use "go build"
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go main.go
 	go build
 
@@ -40,3 +39,6 @@ compile_flags.txt:
 clean:
 	fusermount -uz mount/
 	rm -f *.db *.rpm *.deb *.log *.fa *.gz onedriver auth_tokens.json
+
+clean_thumbnails:
+	rm -rf ~/.thumbnails ~/.cache/thumbnails
