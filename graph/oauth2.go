@@ -1,12 +1,5 @@
 package graph
 
-/*
-#cgo linux pkg-config: webkit2gtk-4.0
-#include "stdlib.h"
-#include "oauth2_gtk.h"
-*/
-import "C"
-
 import (
 	"encoding/json"
 	"fmt"
@@ -14,10 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
-	"unsafe"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -86,27 +77,13 @@ func (a *Auth) Refresh() {
 	}
 }
 
-// Fetch the auth code required as the first part of oauth2 authentication.
-func getAuthCode() string {
-	authURL := authCodeURL +
+// Get the appropriate authentication URL for the Graph OAuth2 challenge.
+func getAuthURL() string {
+	return authCodeURL +
 		"?client_id=" + authClientID +
 		"&scope=" + url.PathEscape("files.readwrite.all offline_access") +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
-
-	cAuthURL := C.CString(authURL)
-	defer C.free(unsafe.Pointer(cAuthURL))
-	responseC := C.webkit_auth_window(cAuthURL)
-	defer C.free(unsafe.Pointer(responseC))
-	response := C.GoString(responseC)
-
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_])+")
-	code := rexp.FindString(response)
-	if len(code) == 0 {
-		log.Fatal("No validation code returned, or code was invalid. " +
-			"Please restart the application and try again.")
-	}
-	return code[5:]
 }
 
 // Exchange an auth code for a set of access tokens

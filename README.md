@@ -68,6 +68,10 @@ ls -l mount
 fusermount -u mount
 ```
 
+A headless, Go-only binary can be built with `CGO_ENABLED=0 go build`. Note that
+this build will not have any kind of GUI for authentication (follow the text 
+instructions in the terminal).
+
 ### Running tests
 
 ```bash
