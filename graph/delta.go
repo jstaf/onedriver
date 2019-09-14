@@ -52,7 +52,7 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 	for _, item := range page.Values {
 		//TODO should dedup deltas here, and use the last one received as
 		// recommended by API documentation
-		c.applyDelta(item)
+		c.applyDelta(&item)
 	}
 
 	// If the server does not provide a `@odata.nextLink` item, it means we've
@@ -67,7 +67,7 @@ func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
 }
 
 // apply a server-side change to our local state
-func (c *Cache) applyDelta(item DriveItem) error {
+func (c *Cache) applyDelta(item *DriveItem) error {
 	log.WithFields(log.Fields{
 		"id":   item.ID(),
 		"name": item.Name(),

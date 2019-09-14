@@ -51,7 +51,7 @@ type Deleted struct {
 // operations like Flush.
 type DriveItem struct {
 	// fs fields
-	*fs.Inode
+	fs.Inode
 	cache         *Cache
 	mutex         *mu.RWMutex
 	children      []string       // a slice of ids, nil when uninitialized
@@ -96,12 +96,12 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 }
 
 // String is only used for debugging by go-fuse
-func (d DriveItem) String() string {
+func (d *DriveItem) String() string {
 	return d.Name()
 }
 
 // Name is used to ensure thread-safe access to the NameInternal field.
-func (d DriveItem) Name() string {
+func (d *DriveItem) Name() string {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.NameInternal
@@ -133,14 +133,14 @@ func isLocalID(id string) bool {
 }
 
 // ID returns the internal ID of the item
-func (d DriveItem) ID() string {
+func (d *DriveItem) ID() string {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.IDInternal
 }
 
 // ParentID returns the ID of this item's parent.
-func (d DriveItem) ParentID() string {
+func (d *DriveItem) ParentID() string {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	if d.Parent == nil {
@@ -150,7 +150,7 @@ func (d DriveItem) ParentID() string {
 }
 
 // GetCache is used for thread-safe access to the cache field
-func (d DriveItem) GetCache() *Cache {
+func (d *DriveItem) GetCache() *Cache {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.cache
@@ -306,7 +306,7 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 }
 
 // Path returns an item's full Path
-func (d DriveItem) Path() string {
+func (d *DriveItem) Path() string {
 	// special case when it's the root item
 	name := d.Name()
 	if d.ParentID() == "" && name == "root" {
@@ -324,7 +324,7 @@ func (d DriveItem) Path() string {
 }
 
 // Read from a DriveItem like a file
-func (d DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
+func (d *DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	end := int(off) + int(len(buf))
 	oend := end
 	size := int(d.Size())
@@ -478,13 +478,13 @@ func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 }
 
 // IsDir returns if it is a directory (true) or file (false).
-func (d DriveItem) IsDir() bool {
+func (d *DriveItem) IsDir() bool {
 	// following statement returns 0 if the dir bit is not set
 	return d.Mode()&fuse.S_IFDIR > 0
 }
 
 // Mode returns the permissions/mode of the file.
-func (d DriveItem) Mode() uint32 {
+func (d *DriveItem) Mode() uint32 {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	if d.mode == 0 { // only 0 if fetched from Graph API
@@ -498,7 +498,7 @@ func (d DriveItem) Mode() uint32 {
 
 // ModTime returns the Unix timestamp of last modification (to get a time.Time
 // struct, use time.Unix(int64(d.ModTime()), 0))
-func (d DriveItem) ModTime() uint64 {
+func (d *DriveItem) ModTime() uint64 {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return uint64(d.ModTimeInternal.Unix())
@@ -506,7 +506,7 @@ func (d DriveItem) ModTime() uint64 {
 
 // NLink gives the number of hard links to an inode (or child count if a
 // directory)
-func (d DriveItem) NLink() uint32 {
+func (d *DriveItem) NLink() uint32 {
 	if d.IsDir() {
 		d.mutex.RLock()
 		defer d.mutex.RUnlock()
@@ -519,7 +519,7 @@ func (d DriveItem) NLink() uint32 {
 
 // Size pretends that folders are 4096 bytes, even though they're 0 (since
 // they actually don't exist).
-func (d DriveItem) Size() uint64 {
+func (d *DriveItem) Size() uint64 {
 	if d.IsDir() {
 		return 4096
 	}
