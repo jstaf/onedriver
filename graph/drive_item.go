@@ -1,15 +1,17 @@
 package graph
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/hanwen/go-fuse/v2/fs"
 	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,24 +46,34 @@ type Deleted struct {
 // concurrently.) This struct's methods are thread-safe and can be called
 // concurrently.
 type DriveItem struct {
-	nodefs.File      `json:"-"`
-	cache            *Cache
-	uploadSession    *UploadSession   // current upload session, or nil
-	data             *[]byte          // empty by default
-	hasChanges       bool             // used to trigger an upload on flush
+	// fs fields
+	inode         *fs.Inode
+	cache         *Cache
+	mutex         *mu.RWMutex
+	children      []string       // a slice of ids, nil when uninitialized
+	uploadSession *UploadSession // current upload session, or nil
+	data          *[]byte        // empty by default
+	hasChanges    bool           // used to trigger an upload on flush
+	subdir        uint32         // used purely by NLink()
+	mode          uint32         // do not set manually
+
+	// API-specific fields
 	IDInternal       string           `json:"id,omitempty"`
 	NameInternal     string           `json:"name,omitempty"`
 	SizeInternal     uint64           `json:"size,omitempty"`
 	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	mode             uint32           // do not set manually
 	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	children         []string         // a slice of ids, nil when uninitialized
-	subdir           uint32           // used purely by NLink()
-	mutex            *mu.RWMutex
-	Folder           *Folder  `json:"folder,omitempty"`
-	FileInternal     *File    `json:"file,omitempty"`
-	Deleted          *Deleted `json:"deleted,omitempty"`
-	ConflictBehavior string   `json:"@microsoft.graph.conflictBehavior,omitempty"`
+	Folder           *Folder          `json:"folder,omitempty"`
+	FileInternal     *File            `json:"file,omitempty"`
+	Deleted          *Deleted         `json:"deleted,omitempty"`
+	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
+}
+
+// EmbeddedInode returns a pointer to the embedded inode.
+func (d *DriveItem) EmbeddedInode() *fs.Inode {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.inode
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -75,7 +87,6 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
 	return &DriveItem{
-		File:            nodefs.NewDefaultFile(),
 		IDInternal:      localID(),
 		NameInternal:    name,
 		Parent:          itemParent,
@@ -146,6 +157,57 @@ func (d DriveItem) GetCache() *Cache {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.cache
+}
+
+// DriveQuota is used to parse the User's current storage quotas from the API
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
+type DriveQuota struct {
+	Deleted   uint64 `json:"deleted"`   // bytes in recycle bin
+	FileCount uint64 `json:"fileCount"` // unavailable on personal accounts
+	Remaining uint64 `json:"remaining"`
+	State     string `json:"state"` // normal | nearing | critical | exceeded
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+}
+
+// Drive has some general information about the user's OneDrive
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
+type Drive struct {
+	ID        string     `json:"id"`
+	DriveType string     `json:"driveType"` // personal or business
+	Quota     DriveQuota `json:"quota,omitempty"`
+}
+
+// Statfs returns information about the filesystem. Mainly useful for checking
+// quotas and storage limits.
+func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
+	log.WithFields(log.Fields{"path": leadingSlash(name)}).Debug()
+	resp, err := Get("/me/drive", fs.Auth)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Could not fetch filesystem details.")
+	}
+	drive := Drive{}
+	json.Unmarshal(resp, &drive)
+
+	if drive.DriveType == "personal" {
+		log.Warn("Personal OneDrive accounts do not show number of files, " +
+			"inode counts reported by onedriver will be bogus.")
+	}
+
+	// limits are pasted from https://support.microsoft.com/en-us/help/3125202
+	var blkSize uint64 = 4096 // default ext4 block size
+	out = &fuse.StatfsOut{
+		Bsize:   uint32(blkSize),
+		Blocks:  drive.Quota.Total / blkSize,
+		Bfree:   drive.Quota.Remaining / blkSize,
+		Bavail:  drive.Quota.Remaining / blkSize,
+		Files:   100000,
+		Ffree:   100000 - drive.Quota.FileCount,
+		NameLen: 260,
+	}
+	return 0
 }
 
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already

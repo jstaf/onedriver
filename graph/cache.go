@@ -20,6 +20,7 @@ type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
 	auth      *Auth
+	mutex     mu.RWMutex
 	root      string // the id of the filesystem's root item
 	deltaLink string
 }
@@ -55,6 +56,13 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	// deltaloop is started manually
 	return cache
+}
+
+// GetAuth returns the current auth
+func (c *Cache) GetAuth() *Auth {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.auth
 }
 
 // GetID gets an item from the cache by ID. No fetching is performed. Result is
