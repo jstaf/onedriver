@@ -51,7 +51,7 @@ type Deleted struct {
 // operations like Flush.
 type DriveItem struct {
 	// fs fields
-	inode         *fs.Inode
+	*fs.Inode
 	cache         *Cache
 	mutex         *mu.RWMutex
 	children      []string       // a slice of ids, nil when uninitialized
@@ -71,14 +71,6 @@ type DriveItem struct {
 	FileInternal     *File            `json:"file,omitempty"`
 	Deleted          *Deleted         `json:"deleted,omitempty"`
 	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
-}
-
-// EmbeddedInode returns a pointer to the embedded inode. Required to implment
-// the InodeEmbedder interface required by go-fuse/v2.
-func (d *DriveItem) EmbeddedInode() *fs.Inode {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
-	return d.inode
 }
 
 // NewDriveItem initializes a new DriveItem
