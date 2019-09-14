@@ -9,6 +9,7 @@ import (
 	"time"
 
 	bolt "github.com/etcd-io/bbolt"
+	"github.com/hanwen/go-fuse/v2/fs"
 	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
@@ -20,9 +21,18 @@ type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
 	auth      *Auth
-	mutex     mu.RWMutex
+	mutex     *mu.RWMutex
 	root      string // the id of the filesystem's root item
 	deltaLink string
+}
+
+// NewFS is a wrapper around NewCache
+//TODO refactor this out
+func NewFS(dbpath string) *DriveItem {
+	auth := Authenticate()
+	cache := NewCache(auth, dbpath)
+	root, _ := cache.GetPath("/", auth)
+	return root
 }
 
 // NewCache creates a new Cache
@@ -36,8 +46,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		return err
 	})
 	cache := &Cache{
-		auth: auth,
-		db:   db,
+		auth:  auth,
+		db:    db,
+		mutex: &mu.RWMutex{},
 	}
 
 	root, err := GetItem("/", auth)
@@ -63,6 +74,19 @@ func (c *Cache) GetAuth() *Auth {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.auth
+}
+
+func leadingSlash(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
+// InodePath calculates an inode's path to the filesystem root
+func (c *Cache) InodePath(inode *fs.Inode) string {
+	root, _ := c.GetPath("/", nil)
+	return leadingSlash(inode.Path(root.EmbeddedInode()))
 }
 
 // GetID gets an item from the cache by ID. No fetching is performed. Result is
@@ -120,6 +144,16 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 	parent.children = append(parent.children, item.ID())
 }
 
+// InsertChild adds an item as a child of a specified parent ID.
+func (c *Cache) InsertChild(parentID string, child *DriveItem) {
+	child.mutex.Lock()
+	// should already be set, just double-checking here.
+	child.Parent.ID = parentID
+	id := child.IDInternal
+	child.mutex.Unlock()
+	c.InsertID(id, child)
+}
+
 // DeleteID deletes an item from the cache, and removes it from its parent. Must
 // be called before InsertID if being used to rename/move an item.
 func (c *Cache) DeleteID(id string) {
@@ -143,6 +177,20 @@ func (c *Cache) DeleteID(id string) {
 // only used for parsing
 type driveChildren struct {
 	Children []*DriveItem `json:"value"`
+}
+
+// GetChild fetches a named child of an item. Wraps GetChildrenID.
+func (c *Cache) GetChild(id string, name string, auth *Auth) (*DriveItem, error) {
+	children, err := c.GetChildrenID(id, auth)
+	if err != nil {
+		return nil, err
+	}
+	for _, child := range children {
+		if child.Name() == name {
+			return child, nil
+		}
+	}
+	return nil, errors.New("Child does not exist")
 }
 
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If

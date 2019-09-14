@@ -6,8 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
@@ -66,8 +65,8 @@ func main() {
 	log.Info("onedriver v", onedriverVersion)
 
 	// setup filesystem
-	fs := pathfs.NewPathNodeFs(graph.NewFS("onedriver.db"), nil)
-	server, _, err := nodefs.MountRoot(flag.Arg(0), fs.Root(), nil)
+	root := graph.NewFS("onedriver.db")
+	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{})
 	if err != nil {
 		log.Error(err)
 		log.Fatalf("Mount failed. Is the mountpoint already in use? "+
@@ -81,5 +80,5 @@ func main() {
 	go graph.UnmountHandler(sigChan, server)
 
 	// serve filesystem
-	server.Serve()
+	server.Wait()
 }

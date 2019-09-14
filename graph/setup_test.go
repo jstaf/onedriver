@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	}
 
 	fusefs := NewFS("test.db")
-	auth = fusefs.Auth
+	auth = fusefs.GetCache().GetAuth()
 	fs := pathfs.NewPathNodeFs(fusefs, nil)
 	server, _, _ := nodefs.MountRoot(mountLoc, fs.Root(), nil)
 

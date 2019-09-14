@@ -1,17 +1,19 @@
 package graph
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,7 +46,9 @@ type Deleted struct {
 // if not present. Fields named "xxxxxInternal" should never be accessed, they
 // are there for JSON umarshaling/marshaling only. (They are not safe to access
 // concurrently.) This struct's methods are thread-safe and can be called
-// concurrently.
+// concurrently. Reads/writes are done directly to DriveItems instead of
+// implementing something like the fs.FileHandle to minimize the complexity of
+// operations like Flush.
 type DriveItem struct {
 	// fs fields
 	inode         *fs.Inode
@@ -69,7 +73,8 @@ type DriveItem struct {
 	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
 }
 
-// EmbeddedInode returns a pointer to the embedded inode.
+// EmbeddedInode returns a pointer to the embedded inode. Required to implment
+// the InodeEmbedder interface required by go-fuse/v2.
 func (d *DriveItem) EmbeddedInode() *fs.Inode {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
@@ -181,8 +186,8 @@ type Drive struct {
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
-	log.WithFields(log.Fields{"path": leadingSlash(name)}).Debug()
-	resp, err := Get("/me/drive", fs.Auth)
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+	resp, err := Get("/me/drive", d.GetCache().GetAuth())
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
@@ -197,17 +202,61 @@ func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Err
 	}
 
 	// limits are pasted from https://support.microsoft.com/en-us/help/3125202
-	var blkSize uint64 = 4096 // default ext4 block size
-	out = &fuse.StatfsOut{
-		Bsize:   uint32(blkSize),
-		Blocks:  drive.Quota.Total / blkSize,
-		Bfree:   drive.Quota.Remaining / blkSize,
-		Bavail:  drive.Quota.Remaining / blkSize,
-		Files:   100000,
-		Ffree:   100000 - drive.Quota.FileCount,
-		NameLen: 260,
-	}
+	const blkSize uint64 = 4096 // default ext4 block size
+	out.Bsize = uint32(blkSize)
+	out.Blocks = drive.Quota.Total / blkSize
+	out.Bfree = drive.Quota.Remaining / blkSize
+	out.Bavail = drive.Quota.Remaining / blkSize
+	out.Files = 100000
+	out.Ffree = 100000 - drive.Quota.FileCount
+	out.NameLen = 260
 	return 0
+}
+
+// Readdir returns a list of directory entries (formerly OpenDir).
+func (d *DriveItem) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+
+	cache := d.GetCache()
+	// directories are always created with a remote graph id
+	children, err := cache.GetChildrenID(d.ID(), cache.GetAuth())
+	if err != nil {
+		// not an item not found error (GetAttr() will always be called before
+		// OpenDir()), something has happened to our connection
+		log.WithFields(log.Fields{
+			"path": d.Path(),
+			"err":  err,
+		}).Error("Error during Readdir()")
+		return nil, syscall.EREMOTEIO
+	}
+
+	c := make([]fuse.DirEntry, 0)
+	for _, child := range children {
+		entry := fuse.DirEntry{
+			Name: child.Name(),
+			Mode: child.Mode(),
+		}
+		c = append(c, entry)
+	}
+	return fs.NewListDirStream(c), 0
+}
+
+// Lookup an individual child of an inode.
+func (d *DriveItem) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	if ignore(name) {
+		return nil, syscall.ENOENT
+	}
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"name": name,
+	}).Trace()
+
+	cache := d.GetCache()
+	child, _ := cache.GetChild(d.ID(), name, cache.GetAuth())
+	if child == nil {
+		return nil, syscall.ENOENT
+	}
+	return child.EmbeddedInode(), 0
 }
 
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
@@ -215,7 +264,7 @@ func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Err
 // file has not already been uploaded. You can use an empty Auth object if
 // you're sure that the item already has an ID or otherwise don't need to fetch
 // an ID (such as when deleting an item that is only local).
-//TODO: move this to cache methods, it's not needed here
+//TODO move to cache methods
 func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 	if d.IsDir() {
 		// Directories are always created with an ID. (And this method is only
@@ -377,9 +426,11 @@ func (d *DriveItem) Flush() fuse.Status {
 	return fuse.OK
 }
 
-// GetAttr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
+// Getattr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
 // of the "metadata fetch" operations.
-func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
+func (d *DriveItem) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	log.WithFields(log.Fields{"path": d.Path()}).Trace()
+
 	out.Size = d.Size()
 	out.Nlink = d.NLink()
 	out.Mtime = d.ModTime()
@@ -390,27 +441,48 @@ func (d DriveItem) GetAttr(out *fuse.Attr) fuse.Status {
 		Uid: uint32(os.Getuid()),
 		Gid: uint32(os.Getgid()),
 	}
-	return fuse.OK
+	return 0
 }
 
-// Utimens sets the access/modify times of a file
-func (d *DriveItem) Utimens(atime *time.Time, mtime *time.Time) fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Trace()
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	d.ModTimeInternal = mtime
-	return fuse.OK
-}
+// Setattr is the workhorse for setting filesystem attributes. Does the work of
+// operations like Utimens, Chmod, Chown (not implemented), and Truncate.
+func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+	}).Trace()
 
-// Truncate cuts a file in place
-func (d *DriveItem) Truncate(size uint64) fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+	isDir := d.IsDir() // holds an rlock
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	*d.data = (*d.data)[:size]
-	d.SizeInternal = size
-	d.hasChanges = true
-	return fuse.OK
+
+	// utimens
+	if mtime, valid := in.GetMTime(); valid {
+		d.ModTimeInternal = &mtime
+	}
+
+	// chmod
+	if mode, valid := in.GetMode(); valid {
+		if isDir {
+			d.mode = fuse.S_IFDIR | mode
+		} else {
+			d.mode = fuse.S_IFREG | mode
+		}
+	}
+
+	// truncate
+	if size, valid := in.GetSize(); valid {
+		if size > d.SizeInternal {
+			// unlikely to be hit, but implementing just in case
+			extra := make([]byte, size-d.SizeInternal)
+			*d.data = append(*d.data, extra...)
+		} else {
+			*d.data = (*d.data)[:size]
+		}
+		d.SizeInternal = size
+		d.hasChanges = true
+	}
+
+	return 0
 }
 
 // IsDir returns if it is a directory (true) or file (false).
@@ -430,20 +502,6 @@ func (d DriveItem) Mode() uint32 {
 		return fuse.S_IFREG | 0644
 	}
 	return d.mode
-}
-
-// Chmod changes the mode of a file
-func (d *DriveItem) Chmod(perms uint32) fuse.Status {
-	log.WithFields(log.Fields{"path": d.Path()}).Debug()
-	isDir := d.IsDir() // holds an rlock
-	d.mutex.Lock()
-	if isDir {
-		d.mode = fuse.S_IFDIR | perms
-	} else {
-		d.mode = fuse.S_IFREG | perms
-	}
-	d.mutex.Unlock()
-	return fuse.OK
 }
 
 // ModTime returns the Unix timestamp of last modification (to get a time.Time
@@ -476,4 +534,237 @@ func (d DriveItem) Size() uint64 {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.SizeInternal
+}
+
+// these files will never exist, and we should ignore them
+func ignore(path string) bool {
+	ignoredFiles := []string{
+		"BDMV",
+		".Trash",
+		".Trash-1000",
+		".xdg-volume-info",
+		"autorun.inf",
+		".localized",
+		".DS_Store",
+		"._.",
+		".hidden",
+	}
+	for _, ignore := range ignoredFiles {
+		if path == ignore {
+			return true
+		}
+	}
+	return false
+}
+
+// Create a new local file. The server doesn't have this yet. The uint32 part of
+// the return are fuseflags.
+func (d *DriveItem) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+	path := d.Path()
+	log.WithFields(log.Fields{
+		"path": path,
+		"name": name,
+		"mode": mode,
+	}).Debug()
+
+	item := NewDriveItem(name, mode, d)
+	d.GetCache().InsertChild(d.ID(), item)
+	return item.EmbeddedInode(), nil, uint32(0), 0
+}
+
+// Mkdir creates a directory.
+func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	cache := d.GetCache()
+	auth := cache.GetAuth()
+
+	// create a new folder on the server
+	newFolderPost := DriveItem{
+		NameInternal: filepath.Base(name),
+		Folder:       &Folder{},
+	}
+	bytePayload, _ := json.Marshal(newFolderPost)
+	resp, err := Post(ChildrenPath(filepath.Dir(name)), auth, bytes.NewReader(bytePayload))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"path": name,
+			"err":  err,
+		}).Error("Error during directory creation:")
+		return nil, syscall.EREMOTEIO
+	}
+
+	// Now create and unmarshal the response into the new folder so that it has
+	// an ID (otherwise things involving this folder will fail later). Mutexes
+	// are not required here since no other thread will proceed until the
+	// directory has been created.
+	item := NewDriveItem(name, mode, d)
+	json.Unmarshal(resp, item)
+	cache.InsertChild(d.ID(), item)
+	return item.EmbeddedInode(), 0
+}
+
+// Unlink a child file.
+func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
+	log.WithFields(log.Fields{
+		"path": filepath.Join(d.Path(), name),
+	}).Debug("Unlinking inode.")
+
+	cache := d.GetCache()
+	child, _ := cache.GetChild(d.ID(), name, nil)
+	if child == nil {
+		// the file we are unlinking never existed
+		return syscall.ENOENT
+	}
+
+	// if no ID, the item is local-only, and does not need to be deleted on the
+	// server
+	id := child.ID()
+	if !isLocalID(id) {
+		if err := Remove(name, cache.GetAuth()); err != nil {
+			log.WithFields(log.Fields{
+				"err":  err,
+				"path": name,
+			}).Error("Failed to delete item on server. Aborting op.")
+			return syscall.EREMOTEIO
+		}
+	}
+
+	cache.DeleteID(id)
+	return 0
+}
+
+// Rmdir deletes a child directory. Reuses Unlink.
+func (d *DriveItem) Rmdir(ctx context.Context, name string) syscall.Errno {
+	return d.Unlink(ctx, name)
+}
+
+// Rename renames an inode.
+func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
+	// we don't fully trust DriveItem.Parent.Path from the Graph API
+	cache := d.GetCache()
+	path := filepath.Join(cache.InodePath(d.EmbeddedInode()), name)
+	dest := filepath.Join(cache.InodePath(newParent.EmbeddedInode()), newName)
+	log.WithFields(log.Fields{
+		"path": path,
+		"dest": dest,
+	}).Debug("Renaming inode.")
+
+	auth := cache.GetAuth()
+	item, _ := cache.GetChild(d.ID(), name, auth)
+	id, err := item.RemoteID(auth)
+	if isLocalID(id) || err != nil {
+		// uploads will fail without an id
+		log.WithFields(log.Fields{
+			"id":   id,
+			"path": path,
+			"err":  err,
+		}).Error("ID of item to move cannot be local and we failed to obtain an ID.")
+		return syscall.EBADF
+	}
+
+	// perform remote rename
+	newParentItem, err := cache.GetPath(filepath.Dir(dest), auth)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"path": filepath.Dir(dest),
+			"err":  err,
+		}).Error("Failed to fetch new parent item.")
+		return syscall.ENOENT
+	}
+
+	parentID := newParentItem.ID()
+	if isLocalID(parentID) || err != nil {
+		// should never be reached, but being extra safe here
+		log.WithFields(log.Fields{
+			"id":   parentID,
+			"path": filepath.Dir(dest),
+			"err":  err,
+		}).Error("ID of destination folder cannot be local.")
+		return syscall.EBADF
+	}
+
+	if err = Rename(id, filepath.Base(dest), parentID, auth); err != nil {
+		log.WithFields(log.Fields{
+			"id":       id,
+			"parentID": parentID,
+			"err":      err,
+		}).Error("Failed to rename remote item.")
+		return syscall.EREMOTEIO
+	}
+
+	// now rename local copy
+	if err = cache.MovePath(path, dest, auth); err != nil {
+		log.WithFields(log.Fields{
+			"path": path,
+			"dest": dest,
+			"err":  err,
+		}).Error("Failed to rename local item.")
+		return syscall.EIO
+	}
+
+	// whew! item renamed
+	return 0
+}
+
+// Open fetches a DriveItem's content and initializes the .Data field with
+// actual data from the server. Data is loaded into memory on Open, and
+// persisted to disk on Flush.
+func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+	path := d.Path()
+	log.WithFields(log.Fields{"path": path}).Debug("Opening file for I/O.")
+
+	if d.HasContent() {
+		// we already have data, likely the file is already opened somewhere
+		return nil, uint32(0), 0
+	}
+
+	// try grabbing from disk
+	id := d.ID()
+	cache := d.GetCache()
+	if content := cache.GetContent(id); content != nil {
+		// TODO should verify from cache using hash from server
+		log.WithFields(log.Fields{
+			"path": path,
+			"id":   id,
+		}).Info("Found content in cache.")
+
+		d.mutex.Lock()
+		defer d.mutex.Unlock()
+		// this check is here in case the API file sizes are WRONG (it happens)
+		d.SizeInternal = uint64(len(content))
+		d.data = &content
+		return nil, uint32(0), 0
+	}
+
+	// didn't have it on disk, now try api
+	log.WithFields(log.Fields{
+		"path": path,
+	}).Info("Fetching remote content for item from API")
+
+	auth := cache.GetAuth()
+	id, err := d.RemoteID(auth)
+	if err != nil || id == "" {
+		log.WithFields(log.Fields{
+			"id":   id,
+			"path": path,
+			"err":  err,
+		}).Error("Could not obtain remote ID.")
+		return nil, uint32(0), syscall.EREMOTEIO
+	}
+
+	body, err := GetItemContent(id, auth)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err":  err,
+			"id":   id,
+			"path": path,
+		}).Error("Failed to fetch remote content")
+		return nil, uint32(0), syscall.EREMOTEIO
+	}
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	// this check is here in case the API file sizes are WRONG (it happens)
+	d.SizeInternal = uint64(len(body))
+	d.data = &body
+	return nil, uint32(0), 0
 }
