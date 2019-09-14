@@ -247,8 +247,6 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	item.mutex.Lock()
 	item.children = make([]string, 0)
 	for _, child := range fetched.Children {
-		// initialize item and store in cache
-		child.mutex = &mu.RWMutex{}
 		// we will always have an id after fetching from the server
 		c.metadata.Store(child.IDInternal, child)
 

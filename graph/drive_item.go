@@ -53,7 +53,7 @@ type DriveItem struct {
 	// fs fields
 	fs.Inode
 	cache         *Cache
-	mutex         *mu.RWMutex
+	mutex         mu.RWMutex     // used to be a pointer, but fs.Inode also embeds a mutex :(
 	children      []string       // a slice of ids, nil when uninitialized
 	uploadSession *UploadSession // current upload session, or nil
 	data          *[]byte        // empty by default
@@ -88,7 +88,6 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		NameInternal:    name,
 		Parent:          itemParent,
 		children:        make([]string, 0),
-		mutex:           &mu.RWMutex{},
 		data:            &empty,
 		ModTimeInternal: &currentTime,
 		mode:            mode,

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
-	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -120,9 +119,7 @@ func ChildrenPathID(id string) string {
 // root item.
 func GetItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
-	item := &DriveItem{
-		mutex: &mu.RWMutex{},
-	}
+	item := &DriveItem{}
 	if err != nil {
 		return item, err
 	}

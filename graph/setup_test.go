@@ -9,8 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -37,10 +36,9 @@ func TestMain(m *testing.M) {
 		os.Remove(db)
 	}
 
-	fusefs := NewFS("test.db")
-	auth = fusefs.GetCache().GetAuth()
-	fs := pathfs.NewPathNodeFs(fusefs, nil)
-	server, _, _ := nodefs.MountRoot(mountLoc, fs.Root(), nil)
+	root := NewFS("test.db")
+	auth = root.GetCache().GetAuth()
+	server, _ := fs.Mount(mountLoc, root, &fs.Options{})
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
