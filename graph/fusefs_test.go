@@ -1,3 +1,6 @@
+// A bunch of "black box" filesystem integration tests that test the
+// functionality of key syscalls and their implementation. If something fails
+// here, the filesystem is not functional.
 package graph
 
 import (
@@ -356,4 +359,18 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 	}
 }
 
-//TODO test when running "echo some text > file.txt" that file.txt actually becomes populated
+// Test that when running "echo some text > file.txt" that file.txt actually
+// becomes populated
+func TestEchoWritesToFile(t *testing.T) {
+	fname := filepath.Join(TestDir, "bagels")
+	out, err := exec.Command("bash", "-c", "echo bagels", ">", fname).CombinedOutput()
+	if err != nil {
+		t.Log(out)
+		t.Fatal(err)
+	}
+	content, err := ioutil.ReadFile(fname)
+	failOnErr(t, err)
+	if string(content) != "bagels" {
+		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"", content)
+	}
+}
