@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 	go UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
-	go server.Wait()
+	go server.Serve()
 
 	// cleanup from last run
 	os.RemoveAll(TestDir)
