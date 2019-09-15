@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"flag"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -8,6 +9,7 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/logger"
@@ -38,7 +40,11 @@ func TestMain(m *testing.M) {
 
 	root := NewFS("test.db")
 	auth = root.GetCache().GetAuth()
-	server, _ := fs.Mount(mountLoc, root, &fs.Options{})
+	second := time.Second
+	server, _ := fs.Mount(flag.Arg(0), root, &fs.Options{
+		EntryTimeout: &second,
+		AttrTimeout:  &second,
+	})
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)

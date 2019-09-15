@@ -252,7 +252,7 @@ func (d *DriveItem) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	if child == nil {
 		return nil, syscall.ENOENT
 	}
-	return child.EmbeddedInode(), 0
+	return d.NewInode(ctx, child, fs.StableAttr{Mode: child.Mode() & fuse.S_IFDIR}), 0
 }
 
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
@@ -565,7 +565,7 @@ func (d *DriveItem) Create(ctx context.Context, name string, flags uint32, mode 
 
 	item := NewDriveItem(name, mode, d)
 	d.GetCache().InsertChild(d.ID(), item)
-	return item.EmbeddedInode(), nil, uint32(0), 0
+	return item.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }
 
 // Mkdir creates a directory.
@@ -595,7 +595,7 @@ func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 	item := NewDriveItem(name, mode, d)
 	json.Unmarshal(resp, item)
 	cache.InsertChild(d.ID(), item)
-	return item.EmbeddedInode(), 0
+	return d.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFDIR}), 0
 }
 
 // Unlink a child file.

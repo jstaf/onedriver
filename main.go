@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/graph"
@@ -66,7 +67,11 @@ func main() {
 
 	// setup filesystem
 	root := graph.NewFS("onedriver.db")
-	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{})
+	second := time.Second
+	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
+		EntryTimeout: &second,
+		AttrTimeout:  &second,
+	})
 	if err != nil {
 		log.Error(err)
 		log.Fatalf("Mount failed. Is the mountpoint already in use? "+
