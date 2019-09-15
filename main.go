@@ -14,7 +14,7 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-const onedriverVersion = "0.3"
+const onedriverVersion = "0.4"
 
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Onedrive.
