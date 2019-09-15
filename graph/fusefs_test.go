@@ -371,6 +371,23 @@ func TestEchoWritesToFile(t *testing.T) {
 	content, err := ioutil.ReadFile(fname)
 	failOnErr(t, err)
 	if string(content) != "bagels" {
-		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"", content)
+		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"\n", content)
+	}
+}
+
+// Test that if we stat a file, we get some correct information back
+func TestStat(t *testing.T) {
+	stat, err := os.Stat("mount/Documents")
+	failOnErr(t, err)
+	if stat.Name() != "Documents" {
+		t.Fatalf("Name was not \"Documents\", got \"%s\" instead.\n", stat.Name())
+	}
+
+	if stat.ModTime().Year() < 1971 {
+		t.Fatal("Modification time of /Documents wrong, got: " + stat.ModTime().String())
+	}
+
+	if !stat.IsDir() {
+		t.Fatal("Mode of /Documents wrong, not detected as directory, got: " + string(stat.Mode()))
 	}
 }

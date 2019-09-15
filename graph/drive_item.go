@@ -220,8 +220,8 @@ func (d *DriveItem) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	// directories are always created with a remote graph id
 	children, err := cache.GetChildrenID(d.ID(), cache.GetAuth())
 	if err != nil {
-		// not an item not found error (GetAttr() will always be called before
-		// OpenDir()), something has happened to our connection
+		// not an item not found error (Lookup/Getattr will always be called
+		// before Readdir()), something has happened to our connection
 		log.WithFields(log.Fields{
 			"path": d.Path(),
 			"err":  err,
@@ -229,15 +229,15 @@ func (d *DriveItem) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 		return nil, syscall.EREMOTEIO
 	}
 
-	c := make([]fuse.DirEntry, 0)
+	entries := make([]fuse.DirEntry, 0)
 	for _, child := range children {
 		entry := fuse.DirEntry{
 			Name: child.Name(),
 			Mode: child.Mode(),
 		}
-		c = append(c, entry)
+		entries = append(entries, entry)
 	}
-	return fs.NewListDirStream(c), 0
+	return fs.NewListDirStream(entries), 0
 }
 
 // Lookup an individual child of an inode.
@@ -256,6 +256,7 @@ func (d *DriveItem) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	if child == nil {
 		return nil, syscall.ENOENT
 	}
+	out.Attr = child.makeattr()
 	return d.NewInode(ctx, child, fs.StableAttr{Mode: child.Mode() & fuse.S_IFDIR}), 0
 }
 
@@ -429,6 +430,22 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	return 0
 }
 
+func (d *DriveItem) makeattr() fuse.Attr {
+	mtime := d.ModTime()
+	return fuse.Attr{
+		Size:  d.Size(),
+		Nlink: d.NLink(),
+		Mtime: mtime,
+		Atime: mtime,
+		Ctime: mtime,
+		Mode:  d.Mode(),
+		Owner: fuse.Owner{
+			Uid: uint32(os.Getuid()),
+			Gid: uint32(os.Getgid()),
+		},
+	}
+}
+
 // Getattr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
 // of the "metadata fetch" operations.
 func (d *DriveItem) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
@@ -436,17 +453,7 @@ func (d *DriveItem) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.Attr
 		"path": d.Path(),
 		"id":   d.ID(),
 	}).Trace()
-
-	out.Size = d.Size()
-	out.Nlink = d.NLink()
-	out.Mtime = d.ModTime()
-	out.Atime = out.Mtime
-	out.Ctime = out.Mtime
-	out.Mode = d.Mode()
-	out.Owner = fuse.Owner{
-		Uid: uint32(os.Getuid()),
-		Gid: uint32(os.Getgid()),
-	}
+	out.Attr = d.makeattr()
 	return 0
 }
 
@@ -489,6 +496,7 @@ func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 		d.hasChanges = true
 	}
 
+	out.Attr = d.makeattr()
 	return 0
 }
 
