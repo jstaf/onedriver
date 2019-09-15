@@ -18,10 +18,10 @@ import (
 // that local changes can persist. Should be created using the NewCache()
 // constructor.
 type Cache struct {
-	metadata  sync.Map
-	db        *bolt.DB
-	auth      *Auth
-	mutex     *mu.RWMutex
+	metadata sync.Map
+	db       *bolt.DB
+	auth     *Auth
+	mu.RWMutex
 	root      string // the id of the filesystem's root item
 	deltaLink string
 }
@@ -46,9 +46,8 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		return err
 	})
 	cache := &Cache{
-		auth:  auth,
-		db:    db,
-		mutex: &mu.RWMutex{},
+		auth: auth,
+		db:   db,
 	}
 
 	root, err := GetItem("/", auth)
@@ -71,8 +70,8 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 // GetAuth returns the current auth
 func (c *Cache) GetAuth() *Auth {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.RLock()
+	defer c.RUnlock()
 	return c.auth
 }
 
@@ -248,6 +247,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	item.children = make([]string, 0)
 	for _, child := range fetched.Children {
 		// we will always have an id after fetching from the server
+		child.cache = c
 		c.metadata.Store(child.IDInternal, child)
 
 		// store in result map
