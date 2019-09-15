@@ -615,10 +615,11 @@ func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	// server
 	id := child.ID()
 	if !isLocalID(id) {
-		if err := Remove(name, cache.GetAuth()); err != nil {
+		if err := RemoveID(id, cache.GetAuth()); err != nil {
 			log.WithFields(log.Fields{
 				"err":  err,
-				"path": name,
+				"id":   id,
+				"path": d.Path(),
 			}).Error("Failed to delete item on server. Aborting op.")
 			return syscall.EREMOTEIO
 		}

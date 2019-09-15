@@ -137,6 +137,11 @@ func Remove(path string, auth *Auth) error {
 	return Delete(ResourcePath(path), auth)
 }
 
+// RemoveID removes a directory or file by ID
+func RemoveID(id string, auth *Auth) error {
+	return Delete("/me/drive/items/"+id, auth)
+}
+
 // Mkdir creates a directory on the server.
 func Mkdir(path string, auth *Auth) (*DriveItem, error) {
 	// create a new folder on the server
