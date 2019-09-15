@@ -5,6 +5,7 @@ package graph
 
 import (
 	"bufio"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -363,14 +364,14 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 // becomes populated
 func TestEchoWritesToFile(t *testing.T) {
 	fname := filepath.Join(TestDir, "bagels")
-	out, err := exec.Command("bash", "-c", "echo bagels", ">", fname).CombinedOutput()
+	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
 	if err != nil {
 		t.Log(out)
 		t.Fatal(err)
 	}
 	content, err := ioutil.ReadFile(fname)
 	failOnErr(t, err)
-	if string(content) != "bagels" {
+	if !bytes.Contains(content, []byte("bagels")) {
 		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"\n", content)
 	}
 }
