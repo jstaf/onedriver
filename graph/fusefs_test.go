@@ -393,12 +393,11 @@ func TestStat(t *testing.T) {
 }
 
 // Question marks appear in `ls -l`s output if an item is populated via readdir,
-// but subsequently not found by lookup.
+// but subsequently not found by lookup. Also is a nice catch-all for fs
+// metadata corruption, as `ls` will exit with 1 if something bad happens.
 func TestNoQuestionMarks(t *testing.T) {
 	out, err := exec.Command("ls", "-l", "mount/").CombinedOutput()
-	failOnErr(t, err)
-
-	if strings.Contains(string(out), "??????????") {
+	if strings.Contains(string(out), "??????????") || err != nil {
 		t.Log("A Lookup() failed on an inode found by Readdir()")
 		t.Log(string(out))
 		t.FailNow()

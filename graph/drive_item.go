@@ -265,7 +265,6 @@ func (d *DriveItem) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 // file has not already been uploaded. You can use an empty Auth object if
 // you're sure that the item already has an ID or otherwise don't need to fetch
 // an ID (such as when deleting an item that is only local).
-//TODO move to cache methods
 func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 	if d.IsDir() {
 		// Directories are always created with an ID. (And this method is only

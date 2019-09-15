@@ -185,7 +185,7 @@ func (c *Cache) GetChild(id string, name string, auth *Auth) (*DriveItem, error)
 		return nil, err
 	}
 	for _, child := range children {
-		if child.Name() == name {
+		if strings.ToLower(child.Name()) == strings.ToLower(name) {
 			return child, nil
 		}
 	}
