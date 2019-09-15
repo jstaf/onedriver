@@ -467,7 +467,6 @@ func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 
 	isDir := d.IsDir() // holds an rlock
 	d.mutex.Lock()
-	defer d.mutex.Unlock()
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
@@ -496,6 +495,7 @@ func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAt
 		d.hasChanges = true
 	}
 
+	d.mutex.Unlock()
 	out.Attr = d.makeattr()
 	return 0
 }

@@ -391,3 +391,16 @@ func TestStat(t *testing.T) {
 		t.Fatal("Mode of /Documents wrong, not detected as directory, got: " + string(stat.Mode()))
 	}
 }
+
+// Question marks appear in `ls -l`s output if an item is populated via readdir,
+// but subsequently not found by lookup.
+func TestNoQuestionMarks(t *testing.T) {
+	out, err := exec.Command("ls", "-l", "mount/").CombinedOutput()
+	failOnErr(t, err)
+
+	if strings.Contains(string(out), "??????????") {
+		t.Log("A Lookup() failed on an inode found by Readdir()")
+		t.Log(string(out))
+		t.FailNow()
+	}
+}
