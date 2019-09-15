@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"flag"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -41,7 +40,7 @@ func TestMain(m *testing.M) {
 	root := NewFS("test.db")
 	auth = root.GetCache().GetAuth()
 	second := time.Second
-	server, _ := fs.Mount(flag.Arg(0), root, &fs.Options{
+	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,
 	})
@@ -52,7 +51,8 @@ func TestMain(m *testing.M) {
 	go UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
-	go server.Serve()
+	go server.Wait()
+
 	// cleanup from last run
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
