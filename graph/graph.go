@@ -8,10 +8,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -132,30 +132,25 @@ func GetItemContent(id string, auth *Auth) ([]byte, error) {
 	return Get("/me/drive/items/"+id+"/content", auth)
 }
 
-// Remove a directory or file (does both rmdir and unlink).
-func Remove(path string, auth *Auth) error {
-	return Delete(ResourcePath(path), auth)
-}
-
-// RemoveID removes a directory or file by ID
-func RemoveID(id string, auth *Auth) error {
+// Remove removes a directory or file by ID
+func Remove(id string, auth *Auth) error {
 	return Delete("/me/drive/items/"+id, auth)
 }
 
-// Mkdir creates a directory on the server.
-func Mkdir(path string, auth *Auth) (*DriveItem, error) {
+// Mkdir creates a directory on the server at the specified parent ID.
+func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
 	// create a new folder on the server
 	newFolderPost := APIItem{
-		NameInternal: filepath.Base(path),
+		NameInternal: name,
 		Folder:       &Folder{},
 	}
 	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(ChildrenPath(filepath.Dir(path)), auth, bytes.NewReader(bytePayload))
+	resp, err := Post(ChildrenPathID(parentID), auth, bytes.NewReader(bytePayload))
 	if err != nil {
 		return nil, err
 	}
 
-	item := NewDriveItem(filepath.Base(path), 0755, nil)
+	item := NewDriveItem(name, 0755|fuse.S_IFDIR, nil)
 	err = json.Unmarshal(resp, &item)
 	return item, err
 }

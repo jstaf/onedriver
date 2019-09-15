@@ -1,13 +1,13 @@
 package graph
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -553,6 +553,10 @@ func ignore(path string) bool {
 	return false
 }
 
+func octal(i uint32) string {
+	return strconv.FormatUint(uint64(i), 8)
+}
+
 // Create a new local file. The server doesn't have this yet. The uint32 part of
 // the return are fuseflags.
 func (d *DriveItem) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
@@ -560,26 +564,26 @@ func (d *DriveItem) Create(ctx context.Context, name string, flags uint32, mode 
 	log.WithFields(log.Fields{
 		"path": path,
 		"name": name,
-		"mode": mode,
+		"mode": octal(mode),
 	}).Debug()
 
 	item := NewDriveItem(name, mode, d)
 	d.GetCache().InsertChild(d.ID(), item)
-	return item.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
+	return d.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }
 
 // Mkdir creates a directory.
 func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"name": name,
+		"mode": octal(mode),
+	}).Debug()
 	cache := d.GetCache()
 	auth := cache.GetAuth()
 
 	// create a new folder on the server
-	newFolderPost := APIItem{
-		NameInternal: filepath.Base(name),
-		Folder:       &Folder{},
-	}
-	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(ChildrenPath(filepath.Dir(name)), auth, bytes.NewReader(bytePayload))
+	item, err := Mkdir(name, d.ID(), auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
@@ -587,13 +591,6 @@ func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 		}).Error("Error during directory creation:")
 		return nil, syscall.EREMOTEIO
 	}
-
-	// Now create and unmarshal the response into the new folder so that it has
-	// an ID (otherwise things involving this folder will fail later). Mutexes
-	// are not required here since no other thread will proceed until the
-	// directory has been created.
-	item := NewDriveItem(name, mode, d)
-	json.Unmarshal(resp, item)
 	cache.InsertChild(d.ID(), item)
 	return d.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFDIR}), 0
 }
@@ -601,7 +598,8 @@ func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 // Unlink a child file.
 func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	log.WithFields(log.Fields{
-		"path": filepath.Join(d.Path(), name),
+		"path": d.Path(),
+		"name": name,
 	}).Debug("Unlinking inode.")
 
 	cache := d.GetCache()
@@ -615,7 +613,7 @@ func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	// server
 	id := child.ID()
 	if !isLocalID(id) {
-		if err := RemoveID(id, cache.GetAuth()); err != nil {
+		if err := Remove(id, cache.GetAuth()); err != nil {
 			log.WithFields(log.Fields{
 				"err":  err,
 				"id":   id,
