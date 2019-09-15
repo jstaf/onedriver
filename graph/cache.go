@@ -148,7 +148,7 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 func (c *Cache) InsertChild(parentID string, child *DriveItem) {
 	child.mutex.Lock()
 	// should already be set, just double-checking here.
-	child.Parent.ID = parentID
+	child.APIItem.Parent.ID = parentID
 	id := child.IDInternal
 	child.mutex.Unlock()
 	c.InsertID(id, child)
@@ -340,7 +340,7 @@ func (c *Cache) InsertPath(key string, auth *Auth, item *DriveItem) error {
 	// detector (lock ordering needs to be the same as InsertID: Parent->Child).
 	parentID := parent.ID()
 	item.mutex.Lock()
-	item.Parent.ID = parentID
+	item.APIItem.Parent.ID = parentID
 	item.mutex.Unlock()
 
 	c.InsertID(item.ID(), item)

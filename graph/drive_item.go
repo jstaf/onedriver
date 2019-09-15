@@ -41,6 +41,19 @@ type Deleted struct {
 	State string `json:"state,omitempty"`
 }
 
+// APIItem contains the data fields from the Graph API
+type APIItem struct {
+	IDInternal       string           `json:"id,omitempty"`
+	NameInternal     string           `json:"name,omitempty"`
+	SizeInternal     uint64           `json:"size,omitempty"`
+	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
+	Parent           *DriveItemParent `json:"parentReference,omitempty"`
+	Folder           *Folder          `json:"folder,omitempty"`
+	FileInternal     *File            `json:"file,omitempty"`
+	Deleted          *Deleted         `json:"deleted,omitempty"`
+	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
+}
+
 // DriveItem represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON
 // if not present. Fields named "xxxxxInternal" should never be accessed, they
@@ -51,7 +64,8 @@ type Deleted struct {
 // operations like Flush.
 type DriveItem struct {
 	// fs fields
-	fs.Inode
+	fs.Inode `json:"-"`
+	APIItem
 	cache         *Cache
 	mutex         mu.RWMutex     // used to be a pointer, but fs.Inode also embeds a mutex :(
 	children      []string       // a slice of ids, nil when uninitialized
@@ -60,17 +74,6 @@ type DriveItem struct {
 	hasChanges    bool           // used to trigger an upload on flush
 	subdir        uint32         // used purely by NLink()
 	mode          uint32         // do not set manually
-
-	// API-specific fields
-	IDInternal       string           `json:"id,omitempty"`
-	NameInternal     string           `json:"name,omitempty"`
-	SizeInternal     uint64           `json:"size,omitempty"`
-	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	Folder           *Folder          `json:"folder,omitempty"`
-	FileInternal     *File            `json:"file,omitempty"`
-	Deleted          *Deleted         `json:"deleted,omitempty"`
-	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
 }
 
 // NewDriveItem initializes a new DriveItem
@@ -84,13 +87,15 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	var empty []byte
 	currentTime := time.Now()
 	return &DriveItem{
-		IDInternal:      localID(),
-		NameInternal:    name,
-		Parent:          itemParent,
-		children:        make([]string, 0),
-		data:            &empty,
-		ModTimeInternal: &currentTime,
-		mode:            mode,
+		APIItem: APIItem{
+			IDInternal:      localID(),
+			NameInternal:    name,
+			Parent:          itemParent,
+			ModTimeInternal: &currentTime,
+		},
+		children: make([]string, 0),
+		data:     &empty,
+		mode:     mode,
 	}
 }
 
@@ -142,10 +147,10 @@ func (d *DriveItem) ID() string {
 func (d *DriveItem) ParentID() string {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
-	if d.Parent == nil {
+	if d.APIItem.Parent == nil {
 		return ""
 	}
-	return d.Parent.ID
+	return d.APIItem.Parent.ID
 }
 
 // GetCache is used for thread-safe access to the cache field
@@ -315,10 +320,10 @@ func (d *DriveItem) Path() string {
 	// all paths come prefixed with "/drive/root:"
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
-	if d.Parent == nil {
+	if d.APIItem.Parent == nil {
 		return name
 	}
-	prepath := strings.TrimPrefix(d.Parent.Path+"/"+name, "/drive/root:")
+	prepath := strings.TrimPrefix(d.APIItem.Parent.Path+"/"+name, "/drive/root:")
 	return strings.Replace(prepath, "//", "/", -1)
 }
 
@@ -569,7 +574,7 @@ func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 	auth := cache.GetAuth()
 
 	// create a new folder on the server
-	newFolderPost := DriveItem{
+	newFolderPost := APIItem{
 		NameInternal: filepath.Base(name),
 		Folder:       &Folder{},
 	}

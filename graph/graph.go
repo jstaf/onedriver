@@ -140,7 +140,7 @@ func Remove(path string, auth *Auth) error {
 // Mkdir creates a directory on the server.
 func Mkdir(path string, auth *Auth) (*DriveItem, error) {
 	// create a new folder on the server
-	newFolderPost := DriveItem{
+	newFolderPost := APIItem{
 		NameInternal: filepath.Base(path),
 		Folder:       &Folder{},
 	}
@@ -160,7 +160,7 @@ func Mkdir(path string, auth *Auth) (*DriveItem, error) {
 func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 	// start creating patch content for server
 	// mutex does not need to be initialized since it is never used locally
-	patchContent := DriveItem{
+	patchContent := APIItem{
 		ConflictBehavior: "replace", // overwrite existing content at new location
 		NameInternal:     itemName,
 		Parent: &DriveItemParent{
