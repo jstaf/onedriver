@@ -375,8 +375,10 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	item.IDInternal = newID
 	item.mutex.Unlock()
 
+	// now actually perform the metadata+content move
 	c.DeleteID(oldID)
 	c.InsertID(newID, item)
+	c.MoveContent(oldID, newID)
 	return nil
 }
 
@@ -427,5 +429,19 @@ func (c *Cache) DeleteContent(id string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("content"))
 		return b.Delete([]byte(id))
+	})
+}
+
+// MoveContent moves content from one ID to another
+func (c *Cache) MoveContent(oldID string, newID string) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("content"))
+		content := b.Get([]byte(oldID))
+		if content == nil {
+			return errors.New("Content not found for ID: " + oldID)
+		}
+		b.Put([]byte(newID), content)
+		b.Delete([]byte(oldID))
+		return nil
 	})
 }

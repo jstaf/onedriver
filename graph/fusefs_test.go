@@ -316,8 +316,6 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 // (allow rename/overwrite for exact matches, deny when case-sensitivity would
 // normally allow success)
 func TestNTFSIsABadFilesystem3(t *testing.T) {
-	//TODO there's a race condition somewhere in Rename() that causes this test
-	// to intermittently fail.
 	fname := filepath.Join(TestDir, "original_NAME.txt")
 	ioutil.WriteFile(fname, []byte("original"), 0644)
 
@@ -357,3 +355,5 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 			"expected \"CASE-check.txt\" in output, got %s\n", string(stdout))
 	}
 }
+
+//TODO test when running "echo some text > file.txt" that file.txt actually becomes populated

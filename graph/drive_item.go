@@ -211,7 +211,10 @@ func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Err
 
 // Readdir returns a list of directory entries (formerly OpenDir).
 func (d *DriveItem) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"id":   d.ID(),
+	}).Debug()
 
 	cache := d.GetCache()
 	// directories are always created with a remote graph id
@@ -244,11 +247,12 @@ func (d *DriveItem) Lookup(ctx context.Context, name string, out *fuse.EntryOut)
 	}
 	log.WithFields(log.Fields{
 		"path": d.Path(),
+		"id":   d.ID(),
 		"name": name,
 	}).Trace()
 
 	cache := d.GetCache()
-	child, _ := cache.GetChild(d.ID(), name, cache.GetAuth())
+	child, _ := cache.GetChild(d.ID(), strings.ToLower(name), cache.GetAuth())
 	if child == nil {
 		return nil, syscall.ENOENT
 	}
@@ -399,7 +403,10 @@ func (d *DriveItem) HasContent() bool {
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
 func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
-	log.WithFields(log.Fields{"path": d.Path()}).Debug()
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"id":   d.ID(),
+	}).Debug()
 	d.mutex.Lock()
 	if d.hasChanges {
 		d.hasChanges = false
@@ -425,7 +432,10 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 // Getattr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
 // of the "metadata fetch" operations.
 func (d *DriveItem) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	log.WithFields(log.Fields{"path": d.Path()}).Trace()
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"id":   d.ID(),
+	}).Trace()
 
 	out.Size = d.Size()
 	out.Nlink = d.NLink()
@@ -445,6 +455,7 @@ func (d *DriveItem) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.Attr
 func (d *DriveItem) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	log.WithFields(log.Fields{
 		"path": d.Path(),
+		"id":   d.ID(),
 	}).Trace()
 
 	isDir := d.IsDir() // holds an rlock
@@ -599,6 +610,7 @@ func (d *DriveItem) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	log.WithFields(log.Fields{
 		"path": d.Path(),
+		"id":   d.ID(),
 		"name": name,
 	}).Debug("Unlinking inode.")
 
@@ -641,6 +653,7 @@ func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeE
 	log.WithFields(log.Fields{
 		"path": path,
 		"dest": dest,
+		"id":   d.ID(),
 	}).Debug("Renaming inode.")
 
 	auth := cache.GetAuth()
@@ -662,7 +675,7 @@ func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeE
 		log.WithFields(log.Fields{
 			"path": filepath.Dir(dest),
 			"err":  err,
-		}).Error("Failed to fetch new parent item.")
+		}).Error("Failed to fetch new parent item by path.")
 		return syscall.ENOENT
 	}
 
@@ -705,7 +718,11 @@ func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeE
 // persisted to disk on Flush.
 func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	path := d.Path()
-	log.WithFields(log.Fields{"path": path}).Debug("Opening file for I/O.")
+	id := d.ID()
+	log.WithFields(log.Fields{
+		"path": path,
+		"id":   id,
+	}).Debug("Opening file for I/O.")
 
 	if d.HasContent() {
 		// we already have data, likely the file is already opened somewhere
@@ -713,7 +730,6 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	}
 
 	// try grabbing from disk
-	id := d.ID()
 	cache := d.GetCache()
 	if content := cache.GetContent(id); content != nil {
 		// TODO should verify from cache using hash from server
