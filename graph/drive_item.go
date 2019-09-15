@@ -328,7 +328,7 @@ func (d *DriveItem) Path() string {
 }
 
 // Read from a DriveItem like a file
-func (d *DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
+func (d *DriveItem) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	end := int(off) + int(len(buf))
 	oend := end
 	size := int(d.Size())
@@ -341,7 +341,7 @@ func (d *DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 			"offset":    off,
 		}).Error("Offset was beyond file end (Onedrive metadata was wrong)! " +
 			"Refusing op to avoid a segfault.")
-		return fuse.ReadResultData(make([]byte, 0)), fuse.EINVAL
+		return fuse.ReadResultData(make([]byte, 0)), syscall.EINVAL
 	}
 	if end > size {
 		// d.Size() called once for one fewer RLock
@@ -358,12 +358,12 @@ func (d *DriveItem) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
-	return fuse.ReadResultData((*d.data)[off:end]), fuse.OK
+	return fuse.ReadResultData((*d.data)[off:end]), 0
 }
 
 // Write to a DriveItem like a file. Note that changes are 100% local until
 // Flush() is called.
-func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
+func (d *DriveItem) Write(ctx context.Context, f fs.FileHandle, data []byte, off int64) (uint32, syscall.Errno) {
 	nWrite := len(data)
 	offset := int(off)
 	log.WithFields(log.Fields{
@@ -386,7 +386,7 @@ func (d *DriveItem) Write(data []byte, off int64) (uint32, fuse.Status) {
 	d.SizeInternal = uint64(len(*d.data))
 	d.hasChanges = true
 
-	return uint32(nWrite), fuse.OK
+	return uint32(nWrite), 0
 }
 
 // HasContent returns whether the file has been populated with data
@@ -398,7 +398,7 @@ func (d *DriveItem) HasContent() bool {
 
 // Flush is called when a file descriptor is closed. This is responsible for all
 // uploads of file contents.
-func (d *DriveItem) Flush() fuse.Status {
+func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	log.WithFields(log.Fields{"path": d.Path()}).Debug()
 	d.mutex.Lock()
 	if d.hasChanges {
@@ -413,13 +413,13 @@ func (d *DriveItem) Flush() fuse.Status {
 				"id":   d.ID(),
 				"name": d.Name(),
 			}).Error("Driveitem cache ref cannot be nil!")
-			return fuse.ENODATA
+			return syscall.ENODATA
 		}
 		go d.Upload(cache.auth)
-		return fuse.OK
+		return 0
 	}
 	d.mutex.Unlock()
-	return fuse.OK
+	return 0
 }
 
 // Getattr returns a the DriveItem as a UNIX stat. Holds the read mutex for all
