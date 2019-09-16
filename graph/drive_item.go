@@ -400,9 +400,9 @@ func (d *DriveItem) HasContent() bool {
 	return d.data != nil
 }
 
-// Flush is called when a file descriptor is closed. This is responsible for all
-// uploads of file contents.
-func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
+// Fsync is a signal to ensure writes to the Inode are flushed to stable
+// storage. This method is used to trigger uploads of file content.
+func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscall.Errno {
 	log.WithFields(log.Fields{
 		"path": d.Path(),
 		"id":   d.ID(),
@@ -420,13 +420,23 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 				"id":   d.ID(),
 				"name": d.Name(),
 			}).Error("Driveitem cache ref cannot be nil!")
-			return syscall.ENODATA
+			return syscall.EINVAL
 		}
 		go d.Upload(cache.auth)
 		return 0
 	}
 	d.mutex.Unlock()
 	return 0
+}
+
+// Flush is called when a file descriptor is closed. Uses Fsync to perform file
+// uploads.
+func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
+	log.WithFields(log.Fields{
+		"path": d.Path(),
+		"id":   d.ID(),
+	}).Debug("Forcing Fsync")
+	return d.Fsync(ctx, f, 0)
 }
 
 func (d *DriveItem) makeattr() fuse.Attr {
