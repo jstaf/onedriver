@@ -1,5 +1,5 @@
 Name:           onedriver
-Version:        0.3
+Version:        0.4
 Release:        1%{?dist}
 Summary:        A native FUSE filesystem for Microsoft Onedrive
 
@@ -35,5 +35,8 @@ cp %{name}* %{buildroot}/%{_bindir}
 %attr(755, root, root) %{_bindir}/%{name}
 
 %changelog
+* Sun Sep 15 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.4
+- Port to go-fuse version 2 and the new nodefs API for improved performance.
+
 * Sat Sep 7 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.3
 - Initial .spec file

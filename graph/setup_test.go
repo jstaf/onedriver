@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
+	"time"
 
-	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 	os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-u", mountLoc).Run()
+	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 	// wipe all cached data from previous tests
 	toDelete, _ := filepath.Glob("test*.db")
@@ -37,10 +37,13 @@ func TestMain(m *testing.M) {
 		os.Remove(db)
 	}
 
-	fusefs := NewFS("test.db")
-	auth = fusefs.Auth
-	fs := pathfs.NewPathNodeFs(fusefs, nil)
-	server, _, _ := nodefs.MountRoot(mountLoc, fs.Root(), nil)
+	root := NewFS("test.db")
+	auth = root.GetCache().GetAuth()
+	second := time.Second
+	server, _ := fs.Mount(mountLoc, root, &fs.Options{
+		EntryTimeout: &second,
+		AttrTimeout:  &second,
+	})
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
@@ -49,6 +52,7 @@ func TestMain(m *testing.M) {
 
 	// mount fs in background thread
 	go server.Serve()
+
 	// cleanup from last run
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)

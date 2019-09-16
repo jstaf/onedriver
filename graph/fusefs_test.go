@@ -1,7 +1,11 @@
+// A bunch of "black box" filesystem integration tests that test the
+// functionality of key syscalls and their implementation. If something fails
+// here, the filesystem is not functional.
 package graph
 
 import (
 	"bufio"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -316,8 +320,6 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 // (allow rename/overwrite for exact matches, deny when case-sensitivity would
 // normally allow success)
 func TestNTFSIsABadFilesystem3(t *testing.T) {
-	//TODO there's a race condition somewhere in Rename() that causes this test
-	// to intermittently fail.
 	fname := filepath.Join(TestDir, "original_NAME.txt")
 	ioutil.WriteFile(fname, []byte("original"), 0644)
 
@@ -355,5 +357,50 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 	if !strings.Contains(string(stdout), "CASE-check.txt") {
 		t.Fatalf("Upper case filenames were not honored, "+
 			"expected \"CASE-check.txt\" in output, got %s\n", string(stdout))
+	}
+}
+
+// Test that when running "echo some text > file.txt" that file.txt actually
+// becomes populated
+func TestEchoWritesToFile(t *testing.T) {
+	fname := filepath.Join(TestDir, "bagels")
+	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
+	if err != nil {
+		t.Log(out)
+		t.Fatal(err)
+	}
+	content, err := ioutil.ReadFile(fname)
+	failOnErr(t, err)
+	if !bytes.Contains(content, []byte("bagels")) {
+		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"\n", content)
+	}
+}
+
+// Test that if we stat a file, we get some correct information back
+func TestStat(t *testing.T) {
+	stat, err := os.Stat("mount/Documents")
+	failOnErr(t, err)
+	if stat.Name() != "Documents" {
+		t.Fatalf("Name was not \"Documents\", got \"%s\" instead.\n", stat.Name())
+	}
+
+	if stat.ModTime().Year() < 1971 {
+		t.Fatal("Modification time of /Documents wrong, got: " + stat.ModTime().String())
+	}
+
+	if !stat.IsDir() {
+		t.Fatal("Mode of /Documents wrong, not detected as directory, got: " + string(stat.Mode()))
+	}
+}
+
+// Question marks appear in `ls -l`s output if an item is populated via readdir,
+// but subsequently not found by lookup. Also is a nice catch-all for fs
+// metadata corruption, as `ls` will exit with 1 if something bad happens.
+func TestNoQuestionMarks(t *testing.T) {
+	out, err := exec.Command("ls", "-l", "mount/").CombinedOutput()
+	if strings.Contains(string(out), "??????????") || err != nil {
+		t.Log("A Lookup() failed on an inode found by Readdir()")
+		t.Log(string(out))
+		t.FailNow()
 	}
 }

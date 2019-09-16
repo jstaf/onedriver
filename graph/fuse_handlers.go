@@ -4,7 +4,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	log "github.com/sirupsen/logrus"
 )
 
