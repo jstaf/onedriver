@@ -28,7 +28,7 @@ GOOS=linux go build
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/%{_bindir}
-cp %{name}* %{buildroot}/%{_bindir}
+cp %{name} %{buildroot}/%{_bindir}
 
 %files
 %defattr(-,root,root,-)

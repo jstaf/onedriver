@@ -12,6 +12,7 @@ onedriver.deb: onedriver
 
 rpm: onedriver.spec
 	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
+	mkdir -p ~/rpmbuild/SOURCES
 	spectool -g -R $<
 	# skip generation of debuginfo package
 	rpmbuild -bb --define "debug_package %{nil}" $<
