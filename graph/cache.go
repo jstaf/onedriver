@@ -18,13 +18,14 @@ import (
 // that local changes can persist. Should be created using the NewCache()
 // constructor.
 type Cache struct {
-	metadata sync.Map
-	db       *bolt.DB
-	auth     *Auth
-	mu.RWMutex
+	metadata  sync.Map
+	db        *bolt.DB
 	root      string // the id of the filesystem's root item
 	deltaLink string
 	uploads   *UploadManager
+
+	mu.RWMutex
+	auth *Auth
 }
 
 // NewFS is a wrapper around NewCache

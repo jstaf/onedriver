@@ -63,11 +63,11 @@ type APIItem struct {
 // implementing something like the fs.FileHandle to minimize the complexity of
 // operations like Flush.
 type DriveItem struct {
-	// fs fields
 	fs.Inode `json:"-"`
+
+	mutex mu.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
 	APIItem
 	cache         *Cache
-	mutex         mu.RWMutex     // used to be a pointer, but fs.Inode also embeds a mutex :(
 	children      []string       // a slice of ids, nil when uninitialized
 	uploadSession *UploadSession // current upload session, or nil
 	data          *[]byte        // empty by default

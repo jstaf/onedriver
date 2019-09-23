@@ -35,8 +35,9 @@ type UploadSession struct {
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"-"`
 	data               []byte
-	mutex              mu.Mutex
-	state              int
+
+	mutex mu.Mutex
+	state int
 }
 
 // UploadSessionPost is the initial post used to create an upload session
