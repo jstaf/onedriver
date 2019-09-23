@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	mu "github.com/sasha-s/go-deadlock"
@@ -159,7 +160,7 @@ func (u *UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, err
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
-	log.Info("Uploading ", frags)
+	log.WithField("id", u.ID).Info("Uploading ", frags)
 	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)
@@ -176,6 +177,7 @@ func (u *UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, err
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time.
 func (u *UploadSession) Upload(auth *Auth) error {
+	log.WithField("id", u.ID).Debug("Uploading file.")
 	u.setState(started)
 	if !u.isLargeSession() {
 		resp, err := Put(
@@ -183,6 +185,16 @@ func (u *UploadSession) Upload(auth *Auth) error {
 			auth,
 			bytes.NewReader(u.data),
 		)
+		if err != nil && strings.Contains(err.Error(), "resourceModified") {
+			// retry the request after a second, likely the server is having issues
+			time.Sleep(time.Second)
+			resp, err = Put(
+				fmt.Sprintf("/me/drive/items/%s/content", u.ID),
+				auth,
+				bytes.NewReader(u.data),
+			)
+		}
+
 		u.setState(complete)
 		if err != nil {
 			u.setState(errored)
