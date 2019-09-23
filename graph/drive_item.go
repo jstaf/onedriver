@@ -378,6 +378,14 @@ func (d *DriveItem) Write(ctx context.Context, f fs.FileHandle, data []byte, off
 		"offset":  off,
 	}).Tracef("Write file")
 
+	if !d.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   d.ID(),
+			"path": d.Path(),
+		}).Warn("Write called on a closed file descriptor! Reopening file for write op.")
+		d.Open(ctx, 0)
+	}
+
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	if offset+nWrite > int(d.SizeInternal)-1 {
@@ -434,13 +442,13 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	}).Debug("Forcing Fsync")
 	d.Fsync(ctx, f, 0)
 
-	//	// wipe data from memory
-	//	d.mutex.Lock()
-	//	if d.data != nil {
-	//		d.cache.InsertContent(d.IDInternal, *d.data)
-	//		d.data = nil
-	//	}
-	//	d.mutex.Unlock()
+	// wipe data from memory to avoid mem bloat over time
+	d.mutex.Lock()
+	if d.data != nil {
+		d.cache.InsertContent(d.IDInternal, *d.data)
+		d.data = nil
+	}
+	d.mutex.Unlock()
 	return 0
 }
 

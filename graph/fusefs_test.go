@@ -379,7 +379,7 @@ func TestEchoWritesToFile(t *testing.T) {
 	fname := filepath.Join(TestDir, "bagels")
 	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
 	if err != nil {
-		t.Log(out)
+		t.Log(string(out))
 		t.Fatal(err)
 	}
 	content, err := ioutil.ReadFile(fname)
