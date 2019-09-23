@@ -61,7 +61,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
-	cache.uploads = NewUploadManager(5*time.Second, auth)
+	cache.uploads = NewUploadManager(2*time.Second, auth)
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache

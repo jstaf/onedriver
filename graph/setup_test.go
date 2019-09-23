@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -71,6 +72,12 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	log.Info("Test session end -----------------------------------")
+	fmt.Printf("Waiting 5 seconds for any remaining uploads to complete")
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Second)
+		fmt.Printf(".")
+	}
+	fmt.Printf("\n")
 
 	// unmount
 	err := server.Unmount()
@@ -78,7 +85,7 @@ func TestMain(m *testing.M) {
 		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}
-	log.Info("Successfully unmounted fuse server.")
+	fmt.Println("Successfully unmounted fuse server!")
 	os.Exit(code)
 }
 
