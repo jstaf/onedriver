@@ -115,9 +115,25 @@ func ChildrenPathID(id string) string {
 	return "/me/drive/items/" + id + "/children"
 }
 
-// GetItem fetches a DriveItem by path. Only used in special cases, like for the
+// GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
+func GetItem(id string, auth *Auth) (*DriveItem, error) {
+	path := "/me/drive/items/" + id
+	if id == "root" {
+		path = "/me/drive/root"
+	}
+
+	body, err := Get(path, auth)
+	item := &DriveItem{}
+	if err != nil {
+		return item, err
+	}
+	err = json.Unmarshal(body, item)
+	return item, err
+}
+
+// GetItemPath fetches a DriveItem by path. Only used in special cases, like for the
 // root item.
-func GetItem(path string, auth *Auth) (*DriveItem, error) {
+func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(ResourcePath(path), auth)
 	item := &DriveItem{}
 	if err != nil {

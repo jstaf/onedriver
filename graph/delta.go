@@ -14,17 +14,15 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 	for { // eva
 		// get deltas
 		log.Debug("Syncing deltas from server.")
-		for {
-			//TODO should poll and dedup deltas here, then act on them in a
-			// separate block
-			cont, err := c.pollDeltas(c.auth)
-			if err != nil {
-				log.Error(err)
-				break
-			}
-			if !cont {
-				break
-			}
+		//TODO should poll and dedup deltas here, then act on them in a
+		// separate block
+		cont, err := c.pollDeltas(c.auth)
+		if err != nil {
+			log.Error(err)
+			break
+		}
+		if !cont {
+			break
 		}
 		log.Debug("Sync complete!")
 		time.Sleep(interval)

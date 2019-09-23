@@ -282,12 +282,13 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				if id := d.ID(); !isLocalID(id) {
+				id := d.ID()
+				if !isLocalID(id) {
 					return id, nil
 				}
 
 				// Does the server have it?
-				latest, err := GetItem(d.Path(), auth)
+				latest, err := GetItem(id, auth)
 				if err == nil {
 					// hooray!
 					err := d.GetCache().MoveID(originalID, latest.IDInternal)
@@ -404,25 +405,20 @@ func (d *DriveItem) HasContent() bool {
 // storage. This method is used to trigger uploads of file content.
 func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscall.Errno {
 	log.WithFields(log.Fields{
-		"path": d.Path(),
 		"id":   d.ID(),
+		"path": d.Path(),
 	}).Debug()
 	d.mutex.Lock()
 	if d.hasChanges {
 		d.hasChanges = false
 		d.mutex.Unlock()
-
-		// ensureID() is no longer used here to make upload dispatch even faster
-		// (since upload is using ensureID() internally)
-		cache := d.GetCache()
-		if cache == nil {
+		if err := d.cache.uploads.QueueUpload(d); err != nil {
 			log.WithFields(log.Fields{
-				"id":   d.ID(),
-				"name": d.Name(),
-			}).Error("Driveitem cache ref cannot be nil!")
-			return syscall.EINVAL
+				"id":  d.IDInternal,
+				"err": err,
+			}).Error("Error creating upload session.")
+			return syscall.EREMOTEIO
 		}
-		go d.Upload(cache.auth)
 		return 0
 	}
 	d.mutex.Unlock()
@@ -436,7 +432,16 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 		"path": d.Path(),
 		"id":   d.ID(),
 	}).Debug("Forcing Fsync")
-	return d.Fsync(ctx, f, 0)
+	d.Fsync(ctx, f, 0)
+
+	//	// wipe data from memory
+	//	d.mutex.Lock()
+	//	if d.data != nil {
+	//		d.cache.InsertContent(d.IDInternal, *d.data)
+	//		d.data = nil
+	//	}
+	//	d.mutex.Unlock()
+	return 0
 }
 
 func (d *DriveItem) makeattr() fuse.Attr {

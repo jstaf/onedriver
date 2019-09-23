@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 	log.SetReportCaller(true)
 	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.DebugLevel)
-	log.Info("Test session start -----------------------------------")
+	log.Info("Test session start ---------------------------------")
 
 	// run tests
 	code := m.Run()

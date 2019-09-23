@@ -24,10 +24,10 @@ type Cache struct {
 	mu.RWMutex
 	root      string // the id of the filesystem's root item
 	deltaLink string
+	uploads   *UploadManager
 }
 
 // NewFS is a wrapper around NewCache
-//TODO refactor this out
 func NewFS(dbpath string) *DriveItem {
 	auth := Authenticate()
 	cache := NewCache(auth, dbpath)
@@ -50,7 +50,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		db:   db,
 	}
 
-	root, err := GetItem("/", auth)
+	root, err := GetItem("root", auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
@@ -60,10 +60,11 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
+	cache.uploads = NewUploadManager(5*time.Second, auth)
+
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
 	cache.deltaLink = "/me/drive/root/delta?token=latest"
-
 	// deltaloop is started manually
 	return cache
 }

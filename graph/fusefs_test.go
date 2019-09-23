@@ -6,6 +6,7 @@ package graph
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -252,11 +253,10 @@ func TestUnlink(t *testing.T) {
 // copy large file inside onedrive mount, then verify that we can still
 // access selected lines
 func TestUploadSession(t *testing.T) {
-	fname := "dmel.fa"
-	dname := filepath.Join(TestDir, "dmel.fa")
-	failOnErr(t, exec.Command("cp", fname, dname).Run())
+	fname := filepath.Join(TestDir, "dmel.fa")
+	failOnErr(t, exec.Command("cp", "dmel.fa", fname).Run())
 
-	contents, err := ioutil.ReadFile(dname)
+	contents, err := ioutil.ReadFile(fname)
 	failOnErr(t, err)
 
 	header := ">X dna:chromosome chromosome:BDGP6.22:X:1:23542271:1 REF"
@@ -272,10 +272,23 @@ func TestUploadSession(t *testing.T) {
 			final, match)
 	}
 
-	st, _ := os.Stat(dname)
+	st, _ := os.Stat(fname)
 	if st.Size() == 0 {
 		t.Fatal("File size cannot be 0.")
 	}
+
+	// poll endpoint to make sure it has a size greater than 0
+	size := uint64(len(contents))
+	for i := 0; i < 60; i++ {
+		time.Sleep(time.Second)
+		fmt.Printf(".")
+		item, _ := GetItemPath("/onedriver_tests/dmel.fa", auth)
+		if item != nil && item.Size() == size {
+			fmt.Printf("\n")
+			return
+		}
+	}
+	t.Fatalf("\nUpload session did not complete successfully!")
 }
 
 func TestIgnoredFiles(t *testing.T) {
