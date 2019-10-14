@@ -29,11 +29,11 @@ type Cache struct {
 }
 
 // NewFS is a wrapper around NewCache
-func NewFS(dbpath string) *DriveItem {
+func NewFS(dbpath string, deltaInterval time.Duration) *DriveItem {
 	auth := Authenticate()
 	cache := NewCache(auth, dbpath)
 	root, _ := cache.GetPath("/", auth)
-	go cache.deltaLoop(5 * time.Second)
+	go cache.deltaLoop(deltaInterval)
 	return root
 }
 

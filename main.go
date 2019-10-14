@@ -66,7 +66,7 @@ func main() {
 	log.Info("onedriver v", onedriverVersion)
 
 	// setup filesystem
-	root := graph.NewFS("onedriver.db")
+	root := graph.NewFS("onedriver.db", 30*time.Second)
 	second := time.Second
 	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
 		EntryTimeout: &second,

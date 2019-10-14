@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.DebugLevel)
 
-	root := NewFS("test.db")
+	root := NewFS("test.db", 5*time.Second)
 	auth = root.GetCache().GetAuth()
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
