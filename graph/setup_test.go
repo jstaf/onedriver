@@ -39,6 +39,13 @@ func TestMain(m *testing.M) {
 		os.Remove(db)
 	}
 
+	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	defer logFile.Close()
+	log.SetOutput(logFile)
+	log.SetReportCaller(true)
+	log.SetFormatter(logger.LogrusFormatter())
+	log.SetLevel(log.DebugLevel)
+
 	root := NewFS("test.db")
 	auth = root.GetCache().GetAuth()
 	second := time.Second
@@ -56,18 +63,13 @@ func TestMain(m *testing.M) {
 	go server.Serve()
 
 	// cleanup from last run
+	log.Info("Setup test environment ---------------------------------")
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
 	os.Mkdir(DeltaDir, 0755)
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
 
-	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.SetReportCaller(true)
-	log.SetFormatter(logger.LogrusFormatter())
-	log.SetLevel(log.DebugLevel)
 	log.Info("Test session start ---------------------------------")
 
 	// run tests
