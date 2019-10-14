@@ -666,6 +666,7 @@ func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	}
 
 	cache.DeleteID(id)
+	cache.DeleteContent(id)
 	return 0
 }
 
