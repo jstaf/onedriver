@@ -28,15 +28,6 @@ type Cache struct {
 	auth *Auth
 }
 
-// NewFS is a wrapper around NewCache
-func NewFS(dbpath string, deltaInterval time.Duration) *DriveItem {
-	auth := Authenticate()
-	cache := NewCache(auth, dbpath)
-	root, _ := cache.GetPath("/", auth)
-	go cache.deltaLoop(deltaInterval)
-	return root
-}
-
 // NewCache creates a new Cache
 func NewCache(auth *Auth, dbpath string) *Cache {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
