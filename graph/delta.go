@@ -13,57 +13,66 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		log.Debug("Syncing deltas from server.")
-		//TODO should poll and dedup deltas here, then act on them in a
-		// separate block
+		log.Debug("Fetching deltas from server.")
+		deltas := make(map[string]*DriveItem)
 		for {
-			cont, err := c.pollDeltas(c.auth)
+			incoming, cont, err := c.pollDeltas(c.auth)
 			if err != nil {
-				log.WithField("err", err).Error("Error during sync.")
+				log.WithField("err", err).Error("Error during delta fetch.")
 				break
 			}
+
+			for _, delta := range incoming {
+				// As per the API docs, the last delta received from the server
+				// for an item is the one we should use.
+				deltas[delta.ID()] = delta
+			}
 			if !cont {
-				log.Debug("Sync complete!")
+				log.Infof("Fetched %d deltas.", len(deltas))
 				break
 			}
 		}
+
+		// now apply deltas
+		for _, item := range deltas {
+			c.applyDelta(item)
+		}
+
+		// sleep till next sync interval
+		log.Info("Sync complete!")
 		time.Sleep(interval)
 	}
 }
 
 type deltaResponse struct {
-	NextLink  string      `json:"@odata.nextLink,omitempty"`
-	DeltaLink string      `json:"@odata.deltaLink,omitempty"`
-	Values    []DriveItem `json:"value,omitempty"`
+	NextLink  string       `json:"@odata.nextLink,omitempty"`
+	DeltaLink string       `json:"@odata.deltaLink,omitempty"`
+	Values    []*DriveItem `json:"value,omitempty"`
 }
 
-// Polls the delta endpoint and return whether or not to continue polling
-func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
+// Polls the delta endpoint and return deltas + whether or not to continue
+// polling. Does not perform deduplication.
+func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Error("Could not fetch server deltas.")
-		return false, err
+		return make([]*DriveItem, 0), false, err
 	}
 
 	page := deltaResponse{}
 	json.Unmarshal(resp, &page)
-	for i := 0; i < len(page.Values); i++ {
-		//TODO should dedup deltas here, and use the last one received as
-		// recommended by API documentation
-		c.applyDelta(&page.Values[i])
-	}
 
 	// If the server does not provide a `@odata.nextLink` item, it means we've
 	// reached the end of this polling cycle and should not continue until the
 	// next poll interval.
 	if page.NextLink != "" {
 		c.deltaLink = strings.TrimPrefix(page.NextLink, graphURL)
-		return true, nil
+		return page.Values, true, nil
 	}
 	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graphURL)
-	return false, nil
+	return page.Values, false, nil
 }
 
 // apply a server-side change to our local state
