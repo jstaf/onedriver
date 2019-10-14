@@ -6,6 +6,7 @@ import (
 )
 
 func TestRequestUnauthenticated(t *testing.T) {
+	t.Parallel()
 	badAuth := &Auth{
 		// Set a renewal 1 year in the future so we don't accidentally overwrite
 		// our auth tokens
@@ -18,6 +19,7 @@ func TestRequestUnauthenticated(t *testing.T) {
 }
 
 func TestGetItem(t *testing.T) {
+	t.Parallel()
 	item, err := GetItemPath("/", auth)
 	if item.Name() != "root" {
 		t.Fatal("Failed to fetch directory root. Additional errors:", err)

@@ -6,7 +6,6 @@ package graph
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -19,6 +18,7 @@ import (
 
 // does ls work and can we find the Documents/Pictures folders
 func TestLs(t *testing.T) {
+	t.Parallel()
 	stdout, err := exec.Command("ls", "mount").Output()
 	failOnErr(t, err)
 	sout := string(stdout)
@@ -32,6 +32,7 @@ func TestLs(t *testing.T) {
 
 // can touch create an empty file
 func TestTouchCreate(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "empty")
 	syscall.Umask(022) // otherwise tests fail if default umask is 002
 	failOnErr(t, exec.Command("touch", fname).Run())
@@ -50,6 +51,7 @@ func TestTouchCreate(t *testing.T) {
 
 // does the touch command update modification time properly?
 func TestTouchUpdateTime(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "modtime")
 	failOnErr(t, exec.Command("touch", fname).Run())
 	st1, _ := os.Stat(fname)
@@ -67,6 +69,7 @@ func TestTouchUpdateTime(t *testing.T) {
 
 // chmod should *just work*
 func TestChmod(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "chmod_tester")
 	failOnErr(t, exec.Command("touch", fname).Run())
 	failOnErr(t, os.Chmod(fname, 0777))
@@ -80,6 +83,7 @@ func TestChmod(t *testing.T) {
 // mkdir->rmdir->mkdir chain that fails if the cache hangs on to an old copy
 // after rmdir
 func TestMkdirRmdir(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "folder1")
 	failOnErr(t, exec.Command("mkdir", fname).Run())
 	failOnErr(t, exec.Command("rmdir", fname).Run())
@@ -88,6 +92,7 @@ func TestMkdirRmdir(t *testing.T) {
 
 // test that we can write to a file and read its contents back correctly
 func TestReadWrite(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "write.txt")
 	content := "my hands are typing words\n"
 	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
@@ -101,6 +106,7 @@ func TestReadWrite(t *testing.T) {
 
 // test that we can create a file and rename it
 func TestRenameMove(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "rename.txt")
 	dname := filepath.Join(TestDir, "new-destination-name.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
@@ -122,6 +128,7 @@ func TestRenameMove(t *testing.T) {
 
 // test that copies work as expected
 func TestCopy(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "copy-start.txt")
 	dname := filepath.Join(TestDir, "copy-end.txt")
 	content := "and copies too!\n"
@@ -138,6 +145,7 @@ func TestCopy(t *testing.T) {
 
 // do appends work correctly?
 func TestAppend(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "append.txt")
 	for i := 0; i < 5; i++ {
 		file, _ := os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
@@ -164,6 +172,7 @@ func TestAppend(t *testing.T) {
 
 // identical to TestAppend, but truncates the file each time it is written to
 func TestTruncate(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "truncate.txt")
 	for i := 0; i < 5; i++ {
 		file, _ := os.OpenFile(fname, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
@@ -190,6 +199,7 @@ func TestTruncate(t *testing.T) {
 
 // can we seek to the middle of a file and do writes there correctly?
 func TestReadWriteMidfile(t *testing.T) {
+	t.Parallel()
 	content := `Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
 Phasellus viverra dui vel velit eleifend, vel auctor nulla scelerisque.
 Mauris volutpat a justo vel suscipit. Suspendisse diam lorem, imperdiet eget
@@ -230,6 +240,7 @@ massa lectus mattis dolor, in volutpat nulla lectus id neque.`
 
 // Statfs should succeed
 func TestStatFs(t *testing.T) {
+	t.Parallel()
 	var st syscall.Statfs_t
 	err := syscall.Statfs(TestDir, &st)
 	failOnErr(t, err)
@@ -241,6 +252,7 @@ func TestStatFs(t *testing.T) {
 
 // does unlink work? (because apparently we weren't testing that before...)
 func TestUnlink(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "unlink_tester")
 	failOnErr(t, exec.Command("touch", fname).Run())
 	failOnErr(t, os.Remove(fname))
@@ -253,6 +265,7 @@ func TestUnlink(t *testing.T) {
 // copy large file inside onedrive mount, then verify that we can still
 // access selected lines
 func TestUploadSession(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "dmel.fa")
 	failOnErr(t, exec.Command("cp", "dmel.fa", fname).Run())
 
@@ -281,10 +294,10 @@ func TestUploadSession(t *testing.T) {
 	size := uint64(len(contents))
 	for i := 0; i < 60; i++ {
 		time.Sleep(time.Second)
-		fmt.Printf(".")
+		//fmt.Printf(".")
 		item, _ := GetItemPath("/onedriver_tests/dmel.fa", auth)
 		if item != nil && item.Size() == size {
-			fmt.Printf("\n")
+			//fmt.Printf("\n")
 			return
 		}
 	}
@@ -292,6 +305,7 @@ func TestUploadSession(t *testing.T) {
 }
 
 func TestIgnoredFiles(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, ".Trash-1000")
 	_, err := os.Stat(fname)
 	if err == nil || !strings.Contains(err.Error(), "no such file or directory") {
@@ -303,6 +317,7 @@ func TestIgnoredFiles(t *testing.T) {
 // filesystem. Make sure we prevent users of normal systems from running into
 // issues with OneDrive's case-insensitivity.
 func TestNTFSIsABadFilesystem(t *testing.T) {
+	t.Parallel()
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
 		[]byte("NTFS is bad"), 0644))
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
@@ -318,6 +333,7 @@ func TestNTFSIsABadFilesystem(t *testing.T) {
 
 // same as last test, but with exclusive create() calls.
 func TestNTFSIsABadFilesystem2(t *testing.T) {
+	t.Parallel()
 	file, err := os.OpenFile(filepath.Join(TestDir, "case-sensitive2.txt"), os.O_CREATE|os.O_EXCL, 0644)
 	file.Close()
 	failOnErr(t, err)
@@ -333,6 +349,7 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 // (allow rename/overwrite for exact matches, deny when case-sensitivity would
 // normally allow success)
 func TestNTFSIsABadFilesystem3(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "original_NAME.txt")
 	ioutil.WriteFile(fname, []byte("original"), 0644)
 
@@ -363,6 +380,7 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 // This test is insurance to prevent tests (and the fs) from accidentally not
 // storing case for filenames at all
 func TestChildrenAreCasedProperly(t *testing.T) {
+	t.Parallel()
 	failOnErr(t, ioutil.WriteFile(
 		filepath.Join(TestDir, "CASE-check.txt"), []byte("yep"), 0644))
 	stdout, err := exec.Command("ls", TestDir).Output()
@@ -376,6 +394,7 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 // Test that when running "echo some text > file.txt" that file.txt actually
 // becomes populated
 func TestEchoWritesToFile(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "bagels")
 	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
 	if err != nil {
@@ -391,6 +410,7 @@ func TestEchoWritesToFile(t *testing.T) {
 
 // Test that if we stat a file, we get some correct information back
 func TestStat(t *testing.T) {
+	t.Parallel()
 	stat, err := os.Stat("mount/Documents")
 	failOnErr(t, err)
 	if stat.Name() != "Documents" {
@@ -410,6 +430,7 @@ func TestStat(t *testing.T) {
 // but subsequently not found by lookup. Also is a nice catch-all for fs
 // metadata corruption, as `ls` will exit with 1 if something bad happens.
 func TestNoQuestionMarks(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command("ls", "-l", "mount/").CombinedOutput()
 	if strings.Contains(string(out), "??????????") || err != nil {
 		t.Log("A Lookup() failed on an inode found by Readdir()")

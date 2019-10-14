@@ -6,6 +6,7 @@ import (
 )
 
 func TestAuthFromfile(t *testing.T) {
+	t.Parallel()
 	var auth Auth
 	auth.FromFile("auth_tokens.json")
 	if auth.AccessToken == "" {
@@ -15,6 +16,7 @@ func TestAuthFromfile(t *testing.T) {
 }
 
 func TestAuthRefresh(t *testing.T) {
+	t.Parallel()
 	var auth Auth
 	auth.FromFile("auth_tokens.json")
 	auth.ExpiresAt = 0 // force an auth refresh

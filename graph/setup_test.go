@@ -19,6 +19,7 @@ import (
 const (
 	mountLoc = "mount"
 	TestDir  = mountLoc + "/onedriver_tests"
+	DeltaDir = TestDir + "/delta"
 )
 
 var auth *Auth
@@ -57,6 +58,7 @@ func TestMain(m *testing.M) {
 	// cleanup from last run
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
+	os.Mkdir(DeltaDir, 0755)
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
 

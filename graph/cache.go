@@ -33,6 +33,7 @@ func NewFS(dbpath string) *DriveItem {
 	auth := Authenticate()
 	cache := NewCache(auth, dbpath)
 	root, _ := cache.GetPath("/", auth)
+	go cache.deltaLoop(5 * time.Second)
 	return root
 }
 
