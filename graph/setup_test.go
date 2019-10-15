@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -52,6 +53,12 @@ func TestMain(m *testing.M) {
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,
+		MountOptions: fuse.MountOptions{
+			Name:          "onedriver",
+			FsName:        "onedriver",
+			DisableXAttrs: true,
+			MaxBackground: 1024,
+		},
 	})
 
 	// setup sigint handler for graceful unmount on interrupt/terminate

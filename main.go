@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
@@ -71,6 +72,12 @@ func main() {
 	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,
+		MountOptions: fuse.MountOptions{
+			Name:          "onedriver",
+			FsName:        "onedriver",
+			DisableXAttrs: true,
+			MaxBackground: 1024,
+		},
 	})
 	if err != nil {
 		log.Error(err)
