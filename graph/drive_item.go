@@ -439,7 +439,7 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	log.WithFields(log.Fields{
 		"path": d.Path(),
 		"id":   d.ID(),
-	}).Debug("Forcing Fsync")
+	}).Debug()
 	d.Fsync(ctx, f, 0)
 
 	// wipe data from memory to avoid mem bloat over time

@@ -51,7 +51,9 @@ type deltaResponse struct {
 }
 
 // Polls the delta endpoint and return deltas + whether or not to continue
-// polling. Does not perform deduplication.
+// polling. Does not perform deduplication. Note that changes from the local
+// client will actually appear as deltas from the server (there is no
+// distinction between local and remote content from the server's perspective).
 func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
@@ -75,22 +77,29 @@ func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	return page.Values, false, nil
 }
 
-// apply a server-side change to our local state
+// applyDelta diagnoses and applies a server-side change to our local state.
+// Things we care about (present in the local cache):
+// * Deleted items
+// * Changed content remotely, but not locally
+// * New items in a folder we have locally
 func (c *Cache) applyDelta(item *DriveItem) error {
+	id := item.ID()
 	log.WithFields(log.Fields{
-		"id":   item.ID(),
+		"id":   id,
 		"name": item.Name(),
 	}).Debug("Applying delta")
 
 	// diagnose and act on what type of delta we're dealing with
 
 	// do we have it at all?
-	if parent := c.GetID(item.ParentID()); parent == nil {
+	parentID := item.ParentID()
+	if parent := c.GetID(parentID); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
 		log.WithFields(log.Fields{
+			"id":       id,
+			"parentID": parentID,
 			"name":     item.Name(),
-			"parentID": item.ParentID(),
 			"delta":    "skip",
 		}).Trace("Skipping delta, item's parent not in cache.")
 		return nil
@@ -98,15 +107,33 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 
 	// was it deleted?
 	if item.Deleted != nil {
+		//TODO from docs:
+		// you should only delete a folder locally if it is empty after syncing
+		// all the changes.
 		log.WithFields(log.Fields{
-			"id":    item.ID(),
+			"id":    id,
 			"name":  item.Name(),
 			"delta": "delete",
-		}).Info("Applying server-side deletion of item")
-		c.DeleteID(item.ID())
+		}).Info("Applying server-side deletion of item.")
+		c.DeleteID(id)
 		return nil
 	}
 
-	//TODO stub
+	// does the item exist locally? if not, add the delta to the cache under the
+	// appropriate parent
+	local := c.GetID(id)
+	if local == nil {
+		log.WithFields(log.Fields{
+			"id":       id,
+			"parentID": parentID,
+			"name":     item.Name(),
+			"delta":    "create",
+		}).Info("Creating inode from delta.")
+		c.InsertChild(parentID, item)
+		return nil
+	}
+
+	//TODO
+	//finally, check if the content/metadata of the remote has changed
 	return nil
 }
