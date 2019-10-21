@@ -2,6 +2,8 @@
 package graph
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,4 +51,30 @@ func TestDeltaRmdir(t *testing.T) {
 		}
 	}
 	t.Fatal("File deletion not picked up by client")
+}
+
+// Create a file locally, then rename it remotely and verify that the renamed
+// file still has the correct content under the new parent.
+func TestDeltaRename(t *testing.T) {
+	t.Parallel()
+	failOnErr(t, ioutil.WriteFile(
+		filepath.Join(DeltaDir, "delta_rename_start"),
+		[]byte("cheesecake"),
+		0644,
+	))
+
+	item, err := GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+	failOnErr(t, err)
+	failOnErr(t, Rename(item.ID(), "delta_rename_end", item.ParentID(), auth))
+	for i := 0; i < 10; i++ {
+		fpath := filepath.Join(DeltaDir, "delta_rename_end")
+		if _, err := os.Stat(fpath); err != nil {
+			content, err := ioutil.ReadFile(fpath)
+			failOnErr(t, err)
+			if bytes.Contains(content, []byte("cheesecake")) {
+				return
+			}
+		}
+	}
+	t.Fatal("Rename not detected by client.")
 }

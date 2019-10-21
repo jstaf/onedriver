@@ -133,7 +133,12 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 		return nil
 	}
 
+	// Finally, check if the content/metadata of the remote has changed.
+	// "Interesting" changes must be synced back to our local state without
+	// data loss or corruption. Currently the only thing the local filesystem
+	// actually modifies remotely is the actual file data, so we simply accept
+	// the remote metadata changes that do not deal with the file's content
+	// changing.
 	//TODO
-	//finally, check if the content/metadata of the remote has changed
 	return nil
 }

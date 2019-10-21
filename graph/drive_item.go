@@ -409,6 +409,14 @@ func (d *DriveItem) HasContent() bool {
 	return d.data != nil
 }
 
+// HasChanges returns true if the file has local changes that haven't been
+// uploaded yet.
+func (d *DriveItem) HasChanges() bool {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.hasChanges
+}
+
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
 // storage. This method is used to trigger uploads of file content.
 func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscall.Errno {
@@ -416,20 +424,20 @@ func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) sy
 		"id":   d.ID(),
 		"path": d.Path(),
 	}).Debug()
-	d.mutex.Lock()
-	if d.hasChanges {
+	if d.HasChanges() {
+		d.mutex.Lock()
 		d.hasChanges = false
 		d.mutex.Unlock()
 		if err := d.cache.uploads.QueueUpload(d); err != nil {
 			log.WithFields(log.Fields{
-				"id":  d.IDInternal,
-				"err": err,
+				"id":   d.ID(),
+				"name": d.Name(),
+				"err":  err,
 			}).Error("Error creating upload session.")
 			return syscall.EREMOTEIO
 		}
 		return 0
 	}
-	d.mutex.Unlock()
 	return 0
 }
 
@@ -452,6 +460,8 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	return 0
 }
 
+// makeattr a convenience function to create a set of filesystem attrs for use
+// later
 func (d *DriveItem) makeattr() fuse.Attr {
 	mtime := d.ModTime()
 	return fuse.Attr{
