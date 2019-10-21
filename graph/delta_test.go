@@ -67,9 +67,10 @@ func TestDeltaRename(t *testing.T) {
 	failOnErr(t, err)
 
 	failOnErr(t, Rename(item.ID(), "delta_rename_end", item.ParentID(), auth))
+	fpath := filepath.Join(DeltaDir, "delta_rename_end")
 	for i := 0; i < 10; i++ {
-		fpath := filepath.Join(DeltaDir, "delta_rename_end")
-		if _, err := os.Stat(fpath); err != nil {
+		time.Sleep(time.Second)
+		if _, err := os.Stat(fpath); err == nil {
 			content, err := ioutil.ReadFile(fpath)
 			failOnErr(t, err)
 			if bytes.Contains(content, []byte("cheesecake")) {
@@ -97,9 +98,10 @@ func TestDeltaMoveParent(t *testing.T) {
 	failOnErr(t, err)
 
 	failOnErr(t, Rename(item.ID(), "delta_rename_end", newParent.ID(), auth))
+	fpath := filepath.Join(TestDir, "delta_rename_end")
 	for i := 0; i < 10; i++ {
-		fpath := filepath.Join(TestDir, "delta_rename_end")
-		if _, err := os.Stat(fpath); err != nil {
+		time.Sleep(time.Second)
+		if _, err := os.Stat(fpath); err == nil {
 			content, err := ioutil.ReadFile(fpath)
 			failOnErr(t, err)
 			if bytes.Contains(content, []byte("carrotcake")) {

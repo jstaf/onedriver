@@ -92,6 +92,14 @@ func NewUploadSession(d *DriveItem, auth *Auth) (*UploadSession, error) {
 		Size: d.SizeInternal,
 		data: make([]byte, d.SizeInternal),
 	}
+	if d.data == nil {
+		log.WithFields(log.Fields{
+			"id":   d.IDInternal,
+			"name": d.NameInternal,
+		}).Error("Tried to dereference a nil pointer.")
+		defer d.mutex.RUnlock()
+		return nil, errors.New("inode data was nil")
+	}
 	copy(session.data, *d.data)
 	d.mutex.RUnlock()
 
