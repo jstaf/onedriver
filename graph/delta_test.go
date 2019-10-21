@@ -65,12 +65,42 @@ func TestDeltaRename(t *testing.T) {
 
 	item, err := GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
 	failOnErr(t, err)
+
 	failOnErr(t, Rename(item.ID(), "delta_rename_end", item.ParentID(), auth))
 	for i := 0; i < 10; i++ {
 		fpath := filepath.Join(DeltaDir, "delta_rename_end")
 		if _, err := os.Stat(fpath); err != nil {
 			content, err := ioutil.ReadFile(fpath)
 			failOnErr(t, err)
+			if bytes.Contains(content, []byte("cheesecake")) {
+				return
+			}
+		}
+	}
+	t.Fatal("Rename not detected by client.")
+}
+
+// Create a file locally, then move it on the server to a new directory. Check
+// to see if the cache picks it up.
+func TestDeltaMoveParent(t *testing.T) {
+	t.Parallel()
+	failOnErr(t, ioutil.WriteFile(
+		filepath.Join(DeltaDir, "delta_move_start"),
+		[]byte("carrotcake"),
+		0644,
+	))
+
+	item, err := GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+	failOnErr(t, err)
+
+	newParent, err := GetItemPath("/onedriver_tests/", auth)
+	failOnErr(t, err)
+
+	failOnErr(t, Rename(item.ID(), "delta_rename_end", newParent.ID(), auth))
+	for i := 0; i < 10; i++ {
+		fpath := filepath.Join(TestDir, "delta_rename_end")
+		if _, err := os.Stat(fpath); err != nil {
+			content, _ := ioutil.ReadFile(fpath)
 			if bytes.Contains(content, []byte("cheesecake")) {
 				return
 			}
