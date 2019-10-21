@@ -100,8 +100,9 @@ func TestDeltaMoveParent(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		fpath := filepath.Join(TestDir, "delta_rename_end")
 		if _, err := os.Stat(fpath); err != nil {
-			content, _ := ioutil.ReadFile(fpath)
-			if bytes.Contains(content, []byte("cheesecake")) {
+			content, err := ioutil.ReadFile(fpath)
+			failOnErr(t, err)
+			if bytes.Contains(content, []byte("carrotcake")) {
 				return
 			}
 		}
