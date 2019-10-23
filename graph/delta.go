@@ -1,7 +1,9 @@
 package graph
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -131,6 +133,33 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 		}).Info("Creating inode from delta.")
 		c.InsertChild(parentID, item)
 		return nil
+	}
+
+	// was the item moved?
+	if local.ParentID() != item.ParentID() || local.Name() != item.Name() {
+		log.WithFields(log.Fields{
+			"parent":    local.ParentID(),
+			"name":      local.Name(),
+			"newParent": parentID,
+			"newName":   item.Name(),
+			"id":        id,
+			"delta":     "rename",
+		}).Info("Applying server-side rename")
+		parent := c.GetID(local.ParentID())
+		newParent := c.GetID(parentID)
+		if parent == nil || newParent == nil {
+			log.WithFields(log.Fields{
+				"parent":    local.ParentID(),
+				"name":      local.Name(),
+				"newParent": parentID,
+				"newName":   item.Name(),
+				"id":        id,
+				"delta":     "rename",
+			}).Error("Either original parent or new parent not found in cache!")
+			return errors.New("Parent not in cache")
+		}
+		parent.Rename(context.Background(), local.Name(), newParent, item.Name(), 0)
+		// do not return, there may be additional changes
 	}
 
 	// Finally, check if the content/metadata of the remote has changed.
