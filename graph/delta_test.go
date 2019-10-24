@@ -111,3 +111,60 @@ func TestDeltaMoveParent(t *testing.T) {
 	}
 	t.Fatal("Rename not detected by client.")
 }
+
+// Change the content remotely on the server, and verify it gets propagated to
+// to the client.
+func TestDeltaContentChangeRemote(t *testing.T) {
+	failOnErr(t, ioutil.WriteFile(
+		filepath.Join(DeltaDir, "remote_content"),
+		[]byte("the cake is a lie"),
+		0644,
+	))
+
+	// change and upload it via the API
+	item, err := GetItemPath("/onedriver_tests/delta/remote_content", auth)
+	failOnErr(t, err)
+	newContent := []byte("because it has been changed remotely!")
+	item.data = &newContent
+	session, err := NewUploadSession(item, auth)
+	failOnErr(t, err)
+	failOnErr(t, session.Upload(auth))
+
+	for i := 0; i < 10; i++ {
+		content, err := ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
+		failOnErr(t, err)
+		if bytes.HasPrefix(content, []byte("because")) {
+			return
+		}
+	}
+	t.Fatal("Failed to sync content to local machine.")
+}
+
+// Change the content both on the server and the client and verify that the
+// client data is preserved.
+func TestDeltaContentChangeBoth(t *testing.T) {
+	fpath := filepath.Join(DeltaDir, "both_content_changed")
+	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
+
+	// change and upload it via the API
+	item, err := GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
+	failOnErr(t, err)
+	newContent := []byte("remote")
+	item.data = &newContent
+	session, err := NewUploadSession(item, auth)
+	failOnErr(t, err)
+	failOnErr(t, session.Upload(auth))
+
+	// now change it locally
+	failOnErr(t, ioutil.WriteFile(fpath, []byte("local"), 0644))
+
+	// file has been changed both remotely and locally
+	time.Sleep(time.Second * 10)
+	content, err := ioutil.ReadFile(fpath)
+	failOnErr(t, err)
+
+	if bytes.Equal(content, []byte("local")) {
+		return
+	}
+	t.Fatal("Client copy not preserved")
+}
