@@ -131,6 +131,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	failOnErr(t, session.Upload(auth))
 
 	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
 		content, err := ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
 		failOnErr(t, err)
 		if bytes.HasPrefix(content, []byte("because")) {
