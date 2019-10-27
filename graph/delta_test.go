@@ -115,6 +115,7 @@ func TestDeltaMoveParent(t *testing.T) {
 // Change the content remotely on the server, and verify it gets propagated to
 // to the client.
 func TestDeltaContentChangeRemote(t *testing.T) {
+	t.Parallel()
 	failOnErr(t, ioutil.WriteFile(
 		filepath.Join(DeltaDir, "remote_content"),
 		[]byte("the cake is a lie"),
@@ -144,6 +145,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 // Change the content both on the server and the client and verify that the
 // client data is preserved.
 func TestDeltaContentChangeBoth(t *testing.T) {
+	t.Parallel()
 	fpath := filepath.Join(DeltaDir, "both_content_changed")
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
 
