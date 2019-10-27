@@ -171,3 +171,34 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	}
 	t.Fatal("Client copy not preserved")
 }
+
+// If we have local content in the local disk cache that doesn't match what the
+// server has, Open() should pick this up and wipe it. Otherwise Open() could
+// pick up an old version of a file from previous program startups and think
+// it's current, which would erase the real, up-to-date server copy.
+func TestDeltaBadContentInCache(t *testing.T) {
+	t.Parallel()
+	// write a file to the server and poll until it exists
+	failOnErr(t, ioutil.WriteFile(
+		filepath.Join(DeltaDir, "corrupted"),
+		[]byte("correct contents"),
+		0644,
+	))
+	var id string
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err := GetItemPath("/onedriver_tests/delta/corrupted", auth)
+		if err == nil {
+			id = item.ID()
+			break
+		}
+	}
+
+	fsCache.InsertContent(id, []byte("wrong contents"))
+	contents, err := ioutil.ReadFile(filepath.Join(DeltaDir, "corrupted"))
+	failOnErr(t, err)
+	if bytes.HasPrefix(contents, []byte("wrong")) {
+		t.Fatalf("File contents were wrong! Got \"%s\", wanted \"correct contents\"",
+			string(contents))
+	}
+}

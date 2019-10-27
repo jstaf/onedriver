@@ -24,6 +24,7 @@ const (
 )
 
 var auth *Auth
+var fsCache *Cache // used to inject bad content into the fs for some tests
 
 // Tests are done in the main project directory with a mounted filesystem to
 // avoid having to repeatedly recreate auth_tokens.json and juggle multiple auth
@@ -48,7 +49,8 @@ func TestMain(m *testing.M) {
 	log.SetLevel(log.DebugLevel)
 
 	root := NewFS("test.db", 5*time.Second)
-	auth = root.GetCache().GetAuth()
+	fsCache = root.GetCache()
+	auth = fsCache.GetAuth()
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
