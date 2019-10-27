@@ -21,6 +21,7 @@ type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
 	root      string // the id of the filesystem's root item
+	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
 
@@ -54,6 +55,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	cache.InsertID(cache.root, root)
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
+
+	drive, _ := GetDrive(auth)
+	cache.driveType = drive.DriveType
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache

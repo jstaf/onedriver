@@ -115,6 +115,35 @@ func ChildrenPathID(id string) string {
 	return "/me/drive/items/" + id + "/children"
 }
 
+// DriveQuota is used to parse the User's current storage quotas from the API
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
+type DriveQuota struct {
+	Deleted   uint64 `json:"deleted"`   // bytes in recycle bin
+	FileCount uint64 `json:"fileCount"` // unavailable on personal accounts
+	Remaining uint64 `json:"remaining"`
+	State     string `json:"state"` // normal | nearing | critical | exceeded
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+}
+
+// Drive has some general information about the user's OneDrive
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
+type Drive struct {
+	ID        string     `json:"id"`
+	DriveType string     `json:"driveType"` // personal or business
+	Quota     DriveQuota `json:"quota,omitempty"`
+}
+
+// GetDrive is used to fetch the details of the user's OneDrive.
+func GetDrive(auth *Auth) (Drive, error) {
+	resp, err := Get("/me/drive", auth)
+	drive := Drive{}
+	if err != nil {
+		return drive, err
+	}
+	return drive, json.Unmarshal(resp, &drive)
+}
+
 // GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
 func GetItem(id string, auth *Auth) (*DriveItem, error) {
 	path := "/me/drive/items/" + id

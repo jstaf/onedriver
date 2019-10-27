@@ -31,9 +31,16 @@ type Folder struct {
 	ChildCount uint32 `json:"childCount,omitempty"`
 }
 
-// File is used for parsing only
+// Hashes are integrity hashes used to determine if file content has changed.
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/hashes
+type Hashes struct {
+	SHA1Hash     string `json:"sha1Hash,omitempty"`
+	QuickXorHash string `json:"quickXorHash,omitempty"`
+}
+
+// File is used for checking for changes in local files (relative to the server).
 type File struct {
-	MimeType string `json:"mimeType,omitempty"`
+	Hashes Hashes `json:"hashes,omitempty"`
 }
 
 // Deleted is used for detecting when items get deleted on the server
@@ -160,37 +167,14 @@ func (d *DriveItem) GetCache() *Cache {
 	return d.cache
 }
 
-// DriveQuota is used to parse the User's current storage quotas from the API
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
-type DriveQuota struct {
-	Deleted   uint64 `json:"deleted"`   // bytes in recycle bin
-	FileCount uint64 `json:"fileCount"` // unavailable on personal accounts
-	Remaining uint64 `json:"remaining"`
-	State     string `json:"state"` // normal | nearing | critical | exceeded
-	Total     uint64 `json:"total"`
-	Used      uint64 `json:"used"`
-}
-
-// Drive has some general information about the user's OneDrive
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
-type Drive struct {
-	ID        string     `json:"id"`
-	DriveType string     `json:"driveType"` // personal or business
-	Quota     DriveQuota `json:"quota,omitempty"`
-}
-
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	log.WithFields(log.Fields{"path": d.Path()}).Debug()
-	resp, err := Get("/me/drive", d.GetCache().GetAuth())
+	drive, err := GetDrive(d.GetCache().GetAuth())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Could not fetch filesystem details.")
+		return syscall.EREMOTEIO
 	}
-	drive := Drive{}
-	json.Unmarshal(resp, &drive)
 
 	if drive.DriveType == "personal" {
 		log.Warn("Personal OneDrive accounts do not show number of files, " +
