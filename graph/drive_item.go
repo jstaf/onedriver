@@ -411,7 +411,16 @@ func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) sy
 	if d.HasChanges() {
 		d.mutex.Lock()
 		d.hasChanges = false
+
+		// recompute hashes when saving new content
+		d.FileInternal = &File{}
+		if d.cache.driveType == "personal" {
+			d.FileInternal.Hashes.SHA1Hash = SHA1Hash(d.data)
+		} else {
+			d.FileInternal.Hashes.QuickXorHash = QuickXORHash(d.data)
+		}
 		d.mutex.Unlock()
+
 		if err := d.cache.uploads.QueueUpload(d); err != nil {
 			log.WithFields(log.Fields{
 				"id":   d.ID(),
@@ -757,18 +766,33 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	// try grabbing from disk
 	cache := d.GetCache()
 	if content := cache.GetContent(id); content != nil {
-		// TODO should verify from cache using hash from server
 		log.WithFields(log.Fields{
 			"path": path,
 			"id":   id,
 		}).Info("Found content in cache.")
 
-		d.mutex.Lock()
-		defer d.mutex.Unlock()
-		// this check is here in case the API file sizes are WRONG (it happens)
-		d.SizeInternal = uint64(len(content))
-		d.data = &content
-		return nil, uint32(0), 0
+		// verify content against what we're supposed to have
+		var matches bool
+		if cache.driveType == "personal" {
+			d.mutex.RLock()
+			sha1 := d.FileInternal.Hashes.SHA1Hash
+			d.mutex.RUnlock()
+			matches = SHA1Hash(&content) == sha1
+		} else {
+			d.mutex.RLock()
+			quickXOR := d.FileInternal.Hashes.QuickXorHash
+			d.mutex.RUnlock()
+			matches = QuickXORHash(&content) == quickXOR
+		}
+
+		if matches { // disk content is only used if the checksums match
+			d.mutex.Lock()
+			defer d.mutex.Unlock()
+			// this check is here in case the API file sizes are WRONG (it happens)
+			d.SizeInternal = uint64(len(content))
+			d.data = &content
+			return nil, uint32(0), 0
+		}
 	}
 
 	// didn't have it on disk, now try api
