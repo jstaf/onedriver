@@ -345,6 +345,13 @@ func (d *DriveItem) Read(ctx context.Context, f fs.FileHandle, buf []byte, off i
 		"offset":           off,
 	}).Trace("Read file")
 
+	if !d.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   d.ID(),
+			"path": d.Path(),
+		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
+		d.Open(ctx, 0)
+	}
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), 0
@@ -766,14 +773,12 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	// try grabbing from disk
 	cache := d.GetCache()
 	if content := cache.GetContent(id); content != nil {
-		log.WithFields(log.Fields{
-			"path": path,
-			"id":   id,
-		}).Info("Found content in cache.")
-
 		// verify content against what we're supposed to have
 		var matches bool
-		if cache.driveType == "personal" {
+		if isLocalID(id) && d.FileInternal == nil {
+			// has never been uploaded, therefore we simply accept cache contents
+			matches = true
+		} else if cache.driveType == "personal" {
 			d.mutex.RLock()
 			sha1 := d.FileInternal.Hashes.SHA1Hash
 			d.mutex.RUnlock()
@@ -786,6 +791,11 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 		}
 
 		if matches { // disk content is only used if the checksums match
+			log.WithFields(log.Fields{
+				"path": path,
+				"id":   id,
+			}).Info("Found content in cache.")
+
 			d.mutex.Lock()
 			defer d.mutex.Unlock()
 			// this check is here in case the API file sizes are WRONG (it happens)
