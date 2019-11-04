@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -63,7 +64,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		// something was wrong with the request
 		var err graphError
 		json.Unmarshal(body, &err)
-		return nil, errors.New(err.Error.Code + ": " + err.Error.Message)
+		return nil, fmt.Errorf("HTTP %d - %s: %s", response.StatusCode, err.Error.Code, err.Error.Message)
 	}
 	return body, nil
 }
