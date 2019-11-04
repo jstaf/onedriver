@@ -58,8 +58,19 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		// the actual request failed
 		return nil, err
 	}
-	defer response.Body.Close()
 	body, _ := ioutil.ReadAll(response.Body)
+	response.Body.Close()
+
+	if response.StatusCode >= 500 {
+		// the onedrive API is having issues, retry once
+		response, err = client.Do(request)
+		if err != nil {
+			return nil, err
+		}
+		body, _ = ioutil.ReadAll(response.Body)
+		response.Body.Close()
+	}
+
 	if response.StatusCode >= 400 {
 		// something was wrong with the request
 		var err graphError

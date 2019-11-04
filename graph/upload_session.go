@@ -174,7 +174,9 @@ func (u *UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, err
 	resp, err := client.Do(request)
 	if err != nil {
 		// this is a serious error, not simply one with a non-200 return code
-		log.WithField("id", u.ID).Error("Error during file upload, terminating upload session.")
+		log.WithField(
+			"id", u.ID,
+		).Error("Error during file upload, terminating upload session.")
 		return nil, -1, err
 	}
 	defer resp.Body.Close()
