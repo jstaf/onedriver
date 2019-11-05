@@ -113,6 +113,7 @@ func TestRenameMove(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	failOnErr(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)
+	failOnErr(t, err)
 	if st == nil {
 		t.Fatal("Renamed file does not exist")
 	}
@@ -359,6 +360,7 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(secondName, []byte("new"), 0644))
 	failOnErr(t, os.Rename(secondName, fname))
 	contents, err := ioutil.ReadFile(fname)
+	failOnErr(t, err)
 	if string(contents) != "new" {
 		t.Fatalf("Contents did not match expected output: got \"%s\", wanted \"new\"\n",
 			string(contents))
