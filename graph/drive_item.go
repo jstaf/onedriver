@@ -328,8 +328,7 @@ func (d *DriveItem) Read(ctx context.Context, f fs.FileHandle, buf []byte, off i
 			"bufsize":   int64(end) - off,
 			"file_size": size,
 			"offset":    off,
-		}).Error("Offset was beyond file end (Onedrive metadata was wrong)! " +
-			"Refusing op to avoid a segfault.")
+		}).Error("Offset was beyond file end (Onedrive metadata was wrong!). Refusing op.")
 		return fuse.ReadResultData(make([]byte, 0)), syscall.EINVAL
 	}
 	if end > size {

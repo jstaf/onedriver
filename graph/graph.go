@@ -29,7 +29,7 @@ type graphError struct {
 
 // Request performs an authenticated request to Microsoft Graph
 func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
-	if auth.AccessToken == "" {
+	if auth == nil || auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
 		log.WithFields(log.Fields{
 			"caller":   logger.Caller(3),

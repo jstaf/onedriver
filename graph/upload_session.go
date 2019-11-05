@@ -22,9 +22,9 @@ const chunkSize uint64 = 10 * 1024 * 1024
 // upload states
 const (
 	notStarted = iota
-	started    = iota
-	complete   = iota
-	errored    = iota
+	started
+	complete
+	errored
 )
 
 // UploadSession contains a snapshot of the file we're uploading. We have to
@@ -237,8 +237,7 @@ func (u *UploadSession) Upload(auth *Auth) error {
 				"id":      u.ID,
 				"chunk":   i,
 				"nchunks": nchunks,
-			}).Error("The OneDrive server is having issues, "+
-				"retrying upload in %ds.", backoff)
+			}).Errorf("The OneDrive server is having issues, retrying upload in %ds.", backoff)
 			resp, status, err = u.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil {
 				log.WithFields(log.Fields{

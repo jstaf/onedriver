@@ -225,13 +225,6 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		return children, nil
 	}
 
-	// check that we have a valid auth before proceeding
-	if auth == nil || auth.AccessToken == "" {
-		return nil, errors.New("Auth was nil/zero and children of \"" +
-			item.Path() +
-			"\" were not in cache. Could not fetch item as a result.")
-	}
-
 	// We haven't fetched the children for this item yet, get them from the
 	// server.
 	body, err := Get(ChildrenPathID(id), auth)
