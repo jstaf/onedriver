@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 )
 
-const onedriverVersion = "0.4"
+const onedriverVersion = "0.5"
 
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Onedrive.
@@ -22,6 +23,7 @@ func usage() {
 This program will mount your Onedrive account as a Linux filesystem at the
 specified mountpoint. Note that this is not a sync client - files are fetched
 on-demand and cached locally. Only files you actually use will be downloaded.
+This filesystem requires an active internet connection to work.
 
 Usage: onedriver [options] <mountpoint>
 
@@ -66,11 +68,17 @@ func main() {
 	log.Info("onedriver v", onedriverVersion)
 
 	// setup filesystem
-	root := graph.NewFS("onedriver.db")
+	root := graph.NewFS("onedriver.db", 30*time.Second)
 	second := time.Second
 	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,
+		MountOptions: fuse.MountOptions{
+			Name:          "onedriver",
+			FsName:        "onedriver",
+			DisableXAttrs: true,
+			MaxBackground: 1024,
+		},
 	})
 	if err != nil {
 		log.Error(err)

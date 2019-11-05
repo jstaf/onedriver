@@ -1,7 +1,9 @@
 package graph
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -13,91 +15,186 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		log.Debug("Syncing deltas from server.")
+		log.Debug("Fetching deltas from server.")
+		deltas := make(map[string]*DriveItem)
 		for {
-			//TODO should poll and dedup deltas here, then act on them in a
-			// separate block
-			cont, err := c.pollDeltas(c.auth)
+			incoming, cont, err := c.pollDeltas(c.auth)
 			if err != nil {
-				log.Error(err)
+				log.WithField("err", err).Error("Error during delta fetch.")
 				break
 			}
+
+			for _, delta := range incoming {
+				// As per the API docs, the last delta received from the server
+				// for an item is the one we should use.
+				deltas[delta.ID()] = delta
+			}
 			if !cont {
+				log.Infof("Fetched %d deltas.", len(deltas))
 				break
 			}
 		}
-		log.Debug("Sync complete!")
+
+		// now apply deltas
+		for _, item := range deltas {
+			c.applyDelta(item)
+		}
+
+		// sleep till next sync interval
+		log.Info("Sync complete!")
 		time.Sleep(interval)
 	}
 }
 
 type deltaResponse struct {
-	NextLink  string      `json:"@odata.nextLink,omitempty"`
-	DeltaLink string      `json:"@odata.deltaLink,omitempty"`
-	Values    []DriveItem `json:"value,omitempty"`
+	NextLink  string       `json:"@odata.nextLink,omitempty"`
+	DeltaLink string       `json:"@odata.deltaLink,omitempty"`
+	Values    []*DriveItem `json:"value,omitempty"`
 }
 
-// Polls the delta endpoint and return whether or not to continue polling
-func (c *Cache) pollDeltas(auth *Auth) (bool, error) {
+// Polls the delta endpoint and return deltas + whether or not to continue
+// polling. Does not perform deduplication. Note that changes from the local
+// client will actually appear as deltas from the server (there is no
+// distinction between local and remote changes from the server's perspective,
+// everything is a delta, regardless of where it came from).
+func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
 		}).Error("Could not fetch server deltas.")
-		return false, err
+		return make([]*DriveItem, 0), false, err
 	}
 
 	page := deltaResponse{}
 	json.Unmarshal(resp, &page)
-	for i := 0; i < len(page.Values); i++ {
-		//TODO should dedup deltas here, and use the last one received as
-		// recommended by API documentation
-		c.applyDelta(&page.Values[i])
-	}
 
 	// If the server does not provide a `@odata.nextLink` item, it means we've
 	// reached the end of this polling cycle and should not continue until the
 	// next poll interval.
 	if page.NextLink != "" {
 		c.deltaLink = strings.TrimPrefix(page.NextLink, graphURL)
-		return true, nil
+		return page.Values, true, nil
 	}
 	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graphURL)
-	return false, nil
+	return page.Values, false, nil
 }
 
-// apply a server-side change to our local state
-func (c *Cache) applyDelta(item *DriveItem) error {
+// applyDelta diagnoses and applies a server-side change to our local state.
+// Things we care about (present in the local cache):
+// * Deleted items
+// * Changed content remotely, but not locally
+// * New items in a folder we have locally
+func (c *Cache) applyDelta(delta *DriveItem) error {
+	id := delta.ID()
+	name := delta.Name()
 	log.WithFields(log.Fields{
-		"id":   item.ID(),
-		"name": item.Name(),
+		"id":   id,
+		"name": name,
 	}).Debug("Applying delta")
 
 	// diagnose and act on what type of delta we're dealing with
 
 	// do we have it at all?
-	if parent := c.GetID(item.ParentID()); parent == nil {
+	parentID := delta.ParentID()
+	if parent := c.GetID(parentID); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
 		log.WithFields(log.Fields{
-			"name":     item.Name(),
-			"parentID": item.ParentID(),
+			"id":       id,
+			"parentID": parentID,
+			"name":     name,
 			"delta":    "skip",
 		}).Trace("Skipping delta, item's parent not in cache.")
 		return nil
 	}
 
 	// was it deleted?
-	if item.Deleted != nil {
+	if delta.Deleted != nil {
+		//TODO from docs:
+		// you should only delete a folder locally if it is empty after syncing
+		// all the changes.
 		log.WithFields(log.Fields{
-			"id":    item.ID(),
-			"name":  item.Name(),
+			"id":    id,
+			"name":  name,
 			"delta": "delete",
-		}).Info("Applying server-side deletion of item")
-		c.DeleteID(item.ID())
+		}).Info("Applying server-side deletion of item.")
+		c.DeleteID(id)
 		return nil
 	}
 
-	//TODO stub
+	// does the item exist locally? if not, add the delta to the cache under the
+	// appropriate parent
+	local := c.GetID(id)
+	if local == nil {
+		log.WithFields(log.Fields{
+			"id":       id,
+			"parentID": parentID,
+			"name":     name,
+			"delta":    "create",
+		}).Info("Creating inode from delta.")
+		c.InsertChild(parentID, delta)
+		return nil
+	}
+
+	// was the item moved?
+	if local.ParentID() != parentID || local.Name() != name {
+		log.WithFields(log.Fields{
+			"parent":    local.ParentID(),
+			"name":      local.Name(),
+			"newParent": parentID,
+			"newName":   name,
+			"id":        id,
+			"delta":     "rename",
+		}).Info("Applying server-side rename")
+		parent := c.GetID(local.ParentID())
+		newParent := c.GetID(parentID)
+		if parent == nil || newParent == nil {
+			log.WithFields(log.Fields{
+				"parent":    local.ParentID(),
+				"name":      local.Name(),
+				"newParent": parentID,
+				"newName":   name,
+				"id":        id,
+				"delta":     "rename",
+			}).Error("Either original parent or new parent not found in cache!")
+			return errors.New("Parent not in cache")
+		}
+		parent.Rename(context.Background(), local.Name(), newParent, name, 0)
+		// do not return, there may be additional changes
+	}
+
+	// Finally, check if the content/metadata of the remote has changed.
+	// "Interesting" changes must be synced back to our local state without
+	// data loss or corruption. Currently the only thing the local filesystem
+	// actually modifies remotely is the actual file data, so we simply accept
+	// the remote metadata changes that do not deal with the file's content
+	// changing.
+	//
+	// Do not sync if the file size is 0, as this is likely a file in the
+	// progress of being uploaded (also, no need to sync empty files).
+	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
+		//TODO check if local has changes and rename the server copy if so
+		log.WithFields(log.Fields{
+			"id":    id,
+			"name":  name,
+			"delta": "overwrite",
+		}).Info("Overwriting local item, no local changes to preserve.")
+		// update modtime, hashes, purge local content
+		c.DeleteContent(id)
+		local.mutex.Lock()
+		defer local.mutex.Unlock()
+		local.ModTimeInternal = delta.ModTimeInternal
+		local.FileInternal = delta.FileInternal
+		local.hasChanges = false
+		local.data = nil
+		return nil
+	}
+
+	log.WithFields(log.Fields{
+		"id":    id,
+		"name":  name,
+		"delta": "skip",
+	}).Info("Skipping, no changes relative to local state.")
 	return nil
 }

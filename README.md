@@ -5,55 +5,43 @@
 onedriver
 ======================================
 
-Onedriver is a native Linux client for Microsoft Onedrive.
+**onedriver is a native Linux filesystem for Microsoft OneDrive.**
 
-## Why Onedriver?
+The overwhelming majority of OneDrive clients are actually sync tools, and will
+actually download the entire contents of your OneDrive to disk. No one wants
+this. Why are you paying for cloud storage if it has to stay on your local
+computer?
 
-"There's a few Onedrive clients available now, why did you write another one?"
+onedriver is not a sync client. It is a network filesystem that exposes the
+contents of your OneDrive to the kernel directly. To your computer, there is
+no difference between working with files on OneDrive and the files on your
+local hard disk. Just mount onedriver to a directory, and get started with
+your files on OneDrive!
 
-The overwhelming majority of clients are "dumb sync" clients, and will actually 
-download the entire contents of your Onedrive to disk (abraunegg/onedrive, 
-rclone, Insync). No one wants this. Why are you paying for cloud storage if it
-has to stay on your local computer?
+**Getting started with onedriver is as simple as running `onedriver /path/to/mount/onedrive/at`**
 
-Some sync clients require a sysadmin-level skills to use or are missing GUIs 
-(rclone, abraunegg/onedrive). Ideally, anyone should be able to just open the 
-client and have it work.
+### Features
 
-Some Onedrive clients cost money and are not open-source (Insync, odrive). This 
-makes these products non-viable for a lot of users and organizations.
-
-But perhaps most importantly, I kind of just enjoy writing this stuff and there
-weren't any good ways to access the files I had on Onedrive. Now there are :)
-
-### Onedriver goals
-
-* Files are opened and downloaded on-demand, with aggressive caching of file 
-  contents and metadata locally. Onedriver does not waste disk space on files
-  that are supposed to be stored in the cloud.
 * No configuration- it just works. There's nothing to setup. There's no special
   interface beyond your normal file browser.
-* Stateless. Unlike a few other Onedrive clients, there's nothing to 
-  break locally. You never have to worry about somehow messing up your local 
-  copy and having to figure out how to fix things before you can access your 
-  files again. The server *always* has the definitive copy.
+* Files are opened and downloaded on-demand, with aggressive caching of file 
+  contents and metadata locally. onedriver does not waste disk space on files
+  that are supposed to be stored in the cloud. (An internet connection is still
+  required, however.)
+* Stateless. Unlike a few other OneDrive clients, there's nothing to break 
+  locally. You never have to worry about somehow messing up your local copy and 
+  having to figure out how to fix things before you can access your files again.
+* All filesystem operations are asynchronous and thread-safe, allowing you to 
+  perform as many tasks as you want simultaneously.
 * Free and open-source.
 
-## Disclaimer
+## Building onedriver
 
-This project is still in active development and key features may still be 
-missing. To see current progress, check out the 
-[projects page](https://github.com/jstaf/onedriver/projects/1). 
-I don't recommend using it until the initial release is complete (though 
-testing is always welcome!). 
-
-## Building / running
-
-In addition to the traditional Go tooling, you will need a C
-compiler and development headers for `webkit2gtk-4.0`. On Fedora, these can be
-obtained with `dnf install gcc pkg-config webkit2gtk3-devel`. On Ubuntu, these
-dependencies can be installed with
-`apt install gcc pkg-config libwebkit2gtk-4.0-dev`.
+In addition to the traditional Go tooling, you will need a C compiler and
+development headers for `webkit2gtk-4.0`. On Fedora, these can be obtained with 
+`dnf install golang gcc pkg-config webkit2gtk3-devel`. 
+On Ubuntu, these dependencies can be installed with
+`apt install golang gcc pkg-config libwebkit2gtk-4.0-dev`.
 
 ```bash
 # to build and run the binary
@@ -68,11 +56,13 @@ ls -l mount
 fusermount -u mount
 ```
 
-A headless, Go-only binary can be built with `CGO_ENABLED=0 go build`. Note that
-this build will not have any kind of GUI for authentication (follow the text 
-instructions in the terminal).
+A headless, Go-only binary can be built with `CGO_ENABLED=0 go build`. Note
+that this build will not have any kind of GUI for authentication (follow the
+text instructions in the terminal). Though it's not officially supported, 
+the headless build should work on macOS, BSD, and even Windows as long as you 
+have a variant of FUSE installed.
 
-### Running tests
+### Running the tests
 
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account
@@ -80,7 +70,10 @@ instructions in the terminal).
 make test
 ```
 
-### Troubleshooting the build/deadlocks
+## Troubleshooting
+
+Most errors can be solved by simply restarting the program. onedriver is
+designed to recover cleanly from errors with no extra effort.
 
 It's possible that there may be a deadlock or segfault that I haven't caught in 
 my tests. If this happens, the onedriver filesystem and subsequent ops may hang
@@ -91,5 +84,19 @@ with the following:
 ```bash
 # in new terminal window
 fusermount -uz mount
-killall make
+killall make  # if running tests via make
 ```
+
+## Known issues & disclaimer
+
+Many file browsers (like GNOME's Nautilus) will attempt to automatically 
+download all files within a directory in order to create thumbnail images.
+This is somewhat annoying, but only needs to happen once - after the initial
+thumbnail images have been created, thumbnails will persist between
+filesystem restarts.
+
+This project is still in active development and key features may still be
+missing. To see current progress, check out the 
+[projects page](https://github.com/jstaf/onedriver/projects/1). 
+I don't recommend using it until the initial release is complete (though
+testing is always welcome!).

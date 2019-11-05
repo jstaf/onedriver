@@ -8,6 +8,7 @@ import (
 )
 
 func TestRootGet(t *testing.T) {
+	t.Parallel()
 	cache := NewCache(auth, "test_root_get.db")
 	root, err := cache.GetPath("/", auth)
 	if err != nil {
@@ -20,6 +21,7 @@ func TestRootGet(t *testing.T) {
 }
 
 func TestRootChildrenUpdate(t *testing.T) {
+	t.Parallel()
 	cache := NewCache(auth, "test_root_children_update.db")
 	children, err := cache.GetChildrenPath("/", auth)
 	if err != nil {
@@ -32,6 +34,7 @@ func TestRootChildrenUpdate(t *testing.T) {
 }
 
 func TestSubdirGet(t *testing.T) {
+	t.Parallel()
 	cache := NewCache(auth, "test_subdir_get.db")
 	documents, err := cache.GetPath("/Documents", auth)
 	if err != nil {
@@ -43,6 +46,7 @@ func TestSubdirGet(t *testing.T) {
 }
 
 func TestSubdirChildrenUpdate(t *testing.T) {
+	t.Parallel()
 	cache := NewCache(auth, "test_subdir_children_update.db")
 	children, err := cache.GetChildrenPath("/Documents", auth)
 	failOnErr(t, err)
@@ -58,6 +62,7 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 }
 
 func TestSamePointer(t *testing.T) {
+	t.Parallel()
 	cache := NewCache(auth, "test_same_pointer.db")
 	item, _ := cache.GetPath("/Documents", auth)
 	item2, _ := cache.GetPath("/Documents", auth)

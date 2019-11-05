@@ -31,9 +31,16 @@ type Folder struct {
 	ChildCount uint32 `json:"childCount,omitempty"`
 }
 
-// File is used for parsing only
+// Hashes are integrity hashes used to determine if file content has changed.
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/hashes
+type Hashes struct {
+	SHA1Hash     string `json:"sha1Hash,omitempty"`
+	QuickXorHash string `json:"quickXorHash,omitempty"`
+}
+
+// File is used for checking for changes in local files (relative to the server).
 type File struct {
-	MimeType string `json:"mimeType,omitempty"`
+	Hashes Hashes `json:"hashes,omitempty"`
 }
 
 // Deleted is used for detecting when items get deleted on the server
@@ -63,11 +70,11 @@ type APIItem struct {
 // implementing something like the fs.FileHandle to minimize the complexity of
 // operations like Flush.
 type DriveItem struct {
-	// fs fields
 	fs.Inode `json:"-"`
+
+	mutex mu.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
 	APIItem
 	cache         *Cache
-	mutex         mu.RWMutex     // used to be a pointer, but fs.Inode also embeds a mutex :(
 	children      []string       // a slice of ids, nil when uninitialized
 	uploadSession *UploadSession // current upload session, or nil
 	data          *[]byte        // empty by default
@@ -160,37 +167,14 @@ func (d *DriveItem) GetCache() *Cache {
 	return d.cache
 }
 
-// DriveQuota is used to parse the User's current storage quotas from the API
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
-type DriveQuota struct {
-	Deleted   uint64 `json:"deleted"`   // bytes in recycle bin
-	FileCount uint64 `json:"fileCount"` // unavailable on personal accounts
-	Remaining uint64 `json:"remaining"`
-	State     string `json:"state"` // normal | nearing | critical | exceeded
-	Total     uint64 `json:"total"`
-	Used      uint64 `json:"used"`
-}
-
-// Drive has some general information about the user's OneDrive
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
-type Drive struct {
-	ID        string     `json:"id"`
-	DriveType string     `json:"driveType"` // personal or business
-	Quota     DriveQuota `json:"quota,omitempty"`
-}
-
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (d *DriveItem) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	log.WithFields(log.Fields{"path": d.Path()}).Debug()
-	resp, err := Get("/me/drive", d.GetCache().GetAuth())
+	drive, err := GetDrive(d.GetCache().GetAuth())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Could not fetch filesystem details.")
+		return syscall.EREMOTEIO
 	}
-	drive := Drive{}
-	json.Unmarshal(resp, &drive)
 
 	if drive.DriveType == "personal" {
 		log.Warn("Personal OneDrive accounts do not show number of files, " +
@@ -282,12 +266,13 @@ func (d *DriveItem) RemoteID(auth *Auth) (string, error) {
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				if id := d.ID(); !isLocalID(id) {
+				id := d.ID()
+				if !isLocalID(id) {
 					return id, nil
 				}
 
 				// Does the server have it?
-				latest, err := GetItem(d.Path(), auth)
+				latest, err := GetItem(id, auth)
 				if err == nil {
 					// hooray!
 					err := d.GetCache().MoveID(originalID, latest.IDInternal)
@@ -343,8 +328,7 @@ func (d *DriveItem) Read(ctx context.Context, f fs.FileHandle, buf []byte, off i
 			"bufsize":   int64(end) - off,
 			"file_size": size,
 			"offset":    off,
-		}).Error("Offset was beyond file end (Onedrive metadata was wrong)! " +
-			"Refusing op to avoid a segfault.")
+		}).Error("Offset was beyond file end (Onedrive metadata was wrong!). Refusing op.")
 		return fuse.ReadResultData(make([]byte, 0)), syscall.EINVAL
 	}
 	if end > size {
@@ -360,6 +344,13 @@ func (d *DriveItem) Read(ctx context.Context, f fs.FileHandle, buf []byte, off i
 		"offset":           off,
 	}).Trace("Read file")
 
+	if !d.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   d.ID(),
+			"path": d.Path(),
+		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
+		d.Open(ctx, 0)
+	}
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return fuse.ReadResultData((*d.data)[off:end]), 0
@@ -376,6 +367,14 @@ func (d *DriveItem) Write(ctx context.Context, f fs.FileHandle, data []byte, off
 		"bufsize": nWrite,
 		"offset":  off,
 	}).Tracef("Write file")
+
+	if !d.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   d.ID(),
+			"path": d.Path(),
+		}).Warn("Write called on a closed file descriptor! Reopening file for write op.")
+		d.Open(ctx, 0)
+	}
 
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -400,32 +399,44 @@ func (d *DriveItem) HasContent() bool {
 	return d.data != nil
 }
 
+// HasChanges returns true if the file has local changes that haven't been
+// uploaded yet.
+func (d *DriveItem) HasChanges() bool {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.hasChanges
+}
+
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
 // storage. This method is used to trigger uploads of file content.
 func (d *DriveItem) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscall.Errno {
 	log.WithFields(log.Fields{
-		"path": d.Path(),
 		"id":   d.ID(),
+		"path": d.Path(),
 	}).Debug()
-	d.mutex.Lock()
-	if d.hasChanges {
+	if d.HasChanges() {
+		d.mutex.Lock()
 		d.hasChanges = false
+
+		// recompute hashes when saving new content
+		d.FileInternal = &File{}
+		if d.cache.driveType == "personal" {
+			d.FileInternal.Hashes.SHA1Hash = SHA1Hash(d.data)
+		} else {
+			d.FileInternal.Hashes.QuickXorHash = QuickXORHash(d.data)
+		}
 		d.mutex.Unlock()
 
-		// ensureID() is no longer used here to make upload dispatch even faster
-		// (since upload is using ensureID() internally)
-		cache := d.GetCache()
-		if cache == nil {
+		if err := d.cache.uploads.QueueUpload(d); err != nil {
 			log.WithFields(log.Fields{
 				"id":   d.ID(),
 				"name": d.Name(),
-			}).Error("Driveitem cache ref cannot be nil!")
-			return syscall.EINVAL
+				"err":  err,
+			}).Error("Error creating upload session.")
+			return syscall.EREMOTEIO
 		}
-		go d.Upload(cache.auth)
 		return 0
 	}
-	d.mutex.Unlock()
 	return 0
 }
 
@@ -435,10 +446,21 @@ func (d *DriveItem) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	log.WithFields(log.Fields{
 		"path": d.Path(),
 		"id":   d.ID(),
-	}).Debug("Forcing Fsync")
-	return d.Fsync(ctx, f, 0)
+	}).Debug()
+	d.Fsync(ctx, f, 0)
+
+	// wipe data from memory to avoid mem bloat over time
+	d.mutex.Lock()
+	if d.data != nil {
+		d.cache.InsertContent(d.IDInternal, *d.data)
+		d.data = nil
+	}
+	d.mutex.Unlock()
+	return 0
 }
 
+// makeattr a convenience function to create a set of filesystem attrs for use
+// later
 func (d *DriveItem) makeattr() fuse.Attr {
 	mtime := d.ModTime()
 	return fuse.Attr{
@@ -653,6 +675,7 @@ func (d *DriveItem) Unlink(ctx context.Context, name string) syscall.Errno {
 	}
 
 	cache.DeleteID(id)
+	cache.DeleteContent(id)
 	return 0
 }
 
@@ -697,7 +720,7 @@ func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeE
 	}
 
 	parentID := newParentItem.ID()
-	if isLocalID(parentID) || err != nil {
+	if isLocalID(parentID) {
 		// should never be reached, but being extra safe here
 		log.WithFields(log.Fields{
 			"id":   parentID,
@@ -749,24 +772,54 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	// try grabbing from disk
 	cache := d.GetCache()
 	if content := cache.GetContent(id); content != nil {
-		// TODO should verify from cache using hash from server
-		log.WithFields(log.Fields{
-			"path": path,
-			"id":   id,
-		}).Info("Found content in cache.")
+		// verify content against what we're supposed to have
+		var hashWanted, hashActual, hashType string
+		if isLocalID(id) && d.FileInternal == nil {
+			// only check hashes if the file has been uploaded before, otherwise
+			// we just use the zero values and accept the cached content.
+			hashType = "none"
+		} else if cache.driveType == "personal" {
+			d.mutex.RLock()
+			hashWanted = strings.ToLower(d.FileInternal.Hashes.SHA1Hash)
+			d.mutex.RUnlock()
+			hashActual = strings.ToLower(SHA1Hash(&content))
+			hashType = "SHA1"
+		} else {
+			d.mutex.RLock()
+			hashWanted = strings.ToLower(d.FileInternal.Hashes.QuickXorHash)
+			d.mutex.RUnlock()
+			hashActual = strings.ToLower(QuickXORHash(&content))
+			hashType = "QuickXORHash"
+		}
 
-		d.mutex.Lock()
-		defer d.mutex.Unlock()
-		// this check is here in case the API file sizes are WRONG (it happens)
-		d.SizeInternal = uint64(len(content))
-		d.data = &content
-		return nil, uint32(0), 0
+		if hashActual == hashWanted {
+			// disk content is only used if the checksums match
+			log.WithFields(log.Fields{
+				"path": path,
+				"id":   id,
+			}).Info("Found content in cache.")
+
+			d.mutex.Lock()
+			defer d.mutex.Unlock()
+			// this check is here in case the API file sizes are WRONG (it happens)
+			d.SizeInternal = uint64(len(content))
+			d.data = &content
+			return nil, uint32(0), 0
+		}
+		log.WithFields(log.Fields{
+			"id":          id,
+			"path":        path,
+			"hash_wanted": hashWanted,
+			"hash_actual": hashActual,
+			"hash_type":   hashType,
+		}).Info("Not using cached item due to file hash mismatch.")
 	}
 
 	// didn't have it on disk, now try api
 	log.WithFields(log.Fields{
+		"id":   id,
 		"path": path,
-	}).Info("Fetching remote content for item from API")
+	}).Info("Fetching remote content for item from API.")
 
 	auth := cache.GetAuth()
 	id, err := d.RemoteID(auth)
@@ -785,7 +838,7 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 			"err":  err,
 			"id":   id,
 			"path": path,
-		}).Error("Failed to fetch remote content")
+		}).Error("Failed to fetch remote content.")
 		return nil, uint32(0), syscall.EREMOTEIO
 	}
 

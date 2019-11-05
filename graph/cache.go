@@ -18,21 +18,15 @@ import (
 // that local changes can persist. Should be created using the NewCache()
 // constructor.
 type Cache struct {
-	metadata sync.Map
-	db       *bolt.DB
-	auth     *Auth
-	mu.RWMutex
+	metadata  sync.Map
+	db        *bolt.DB
 	root      string // the id of the filesystem's root item
+	driveType string // personal | business
 	deltaLink string
-}
+	uploads   *UploadManager
 
-// NewFS is a wrapper around NewCache
-//TODO refactor this out
-func NewFS(dbpath string) *DriveItem {
-	auth := Authenticate()
-	cache := NewCache(auth, dbpath)
-	root, _ := cache.GetPath("/", auth)
-	return root
+	mu.RWMutex
+	auth *Auth
 }
 
 // NewCache creates a new Cache
@@ -50,7 +44,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		db:   db,
 	}
 
-	root, err := GetItem("/", auth)
+	root, err := GetItem("root", auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
@@ -60,10 +54,14 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
+	cache.uploads = NewUploadManager(2*time.Second, auth)
+
+	drive, _ := GetDrive(auth)
+	cache.driveType = drive.DriveType
+
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
 	cache.deltaLink = "/me/drive/root/delta?token=latest"
-
 	// deltaloop is started manually
 	return cache
 }
@@ -225,13 +223,6 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 			children[strings.ToLower(child.Name())] = child
 		}
 		return children, nil
-	}
-
-	// check that we have a valid auth before proceeding
-	if auth == nil || auth.AccessToken == "" {
-		return nil, errors.New("Auth was nil/zero and children of \"" +
-			item.Path() +
-			"\" were not in cache. Could not fetch item as a result.")
 	}
 
 	// We haven't fetched the children for this item yet, get them from the
