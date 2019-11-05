@@ -720,7 +720,7 @@ func (d *DriveItem) Rename(ctx context.Context, name string, newParent fs.InodeE
 	}
 
 	parentID := newParentItem.ID()
-	if isLocalID(parentID) || err != nil {
+	if isLocalID(parentID) {
 		// should never be reached, but being extra safe here
 		log.WithFields(log.Fields{
 			"id":   parentID,
