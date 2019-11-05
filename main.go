@@ -15,7 +15,7 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-const onedriverVersion = "0.4"
+const onedriverVersion = "0.5"
 
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Onedrive.
@@ -23,6 +23,7 @@ func usage() {
 This program will mount your Onedrive account as a Linux filesystem at the
 specified mountpoint. Note that this is not a sync client - files are fetched
 on-demand and cached locally. Only files you actually use will be downloaded.
+This filesystem requires an active internet connection to work.
 
 Usage: onedriver [options] <mountpoint>
 
