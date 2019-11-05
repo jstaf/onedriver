@@ -105,6 +105,7 @@ func TestReadWrite(t *testing.T) {
 }
 
 // test that we can create a file and rename it
+//TODO this can fail if a server-side rename undoes the second local rename
 func TestRenameMove(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "rename.txt")

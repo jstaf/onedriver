@@ -123,23 +123,36 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	))
 
 	// change and upload it via the API
+	time.Sleep(time.Second * 10)
 	item, err := GetItemPath("/onedriver_tests/delta/remote_content", auth)
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
+	item.SizeInternal = uint64(len(newContent))
 	item.data = &newContent
 	session, err := NewUploadSession(item, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
+	time.Sleep(time.Second * 5)
+	body, _ := GetItemContent(item.ID(), auth)
+	if bytes.Compare(body, newContent) != 0 {
+		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
+	}
+
+	var content []byte
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
-		content, err := ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
+		content, err = ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
 		failOnErr(t, err)
-		if bytes.HasPrefix(content, []byte("because")) {
+		if bytes.Compare(content, newContent) == 0 {
 			return
 		}
 	}
-	t.Fatal("Failed to sync content to local machine.")
+
+	t.Fatalf("Failed to sync content to local machine. Got content: \"%s\". "+
+		"Wanted: \"because it has been changed remotely!\". "+
+		"Remote content: \"%s\".",
+		string(content), string(body))
 }
 
 // Change the content both on the server and the client and verify that the

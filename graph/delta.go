@@ -55,7 +55,8 @@ type deltaResponse struct {
 // Polls the delta endpoint and return deltas + whether or not to continue
 // polling. Does not perform deduplication. Note that changes from the local
 // client will actually appear as deltas from the server (there is no
-// distinction between local and remote content from the server's perspective).
+// distinction between local and remote changes from the server's perspective,
+// everything is a delta, regardless of where it came from).
 func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
@@ -84,37 +85,38 @@ func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 // * Deleted items
 // * Changed content remotely, but not locally
 // * New items in a folder we have locally
-func (c *Cache) applyDelta(item *DriveItem) error {
-	id := item.ID()
+func (c *Cache) applyDelta(delta *DriveItem) error {
+	id := delta.ID()
+	name := delta.Name()
 	log.WithFields(log.Fields{
 		"id":   id,
-		"name": item.Name(),
+		"name": name,
 	}).Debug("Applying delta")
 
 	// diagnose and act on what type of delta we're dealing with
 
 	// do we have it at all?
-	parentID := item.ParentID()
+	parentID := delta.ParentID()
 	if parent := c.GetID(parentID); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
 		log.WithFields(log.Fields{
 			"id":       id,
 			"parentID": parentID,
-			"name":     item.Name(),
+			"name":     name,
 			"delta":    "skip",
 		}).Trace("Skipping delta, item's parent not in cache.")
 		return nil
 	}
 
 	// was it deleted?
-	if item.Deleted != nil {
+	if delta.Deleted != nil {
 		//TODO from docs:
 		// you should only delete a folder locally if it is empty after syncing
 		// all the changes.
 		log.WithFields(log.Fields{
 			"id":    id,
-			"name":  item.Name(),
+			"name":  name,
 			"delta": "delete",
 		}).Info("Applying server-side deletion of item.")
 		c.DeleteID(id)
@@ -128,20 +130,20 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 		log.WithFields(log.Fields{
 			"id":       id,
 			"parentID": parentID,
-			"name":     item.Name(),
+			"name":     name,
 			"delta":    "create",
 		}).Info("Creating inode from delta.")
-		c.InsertChild(parentID, item)
+		c.InsertChild(parentID, delta)
 		return nil
 	}
 
 	// was the item moved?
-	if local.ParentID() != item.ParentID() || local.Name() != item.Name() {
+	if local.ParentID() != parentID || local.Name() != name {
 		log.WithFields(log.Fields{
 			"parent":    local.ParentID(),
 			"name":      local.Name(),
 			"newParent": parentID,
-			"newName":   item.Name(),
+			"newName":   name,
 			"id":        id,
 			"delta":     "rename",
 		}).Info("Applying server-side rename")
@@ -152,13 +154,13 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 				"parent":    local.ParentID(),
 				"name":      local.Name(),
 				"newParent": parentID,
-				"newName":   item.Name(),
+				"newName":   name,
 				"id":        id,
 				"delta":     "rename",
 			}).Error("Either original parent or new parent not found in cache!")
 			return errors.New("Parent not in cache")
 		}
-		parent.Rename(context.Background(), local.Name(), newParent, item.Name(), 0)
+		parent.Rename(context.Background(), local.Name(), newParent, name, 0)
 		// do not return, there may be additional changes
 	}
 
@@ -168,6 +170,28 @@ func (c *Cache) applyDelta(item *DriveItem) error {
 	// actually modifies remotely is the actual file data, so we simply accept
 	// the remote metadata changes that do not deal with the file's content
 	// changing.
-	//TODO
+	if delta.ModTime() > local.ModTime() {
+		//TODO check if local has changes and rename the server copy if so
+		log.WithFields(log.Fields{
+			"id":    id,
+			"name":  name,
+			"delta": "overwrite",
+		}).Info("Overwriting local item, no local changes to preserve.")
+		// update modtime, hashes, purge local content
+		c.DeleteContent(id)
+		local.mutex.Lock()
+		defer local.mutex.Unlock()
+		local.ModTimeInternal = delta.ModTimeInternal
+		local.FileInternal = delta.FileInternal
+		local.hasChanges = false
+		local.data = nil
+		return nil
+	}
+
+	log.WithFields(log.Fields{
+		"id":    id,
+		"name":  name,
+		"delta": "skip",
+	}).Info("Skipping, no changes relative to local state.")
 	return nil
 }

@@ -774,23 +774,27 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 	cache := d.GetCache()
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
-		var matches bool
+		var hashWanted, hashActual, hashType string
 		if isLocalID(id) && d.FileInternal == nil {
-			// has never been uploaded, therefore we simply accept cache contents
-			matches = true
+			// only check hashes if the file has been uploaded before, otherwise
+			// we just use the zero values and accept the cached content.
+			hashType = "none"
 		} else if cache.driveType == "personal" {
 			d.mutex.RLock()
-			sha1 := d.FileInternal.Hashes.SHA1Hash
+			hashWanted = strings.ToLower(d.FileInternal.Hashes.SHA1Hash)
 			d.mutex.RUnlock()
-			matches = SHA1Hash(&content) == sha1
+			hashActual = strings.ToLower(SHA1Hash(&content))
+			hashType = "SHA1"
 		} else {
 			d.mutex.RLock()
-			quickXOR := d.FileInternal.Hashes.QuickXorHash
+			hashWanted = strings.ToLower(d.FileInternal.Hashes.QuickXorHash)
 			d.mutex.RUnlock()
-			matches = QuickXORHash(&content) == quickXOR
+			hashActual = strings.ToLower(QuickXORHash(&content))
+			hashType = "QuickXORHash"
 		}
 
-		if matches { // disk content is only used if the checksums match
+		if hashActual == hashWanted {
+			// disk content is only used if the checksums match
 			log.WithFields(log.Fields{
 				"path": path,
 				"id":   id,
@@ -803,12 +807,20 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 			d.data = &content
 			return nil, uint32(0), 0
 		}
+		log.WithFields(log.Fields{
+			"id":          id,
+			"path":        path,
+			"hash_wanted": hashWanted,
+			"hash_actual": hashActual,
+			"hash_type":   hashType,
+		}).Info("Not using cached item due to file hash mismatch.")
 	}
 
 	// didn't have it on disk, now try api
 	log.WithFields(log.Fields{
+		"id":   id,
 		"path": path,
-	}).Info("Fetching remote content for item from API")
+	}).Info("Fetching remote content for item from API.")
 
 	auth := cache.GetAuth()
 	id, err := d.RemoteID(auth)
@@ -827,7 +839,7 @@ func (d *DriveItem) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, f
 			"err":  err,
 			"id":   id,
 			"path": path,
-		}).Error("Failed to fetch remote content")
+		}).Error("Failed to fetch remote content.")
 		return nil, uint32(0), syscall.EREMOTEIO
 	}
 
