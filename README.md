@@ -5,9 +5,9 @@
 onedriver
 ======================================
 
-onedriver is a native Linux filesystem for Microsoft OneDrive.
+**onedriver is a native Linux filesystem for Microsoft OneDrive.**
 
-The overwhelming majority of OneDrive clients are sync tools, and will
+The overwhelming majority of OneDrive clients are actually sync tools, and will
 actually download the entire contents of your OneDrive to disk. No one wants
 this. Why are you paying for cloud storage if it has to stay on your local
 computer?
@@ -18,19 +18,16 @@ no difference between working with files on OneDrive and the files on your
 local hard disk. Just mount onedriver to a directory, and get started with
 your files on OneDrive!
 
-Using onedriver is as simple as:
-
-```bash
-onedriver /path/to/mount/onedrive/at
-```
+**Getting started with onedriver is as simple as running `onedriver /path/to/mount/onedrive/at`**
 
 ### Features
 
-* Files are opened and downloaded on-demand, with aggressive caching of file 
-  contents and metadata locally. onedriver does not waste disk space on files
-  that are supposed to be stored in the cloud.
 * No configuration- it just works. There's nothing to setup. There's no special
   interface beyond your normal file browser.
+* Files are opened and downloaded on-demand, with aggressive caching of file 
+  contents and metadata locally. onedriver does not waste disk space on files
+  that are supposed to be stored in the cloud. (An internet connection is still
+  required, however.)
 * Stateless. Unlike a few other OneDrive clients, there's nothing to break 
   locally. You never have to worry about somehow messing up your local copy and 
   having to figure out how to fix things before you can access your files again.
@@ -65,7 +62,7 @@ text instructions in the terminal). Though it's not officially supported,
 the headless build should work on macOS, BSD, and even Windows as long as you 
 have a variant of FUSE installed.
 
-### Running tests
+### Running the tests
 
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account
