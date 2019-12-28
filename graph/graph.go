@@ -238,3 +238,7 @@ func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 	}
 	return err
 }
+
+func isOffline(err error) bool {
+	return strings.Contains(err.Error(), "network is unreachable")
+}

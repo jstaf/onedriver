@@ -24,6 +24,7 @@ type Cache struct {
 	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
+	offline   bool
 
 	mu.RWMutex
 	auth *Auth
@@ -37,6 +38,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	}
 	db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("content"))
+		_, err = tx.CreateBucketIfNotExists([]byte("metadata"))
 		return err
 	})
 	cache := &Cache{
@@ -46,9 +48,26 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	root, err := GetItem("root", auth)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Fatal("Could not fetch root item of filesystem!")
+		if isOffline(err) {
+			// no network, load from db if possible and go to read-only state
+			cache.offline = true
+			err = db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("metadata"))
+				content := b.Get([]byte("root"))
+				if content == nil {
+					return errors.New("no data for root")
+				}
+				json.Unmarshal(content, &root)
+				return nil
+			})
+			if err != nil {
+				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
+			}
+		} else {
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Fatal("Could not fetch root item of filesystem!")
+		}
 	}
 	root.cache = cache
 	cache.root = root.ID()
@@ -56,8 +75,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
 
-	drive, _ := GetDrive(auth)
-	cache.driveType = drive.DriveType
+	if drive, err := GetDrive(auth); err != nil {
+		cache.driveType = drive.DriveType
+	}
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
@@ -228,10 +248,17 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	// We haven't fetched the children for this item yet, get them from the
 	// server.
 	body, err := Get(ChildrenPathID(id), auth)
-	var fetched driveChildren
 	if err != nil {
+		if isOffline(err) {
+			log.WithFields(log.Fields{
+				"id": id,
+			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
+			return children, nil
+		}
+		// something else happened besides being offline
 		return nil, err
 	}
+	var fetched driveChildren
 	json.Unmarshal(body, &fetched)
 
 	item.mutex.Lock()
@@ -433,6 +460,16 @@ func (c *Cache) MoveContent(oldID string, newID string) error {
 		}
 		b.Put([]byte(newID), content)
 		b.Delete([]byte(oldID))
+		return nil
+	})
+}
+
+// InsertDBMetadata inserts an array of DriveItem metadata to the on-disk cache
+func (c *Cache) InsertDBMetadata(items []*DriveItem) error {
+	return c.db.Update(func(tx *bolt.Tx) error {
+		for _, item := range items {
+			item.ID()
+		}
 		return nil
 	})
 }

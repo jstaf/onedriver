@@ -2,7 +2,7 @@
 
 # actual release binary
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/main.go
-	go build -o onedriver ./cmd/onedriver
+	go build ./cmd/onedriver
 
 # helper tool for boltdb databases
 bolt-insert: cmd/bolt-insert/main.go

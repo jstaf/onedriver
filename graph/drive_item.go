@@ -611,14 +611,27 @@ func octal(i uint32) string {
 // the return are fuseflags.
 func (d *DriveItem) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	path := d.Path()
+	id := d.ID()
 	log.WithFields(log.Fields{
+		"id":   id,
 		"path": path,
 		"name": name,
 		"mode": octal(mode),
 	}).Debug()
 
+	cache := d.GetCache()
+	if cache.offline {
+		// nope, we are refusing op to avoid data loss later
+		log.WithFields(log.Fields{
+			"id":   id,
+			"path": path,
+			"name": name,
+		}).Warn("We are offline. Refusing Create() to avoid data loss later.")
+		return nil, nil, uint32(0), syscall.EREMOTEIO
+	}
+
 	item := NewDriveItem(name, mode, d)
-	d.GetCache().InsertChild(d.ID(), item)
+	cache.InsertChild(id, item)
 	return d.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }
 
