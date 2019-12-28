@@ -11,4 +11,9 @@ mount/
 *.db
 *.rpm
 *.deb
+
+# do not include binaries, but do include sources
 onedriver
+bolt-insert
+!cmd/onedriver
+!cmd/bolt-insert
