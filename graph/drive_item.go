@@ -136,12 +136,12 @@ func fromJSON(data []byte) (*DriveItem, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	item := NewDriveItem("", uint32(0), nil) // values are overwritten
-	item.APIItem = raw.APIItem
-	item.children = raw.Children
-	item.mode = raw.Mode
-	item.subdir = raw.Subdir
-	return item, nil
+	return &DriveItem{
+		APIItem:  raw.APIItem,
+		children: raw.Children,
+		mode:     raw.Mode,
+		subdir:   raw.Subdir,
+	}, nil
 }
 
 // String is only used for debugging by go-fuse

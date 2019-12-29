@@ -125,6 +125,9 @@ func (c *Cache) GetID(id string) *DriveItem {
 				}
 				return err
 			})
+			if found != nil {
+				found.cache = c
+			}
 			return found
 		}
 		return nil
@@ -436,7 +439,7 @@ func (c *Cache) MovePath(oldPath string, newPath string, auth *Auth) error {
 	return nil
 }
 
-// GetContent read a file's content from disk.
+// GetContent reads a file's content from disk.
 func (c *Cache) GetContent(id string) []byte {
 	var content []byte // nil
 	c.db.View(func(tx *bolt.Tx) error {
