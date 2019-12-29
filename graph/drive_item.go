@@ -83,6 +83,15 @@ type DriveItem struct {
 	mode          uint32         // do not set manually
 }
 
+// SerializeableItem is like a DriveItem, but can be serialized for local
+// storage to disk
+type SerializeableItem struct {
+	APIItem
+	Children []string
+	Subdir   uint32
+	Mode     uint32
+}
+
 // NewDriveItem initializes a new DriveItem
 func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 	itemParent := &DriveItemParent{ID: "", Path: ""}
@@ -104,6 +113,35 @@ func NewDriveItem(name string, mode uint32, parent *DriveItem) *DriveItem {
 		data:     &empty,
 		mode:     mode,
 	}
+}
+
+// toJSON converts a DriveItem to JSON for use with local storage. Not used with
+// the API.
+func (d *DriveItem) toJSON() []byte {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	data, _ := json.Marshal(SerializeableItem{
+		APIItem:  d.APIItem,
+		Children: d.children,
+		Subdir:   d.subdir,
+		Mode:     d.mode,
+	})
+	return data
+}
+
+// fromJSON converts JSON to a *DriveItem when loading from local storage. Not
+// used with the API.
+func fromJSON(data []byte) (*DriveItem, error) {
+	var raw SerializeableItem
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	item := NewDriveItem("", uint32(0), nil) // values are overwritten
+	item.APIItem = raw.APIItem
+	item.children = raw.Children
+	item.mode = raw.Mode
+	item.subdir = raw.Subdir
+	return item, nil
 }
 
 // String is only used for debugging by go-fuse

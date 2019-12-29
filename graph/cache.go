@@ -3,6 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +31,12 @@ type Cache struct {
 	auth *Auth
 }
 
+// boltdb buckets
+var (
+	CONTENT  = []byte("content")
+	METADATA = []byte("metadata")
+)
+
 // NewCache creates a new Cache
 func NewCache(auth *Auth, dbpath string) *Cache {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
@@ -37,8 +44,8 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
 	}
 	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("content"))
-		_, err = tx.CreateBucketIfNotExists([]byte("metadata"))
+		_, err := tx.CreateBucketIfNotExists(CONTENT)
+		_, err = tx.CreateBucketIfNotExists(METADATA)
 		return err
 	})
 	cache := &Cache{
@@ -51,16 +58,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		if isOffline(err) {
 			// no network, load from db if possible and go to read-only state
 			cache.offline = true
-			err = db.View(func(tx *bolt.Tx) error {
-				b := tx.Bucket([]byte("metadata"))
-				content := b.Get([]byte("root"))
-				if content == nil {
-					return errors.New("no data for root")
-				}
-				json.Unmarshal(content, &root)
-				return nil
-			})
-			if err != nil {
+			if root = cache.GetID("root"); root == nil {
 				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
 			}
 		} else {
@@ -68,6 +66,11 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				"err": err,
 			}).Fatal("Could not fetch root item of filesystem!")
 		}
+	} else {
+		// we need to label this as the root item for subsequent startups
+		cache.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(METADATA).Put([]byte("root"), root.toJSON())
+		})
 	}
 	root.cache = cache
 	cache.root = root.ID()
@@ -106,11 +109,24 @@ func (c *Cache) InodePath(inode *fs.Inode) string {
 	return leadingSlash(inode.Path(root.EmbeddedInode()))
 }
 
-// GetID gets an item from the cache by ID. No fetching is performed. Result is
-// nil if no item is found.
+// GetID gets an item from the cache by ID. No API fetching is performed. Result
+// is nil if no item is found.
 func (c *Cache) GetID(id string) *DriveItem {
 	entry, exists := c.metadata.Load(id)
 	if !exists {
+		if c.offline {
+			// disk is only used if we are offline
+			var found *DriveItem
+			c.db.View(func(tx *bolt.Tx) error {
+				data := tx.Bucket(METADATA).Get([]byte(id))
+				var err error
+				if data != nil {
+					found, err = fromJSON(data)
+				}
+				return err
+			})
+			return found
+		}
 		return nil
 	}
 	item := entry.(*DriveItem)
@@ -424,7 +440,7 @@ func (c *Cache) MovePath(oldPath string, newPath string, auth *Auth) error {
 func (c *Cache) GetContent(id string) []byte {
 	var content []byte // nil
 	c.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		if tmp := b.Get([]byte(id)); tmp != nil {
 			content = make([]byte, len(tmp))
 			copy(content, tmp)
@@ -437,7 +453,7 @@ func (c *Cache) GetContent(id string) []byte {
 // InsertContent writes file content to disk.
 func (c *Cache) InsertContent(id string, content []byte) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		return b.Put([]byte(id), content)
 	})
 }
@@ -445,7 +461,7 @@ func (c *Cache) InsertContent(id string, content []byte) error {
 // DeleteContent deletes content from disk.
 func (c *Cache) DeleteContent(id string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		return b.Delete([]byte(id))
 	})
 }
@@ -453,7 +469,7 @@ func (c *Cache) DeleteContent(id string) error {
 // MoveContent moves content from one ID to another
 func (c *Cache) MoveContent(oldID string, newID string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		content := b.Get([]byte(oldID))
 		if content == nil {
 			return errors.New("Content not found for ID: " + oldID)
@@ -464,12 +480,25 @@ func (c *Cache) MoveContent(oldID string, newID string) error {
 	})
 }
 
-// InsertDBMetadata inserts an array of DriveItem metadata to the on-disk cache
-func (c *Cache) InsertDBMetadata(items []*DriveItem) error {
-	return c.db.Update(func(tx *bolt.Tx) error {
-		for _, item := range items {
-			item.ID()
-		}
-		return nil
+// SerializeAll dumps all inode metadata currently in the cache to disk. This
+// metadata is only used later if an item could not be found in memory AND the
+// cache is offline. Old metadata is not removed, only overwritten (to avoid an
+// offline session from wiping all metadata on a subsequent serialization).
+func (c *Cache) SerializeAll() {
+	log.Info("Serializing cache metadata to disk.")
+	c.metadata.Range(func(key interface{}, value interface{}) bool {
+		c.db.Batch(func(tx *bolt.Tx) error {
+			id := fmt.Sprint(key)
+			contents := value.(*DriveItem).toJSON()
+			b := tx.Bucket(METADATA)
+			b.Put([]byte(id), contents)
+			if id == c.root {
+				// root item must be updated manually (since there's actually
+				// two copies)
+				b.Put([]byte("root"), contents)
+			}
+			return nil
+		})
+		return true
 	})
 }

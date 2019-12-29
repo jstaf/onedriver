@@ -20,6 +20,8 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		for {
 			incoming, cont, err := c.pollDeltas(c.auth)
 			if err != nil {
+				// TODO the only thing that should be able to bring the FS out
+				// of a read-only state is a successful delta call
 				log.WithField("err", err).Error("Error during delta fetch.")
 				break
 			}
@@ -42,6 +44,7 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 
 		// sleep till next sync interval
 		log.Info("Sync complete!")
+		c.SerializeAll()
 		time.Sleep(interval)
 	}
 }
@@ -60,9 +63,6 @@ type deltaResponse struct {
 func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Could not fetch server deltas.")
 		return make([]*DriveItem, 0), false, err
 	}
 
