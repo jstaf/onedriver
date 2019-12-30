@@ -75,40 +75,40 @@ func (u *UploadSession) setState(state int) {
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(d *DriveItem, auth *Auth) (*UploadSession, error) {
-	id, err := d.RemoteID(auth)
+func NewUploadSession(inode *Inode, auth *Auth) (*UploadSession, error) {
+	id, err := inode.RemoteID(auth)
 	if err != nil || isLocalID(id) {
 		log.WithFields(log.Fields{
 			"err":  err,
-			"path": d.Path(),
+			"path": inode.Path(),
 		}).Errorf("Could not obtain remote ID for upload.")
 		return nil, err
 	}
 
-	d.mutex.RLock()
+	inode.mutex.RLock()
 	// create a generic session for all files
 	session := UploadSession{
-		ID:   d.IDInternal,
-		Size: d.SizeInternal,
-		data: make([]byte, d.SizeInternal),
+		ID:   inode.IDInternal,
+		Size: inode.SizeInternal,
+		data: make([]byte, inode.SizeInternal),
 	}
-	if d.data == nil {
+	if inode.data == nil {
 		log.WithFields(log.Fields{
-			"id":   d.IDInternal,
-			"name": d.NameInternal,
+			"id":   inode.IDInternal,
+			"name": inode.NameInternal,
 		}).Error("Tried to dereference a nil pointer.")
-		defer d.mutex.RUnlock()
+		defer inode.mutex.RUnlock()
 		return nil, errors.New("inode data was nil")
 	}
-	copy(session.data, *d.data)
-	d.mutex.RUnlock()
+	copy(session.data, *inode.data)
+	inode.mutex.RUnlock()
 
 	if session.isLargeSession() {
 		// must create a formal upload session with the API
 		sessionResp, _ := json.Marshal(UploadSessionPost{
 			ConflictBehavior: "replace",
 			FileSystemInfo: FileSystemInfo{
-				LastModifiedDateTime: time.Unix(int64(d.ModTime()), 0),
+				LastModifiedDateTime: time.Unix(int64(inode.ModTime()), 0),
 			},
 		})
 

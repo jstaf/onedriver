@@ -10,10 +10,10 @@ import (
 // verify that items automatically get created with an ID of "local-"
 func TestConstructor(t *testing.T) {
 	t.Parallel()
-	item := NewDriveItem("Test Create", 0644|fuse.S_IFREG, nil)
-	if item.ID() == "" || !isLocalID(item.ID()) {
+	inode := NewInode("Test Create", 0644|fuse.S_IFREG, nil)
+	if inode.ID() == "" || !isLocalID(inode.ID()) {
 		t.Fatalf("Expected an ID beginning with \"local-\", got \"%s\" instaed",
-			item.ID())
+			inode.ID())
 	}
 }
 
