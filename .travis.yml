@@ -1,4 +1,4 @@
-dist: xenial
+dist: bionic
 addons:
   apt:
     packages:
@@ -8,19 +8,20 @@ addons:
 
 language: go
 go:
-  - "1.12"
+  - "1.13"
 env:
   - GO111MODULE=on
 
-# we copy the auth_tokens for the test account to and from s3 each build.
 cache: pip
 install:
   - pip install --user awscli
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/goimports
 script:
-  - go build
-  - bash .lint.sh
+  - make onedriver
+  - bash .travis_lint.sh
+  # we copy the auth_tokens for the test account to and from s3 each build.
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
