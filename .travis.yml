@@ -20,6 +20,7 @@ install:
   - go get github.com/mattn/goveralls
 script:
   - go build
+  - bash .lint.sh
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
