@@ -1,14 +1,9 @@
 .PHONY = all, test, test_no_race, rpm, clean
 
-# actual release binary
-onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/main.go
+onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build ./cmd/onedriver
 
-# helper tool for boltdb databases
-bolt-insert: cmd/bolt-insert/main.go
-	go build ./cmd/bolt-insert
-
-all: onedriver bolt-insert test onedriver.deb rpm
+all: onedriver test onedriver.deb rpm
 
 # kind of a yucky build using nfpm - will be replaced later with a real .deb
 # build pipeline
