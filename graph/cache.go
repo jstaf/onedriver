@@ -54,7 +54,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	root, err := GetItem("root", auth)
 	if err != nil {
-		if isOffline(err) {
+		if IsOffline(err) {
 			// no network, load from db if possible and go to read-only state
 			cache.offline = true
 			if root = cache.GetID("root"); root == nil {
@@ -267,7 +267,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 	// server.
 	body, err := Get(ChildrenPathID(id), auth)
 	if err != nil {
-		if isOffline(err) {
+		if IsOffline(err) {
 			log.WithFields(log.Fields{
 				"id": id,
 			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")

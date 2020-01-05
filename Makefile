@@ -27,6 +27,7 @@ dmel.fa:
 test: onedriver dmel.fa
 	rm -f fusefs_tests.race*
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph
+	unshare -nr go test -race -v -parallel=8 -count=1 ./offline
 
 test_no_race: onedriver dmel.fa
 	go test -v -count=1 ./graph

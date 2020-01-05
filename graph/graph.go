@@ -164,10 +164,10 @@ func GetItem(id string, auth *Auth) (*Inode, error) {
 	}
 
 	body, err := Get(path, auth)
-	inode := &Inode{}
 	if err != nil {
-		return inode, err
+		return nil, err
 	}
+	inode := &Inode{}
 	err = json.Unmarshal(body, inode)
 	return inode, err
 }
@@ -239,7 +239,11 @@ func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 	return err
 }
 
-func isOffline(err error) bool {
+// IsOffline checks if an error is indicative of being offline.
+func IsOffline(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.Contains(err.Error(), "network is unreachable") ||
 		strings.Contains(err.Error(), "connection refused")
 }
