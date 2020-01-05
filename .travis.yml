@@ -26,10 +26,14 @@ script:
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
   - go test -v -covermode=count -coverprofile=coverage.out ./graph
+  - go test -c ./offline
+  - export TEST_UID=$(id -u)
+  - export TEST_GID=$(id -g)
+  - sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.covermode=count -test.coverprofile=offline.out
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
   - aws s3 cp fusefs_tests.log s3://fusefs-travis/
-  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out,offline.out -service=travis-ci -repotoken $COVERALLS_TOKEN
 
 notifications:
   email: false

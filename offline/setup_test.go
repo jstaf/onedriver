@@ -25,7 +25,7 @@ var auth *graph.Auth
 
 // Like the graph package, but designed for running tests offline.
 func TestMain(m *testing.M) {
-	os.Chdir("..")
+	//os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
 	exec.Command("fusermount", "-uz", mountLoc).Run()
@@ -45,6 +45,7 @@ func TestMain(m *testing.M) {
 	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.DebugLevel)
 
+	// reuses the cached data from the previous tests
 	root := graph.NewFS("test.db", 5*time.Second)
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{

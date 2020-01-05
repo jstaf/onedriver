@@ -1,9 +1,11 @@
-.PHONY = all, test, test_no_race, rpm, clean
+.PHONY = all, test, test_offline, test_no_race, rpm, clean
+TEST_UID = $(shell id -u)
+TEST_GID = $(shell id -g)
 
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build ./cmd/onedriver
 
-all: onedriver test onedriver.deb rpm
+all: onedriver test test_offline onedriver.deb rpm
 
 # kind of a yucky build using nfpm - will be replaced later with a real .deb
 # build pipeline
@@ -27,14 +29,17 @@ dmel.fa:
 test: onedriver dmel.fa
 	rm -f *.race*
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph
-	# install test dependencies online, then run offline tests without network access
-	go test -i ./offline
-	GORACE="log_path=offline_tests.race strip_path_prefix=1" unshare -nr go test -race -v -parallel=8 -count=1 ./offline
 
 test_no_race: onedriver dmel.fa
 	go test -v -count=1 ./graph
 	go test -i ./offline
-	unshare -nr go test -v -count=1 ./offline
+
+# Install test dependencies and build test binary online, then disable network
+# access and run tests as the current user. No way to get around using sudo to 
+# change UIDs, otherwise we don't have permission to mount the fuse filesystem.
+test_offline: onedriver
+	go test -c ./offline
+	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v
 
 # for autocompletion by ide-clangd
 compile_flags.txt:
