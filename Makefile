@@ -25,12 +25,16 @@ dmel.fa:
 # cache disabled to always force rerun of all tests
 # (some tests can fail due to race conditions (since all fuse ops are async))
 test: onedriver dmel.fa
-	rm -f fusefs_tests.race*
+	rm -f *.race*
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph
-	unshare -nr go test -race -v -parallel=8 -count=1 ./offline
+	# install test dependencies online, then run offline tests without network access
+	go test -i ./offline
+	GORACE="log_path=offline_tests.race strip_path_prefix=1" unshare -nr go test -race -v -parallel=8 -count=1 ./offline
 
 test_no_race: onedriver dmel.fa
 	go test -v -count=1 ./graph
+	go test -i ./offline
+	unshare -nr go test -v -count=1 ./offline
 
 # for autocompletion by ide-clangd
 compile_flags.txt:
