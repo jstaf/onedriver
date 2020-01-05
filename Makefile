@@ -41,6 +41,16 @@ test_offline: onedriver
 	go test -c ./offline
 	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v
 
+# used by travis CI since the version of unshare is too old on ubuntu 18.04
+.ONESHELL:
+unshare:
+	wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.34/util-linux-2.34.tar.gz
+	tar -xzf util-linux-2.34.tar.gz
+	cd util-linux-2.34
+	./configure --disable-dependency-tracking
+	make unshare
+	cp unshare ../
+
 # for autocompletion by ide-clangd
 compile_flags.txt:
 	pkg-config --cflags gtk+-3.0 webkit2gtk-4.0 | sed 's/ /\n/g' > $@
