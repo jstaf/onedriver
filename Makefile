@@ -1,16 +1,29 @@
-.PHONY = all, test, test_offline, test_no_race, rpm, clean
+.PHONY: all, test, test_no_race, rpm, clean
+
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
+UNSHARE_VERSION = 2.34
+UNSHARE_TEST = $(shell unshare --help | grep setuid | wc -l)
+ifeq ($(UNSHARE_TEST), 1)
+	UNSHARE = unshare
+else
+	UNSHARE = ./unshare
+	EXTRA_TEST_DEPS = unshare
+endif
+
 
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build ./cmd/onedriver
 
-all: onedriver test test_offline onedriver.deb rpm
+
+all: onedriver test onedriver.deb rpm
+
 
 # kind of a yucky build using nfpm - will be replaced later with a real .deb
 # build pipeline
 onedriver.deb: onedriver
 	nfpm pkg --target $@
+
 
 rpm: onedriver.spec
 	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
@@ -20,40 +33,44 @@ rpm: onedriver.spec
 	rpmbuild -bb --define "debug_package %{nil}" $<
 	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
 
+
 # a large text file for us to test upload sessions with. #science
 dmel.fa:
 	curl ftp://ftp.ensemblgenomes.org/pub/metazoa/release-42/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.chromosome.X.fa.gz | zcat > $@
 
-# cache disabled to always force rerun of all tests
-# (some tests can fail due to race conditions (since all fuse ops are async))
-test: onedriver dmel.fa
+
+# For offline tests, the test binary is built online, then network access is
+# disabled and tests are run. sudo is required - otherwise we don't have
+# permission to mount the fuse filesystem.
+test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	rm -f *.race*
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph
-
-test_no_race: onedriver dmel.fa
-	go test -v -count=1 ./graph
-	go test -i ./offline
-
-# Install test dependencies and build test binary online, then disable network
-# access and run tests as the current user. No way to get around using sudo to 
-# change UIDs, otherwise we don't have permission to mount the fuse filesystem.
-test_offline: onedriver
 	go test -c ./offline
-	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v
+	@echo "sudo required to run offline test suite:"
+	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
+
+
+test_no_race: onedriver dmel.fa $(EXTRA_TEST_DEPS)
+	go test -v -count=1 ./graph
+	go test -c ./offline
+	@echo "sudo required to run offline test suite:"
+	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.count=1
+
 
 # used by travis CI since the version of unshare is too old on ubuntu 18.04
-.ONESHELL:
 unshare:
-	wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.34/util-linux-2.34.tar.gz
-	tar -xzf util-linux-2.34.tar.gz
-	cd util-linux-2.34
-	./configure --disable-dependency-tracking
-	make unshare
-	cp unshare ../
+	rm -rf util-linux-$(UNSHARE_VERSION)*
+	wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v$(UNSHARE_VERSION)/util-linux-$(UNSHARE_VERSION).tar.gz
+	tar -xzf util-linux-$(UNSHARE_VERSION).tar.gz
+	cd util-linux-$(UNSHARE_VERSION) && ./configure --disable-dependency-tracking
+	make -C util-linux-$(UNSHARE_VERSION) unshare
+	cp util-linux-$(UNSHARE_VERSION)/unshare .
+
 
 # for autocompletion by ide-clangd
 compile_flags.txt:
 	pkg-config --cflags gtk+-3.0 webkit2gtk-4.0 | sed 's/ /\n/g' > $@
+
 
 # will literally purge everything: all built artifacts, all logs, all tests,
 # all files tests depend on, all auth tokens... EVERYTHING
