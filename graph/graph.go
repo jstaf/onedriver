@@ -40,7 +40,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 
 	auth.Refresh()
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
