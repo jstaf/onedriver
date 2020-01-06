@@ -3,8 +3,7 @@
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
 UNSHARE_VERSION = 2.34
-UNSHARE_TEST = $(shell unshare --help | grep setuid | wc -l)
-ifeq ($(UNSHARE_TEST), 1)
+ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
 else
 	UNSHARE = ./unshare
@@ -76,4 +75,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.log *.fa *.gz onedriver auth_tokens.json
+	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json
+	rm -rf util-linux-*
