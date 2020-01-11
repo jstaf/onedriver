@@ -53,8 +53,8 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 }
 
 // QueueUpload queues an item for upload.
-func (u *UploadManager) QueueUpload(item *DriveItem) error {
-	session, err := NewUploadSession(item, u.auth)
+func (u *UploadManager) QueueUpload(inode *Inode) error {
+	session, err := NewUploadSession(inode, u.auth)
 	if err == nil {
 		u.queue <- session
 	}

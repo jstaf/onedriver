@@ -11,4 +11,12 @@ mount/
 *.db
 *.rpm
 *.deb
+*.test
+*.out
+
+# do not include binaries, but do include sources
 onedriver
+!cmd/onedriver
+
+util-linux*
+unshare

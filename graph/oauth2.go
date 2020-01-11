@@ -58,6 +58,13 @@ func (a *Auth) Refresh() {
 			"application/x-www-form-urlencoded",
 			postData)
 		if err != nil {
+			if IsOffline(err) {
+				log.WithFields(log.Fields{
+					"err": err,
+				}).Error("Network unreachable, postponing renewal by 5 min.")
+				a.ExpiresAt = time.Now().Add(5 * time.Minute).Unix()
+				return
+			}
 			log.WithFields(log.Fields{
 				"err": err,
 			}).Fatal("Could not POST to renew tokens, exiting.")

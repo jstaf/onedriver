@@ -163,8 +163,9 @@ func TestAppend(t *testing.T) {
 	var counter int
 	for scanner.Scan() {
 		counter++
-		if scanner.Text() != "append" {
-			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanner.Text())
+		scanned := scanner.Text()
+		if scanned != "append" {
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanned)
 		}
 	}
 	if counter != 5 {
@@ -296,10 +297,8 @@ func TestUploadSession(t *testing.T) {
 	size := uint64(len(contents))
 	for i := 0; i < 60; i++ {
 		time.Sleep(time.Second)
-		//fmt.Printf(".")
 		item, _ := GetItemPath("/onedriver_tests/dmel.fa", auth)
 		if item != nil && item.Size() == size {
-			//fmt.Printf("\n")
 			return
 		}
 	}

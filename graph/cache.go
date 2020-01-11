@@ -3,6 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,9 +15,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Cache caches DriveItems for a filesystem. This cache never expires so
-// that local changes can persist. Should be created using the NewCache()
-// constructor.
+// Cache caches Inodes for a filesystem. This cache never expires so that local
+// changes can persist. Should be created using the NewCache() constructor.
 type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
@@ -24,10 +24,17 @@ type Cache struct {
 	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
+	offline   bool
 
 	mu.RWMutex
 	auth *Auth
 }
+
+// boltdb buckets
+var (
+	CONTENT  = []byte("content")
+	METADATA = []byte("metadata")
+)
 
 // NewCache creates a new Cache
 func NewCache(auth *Auth, dbpath string) *Cache {
@@ -36,8 +43,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
 	}
 	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("content"))
-		return err
+		tx.CreateBucketIfNotExists(CONTENT)
+		tx.CreateBucketIfNotExists(METADATA)
+		return nil
 	})
 	cache := &Cache{
 		auth: auth,
@@ -46,9 +54,22 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	root, err := GetItem("root", auth)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Fatal("Could not fetch root item of filesystem!")
+		if IsOffline(err) {
+			// no network, load from db if possible and go to read-only state
+			cache.offline = true
+			if root = cache.GetID("root"); root == nil {
+				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
+			}
+		} else {
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Fatal("Could not fetch root item of filesystem!")
+		}
+	} else {
+		// we need to label this as the root item for subsequent startups
+		cache.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(METADATA).Put([]byte("root"), root.AsJSON())
+		})
 	}
 	root.cache = cache
 	cache.root = root.ID()
@@ -56,8 +77,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
 
-	drive, _ := GetDrive(auth)
-	cache.driveType = drive.DriveType
+	if drive, err := GetDrive(auth); err != nil {
+		cache.driveType = drive.DriveType
+	}
 
 	// using token=latest because we don't care about existing items - they'll
 	// be downloaded on-demand by the cache
@@ -81,33 +103,49 @@ func leadingSlash(path string) string {
 }
 
 // InodePath calculates an inode's path to the filesystem root
-func (c *Cache) InodePath(inode *fs.Inode) string {
+func (c *Cache) InodePath(fuseInode *fs.Inode) string {
 	root, _ := c.GetPath("/", nil)
-	return leadingSlash(inode.Path(root.EmbeddedInode()))
+	return leadingSlash(fuseInode.Path(root.EmbeddedInode()))
 }
 
-// GetID gets an item from the cache by ID. No fetching is performed. Result is
-// nil if no item is found.
-func (c *Cache) GetID(id string) *DriveItem {
+// GetID gets an inode from the cache by ID. No API fetching is performed.
+// Result is nil if no inode is found.
+func (c *Cache) GetID(id string) *Inode {
 	entry, exists := c.metadata.Load(id)
 	if !exists {
+		if c.offline {
+			// disk is only used if we are offline
+			var found *Inode
+			c.db.View(func(tx *bolt.Tx) error {
+				data := tx.Bucket(METADATA).Get([]byte(id))
+				var err error
+				if data != nil {
+					found, err = NewInodeJSON(data)
+				}
+				return err
+			})
+			if found != nil {
+				found.cache = c
+			}
+			return found
+		}
 		return nil
 	}
-	item := entry.(*DriveItem)
-	return item
+	inode := entry.(*Inode)
+	return inode
 }
 
 // InsertID inserts a single item into the cache by ID and sets its parent using
-// the Item.Parent.ID, if set. Must be called after DeleteID, if being used to
+// the Inode.Parent.ID, if set. Must be called after DeleteID, if being used to
 // rename/move an item.
-func (c *Cache) InsertID(id string, item *DriveItem) {
+func (c *Cache) InsertID(id string, inode *Inode) {
 	// make sure the item knows about the cache itself, then insert
-	item.mutex.Lock()
-	item.cache = c
-	item.mutex.Unlock()
-	c.metadata.Store(id, item)
+	inode.mutex.Lock()
+	inode.cache = c
+	inode.mutex.Unlock()
+	c.metadata.Store(id, inode)
 
-	parentID := item.ParentID()
+	parentID := inode.ParentID()
 	if parentID == "" {
 		// root item, or parent not set
 		return
@@ -117,7 +155,7 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 		log.WithFields(log.Fields{
 			"parentID":  parentID,
 			"childID":   id,
-			"childName": item.Name(),
+			"childName": inode.Name(),
 		}).Error("Parent item could not be found when setting parent.")
 		return
 	}
@@ -135,17 +173,17 @@ func (c *Cache) InsertID(id string, item *DriveItem) {
 	}
 
 	// add to parent
-	if item.IsDir() {
+	if inode.IsDir() {
 		parent.subdir++
 	}
-	parent.children = append(parent.children, item.ID())
+	parent.children = append(parent.children, inode.ID())
 }
 
 // InsertChild adds an item as a child of a specified parent ID.
-func (c *Cache) InsertChild(parentID string, child *DriveItem) {
+func (c *Cache) InsertChild(parentID string, child *Inode) {
 	child.mutex.Lock()
 	// should already be set, just double-checking here.
-	child.APIItem.Parent.ID = parentID
+	child.DriveItem.Parent.ID = parentID
 	id := child.IDInternal
 	child.mutex.Unlock()
 	c.InsertID(id, child)
@@ -154,13 +192,13 @@ func (c *Cache) InsertChild(parentID string, child *DriveItem) {
 // DeleteID deletes an item from the cache, and removes it from its parent. Must
 // be called before InsertID if being used to rename/move an item.
 func (c *Cache) DeleteID(id string) {
-	if item := c.GetID(id); item != nil {
-		parent := c.GetID(item.ParentID())
+	if inode := c.GetID(id); inode != nil {
+		parent := c.GetID(inode.ParentID())
 		parent.mutex.Lock()
 		for i, childID := range parent.children {
 			if childID == id {
 				parent.children = append(parent.children[:i], parent.children[i+1:]...)
-				if item.IsDir() {
+				if inode.IsDir() {
 					parent.subdir--
 				}
 				break
@@ -173,11 +211,11 @@ func (c *Cache) DeleteID(id string) {
 
 // only used for parsing
 type driveChildren struct {
-	Children []*DriveItem `json:"value"`
+	Children []*Inode `json:"value"`
 }
 
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
-func (c *Cache) GetChild(id string, name string, auth *Auth) (*DriveItem, error) {
+func (c *Cache) GetChild(id string, name string, auth *Auth) (*Inode, error) {
 	children, err := c.GetChildrenID(id, auth)
 	if err != nil {
 		return nil, err
@@ -192,29 +230,29 @@ func (c *Cache) GetChild(id string, name string, auth *Auth) (*DriveItem, error)
 
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If
 // items are not found, they are fetched.
-func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, error) {
+func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) {
 	// fetch item and catch common errors
-	item := c.GetID(id)
-	children := make(map[string]*DriveItem)
-	if item == nil {
+	inode := c.GetID(id)
+	children := make(map[string]*Inode)
+	if inode == nil {
 		log.WithFields(log.Fields{
 			"id": id,
-		}).Error("Item not found in cache")
+		}).Error("Inode not found in cache")
 		return children, errors.New(id + " not found in cache")
-	} else if !item.IsDir() {
+	} else if !inode.IsDir() {
 		// Normal files are treated as empty folders. This only gets called if
 		// we messed up and tried to get the children of a plain-old file.
 		log.WithFields(log.Fields{
 			"id":   id,
-			"path": item.Path(),
+			"path": inode.Path(),
 		}).Warn("Attepted to get children of ordinary file")
 		return children, nil
 	}
 
 	// If item.children is not nil, it means we have the item's children
 	// already and can fetch them directly from the cache
-	if item.children != nil {
-		for _, id := range item.children {
+	if inode.children != nil {
+		for _, id := range inode.children {
 			child := c.GetID(id)
 			if child == nil {
 				// will be nil if deleted or never existed
@@ -228,14 +266,21 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 	// We haven't fetched the children for this item yet, get them from the
 	// server.
 	body, err := Get(ChildrenPathID(id), auth)
-	var fetched driveChildren
 	if err != nil {
+		if IsOffline(err) {
+			log.WithFields(log.Fields{
+				"id": id,
+			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
+			return children, nil
+		}
+		// something else happened besides being offline
 		return nil, err
 	}
+	var fetched driveChildren
 	json.Unmarshal(body, &fetched)
 
-	item.mutex.Lock()
-	item.children = make([]string, 0)
+	inode.mutex.Lock()
+	inode.children = make([]string, 0)
 	for _, child := range fetched.Children {
 		// we will always have an id after fetching from the server
 		child.cache = c
@@ -245,30 +290,30 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*DriveItem, err
 		children[strings.ToLower(child.Name())] = child
 
 		// store id in parent item and increment parents subdirectory count
-		item.children = append(item.children, child.IDInternal)
+		inode.children = append(inode.children, child.IDInternal)
 		if child.IsDir() {
-			item.subdir++
+			inode.subdir++
 		}
 	}
-	item.mutex.Unlock()
+	inode.mutex.Unlock()
 
 	return children, nil
 }
 
 // GetChildrenPath grabs all DriveItems that are the children of the resource at
 // the path. If items are not found, they are fetched.
-func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*DriveItem, error) {
-	item, err := c.GetPath(path, auth)
+func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*Inode, error) {
+	inode, err := c.GetPath(path, auth)
 	if err != nil {
-		return make(map[string]*DriveItem), err
+		return make(map[string]*Inode), err
 	}
 
-	return c.GetChildrenID(item.ID(), auth)
+	return c.GetChildrenID(inode.ID(), auth)
 }
 
 // GetPath fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
-func (c *Cache) GetPath(path string, auth *Auth) (*DriveItem, error) {
+func (c *Cache) GetPath(path string, auth *Auth) (*Inode, error) {
 	lastID := c.root
 	if path == "/" {
 		return c.GetID(lastID), nil
@@ -278,7 +323,7 @@ func (c *Cache) GetPath(path string, auth *Auth) (*DriveItem, error) {
 	// target ID.
 	path = strings.TrimSuffix(strings.ToLower(path), "/")
 	split := strings.Split(path, "/")[1:] //omit leading "/"
-	var item *DriveItem
+	var inode *Inode
 	for i := 0; i < len(split); i++ {
 		// fetches children
 		children, err := c.GetChildrenID(lastID, auth)
@@ -287,31 +332,31 @@ func (c *Cache) GetPath(path string, auth *Auth) (*DriveItem, error) {
 		}
 
 		var exists bool // if we use ":=", item is shadowed
-		item, exists = children[split[i]]
+		inode, exists = children[split[i]]
 		if !exists {
 			// the item still doesn't exist after fetching from server. it
 			// doesn't exist
 			return nil, errors.New(strings.Join(split[:i+1], "/") +
 				" does not exist on server or in local cache")
 		}
-		lastID = item.ID()
+		lastID = inode.ID()
 	}
-	return item, nil
+	return inode, nil
 }
 
 // DeletePath an item from the cache by path. Must be called before Insert if
 // being used to move/rename an item.
 func (c *Cache) DeletePath(key string) {
-	item, _ := c.GetPath(strings.ToLower(key), nil)
-	if item != nil {
-		c.DeleteID(item.ID())
+	inode, _ := c.GetPath(strings.ToLower(key), nil)
+	if inode != nil {
+		c.DeleteID(inode.ID())
 	}
 }
 
 // InsertPath lets us manually insert an item to the cache (like if it was
 // created locally). Overwrites a cached item if present. Must be called after
 // delete if being used to move/rename an item.
-func (c *Cache) InsertPath(key string, auth *Auth, item *DriveItem) error {
+func (c *Cache) InsertPath(key string, auth *Auth, inode *Inode) error {
 	key = strings.ToLower(key)
 
 	// set the item.Parent.ID properly if the item hasn't been in the cache
@@ -320,39 +365,40 @@ func (c *Cache) InsertPath(key string, auth *Auth, item *DriveItem) error {
 	if err != nil {
 		return err
 	} else if parent == nil {
+		const errMsg string = "Parent of key was nil! Did we accidentally use an ID for the key?"
 		log.WithFields(log.Fields{
 			"key":  key,
-			"path": item.Path(),
-		}).Error("Parent of key was nil! Did we accidentally use an ID for the key?")
-		return errors.New("Parent of key was nil! Did we accidentally use an ID for the key?")
+			"path": inode.Path(),
+		}).Error(errMsg)
+		return errors.New(errMsg)
 	}
 
 	// Coded this way to make sure locks are in the same order for the deadlock
 	// detector (lock ordering needs to be the same as InsertID: Parent->Child).
 	parentID := parent.ID()
-	item.mutex.Lock()
-	item.APIItem.Parent.ID = parentID
-	item.mutex.Unlock()
+	inode.mutex.Lock()
+	inode.DriveItem.Parent.ID = parentID
+	inode.mutex.Unlock()
 
-	c.InsertID(item.ID(), item)
+	c.InsertID(inode.ID(), inode)
 	return nil
 }
 
 // MoveID moves an item to a new ID name. Also responsible for handling the
 // actual overwrite of the item's IDInternal field
 func (c *Cache) MoveID(oldID string, newID string) error {
-	item := c.GetID(oldID)
-	if item == nil {
+	inode := c.GetID(oldID)
+	if inode == nil {
 		// It may have already been renamed. This is not an error. We assume
 		// that IDs will never collide. Re-perform the op if this is the case.
-		if item = c.GetID(newID); item == nil {
+		if inode = c.GetID(newID); inode == nil {
 			// nope, it just doesn't exist
 			return errors.New("Could not get item: " + oldID)
 		}
 	}
 
 	// need to rename the child under the parent
-	parent := c.GetID(item.ParentID())
+	parent := c.GetID(inode.ParentID())
 	parent.mutex.Lock()
 	for i, child := range parent.children {
 		if child == oldID {
@@ -362,42 +408,42 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	}
 	parent.mutex.Unlock()
 
-	item.mutex.Lock()
-	item.IDInternal = newID
-	item.mutex.Unlock()
+	inode.mutex.Lock()
+	inode.IDInternal = newID
+	inode.mutex.Unlock()
 
 	// now actually perform the metadata+content move
 	c.DeleteID(oldID)
-	c.InsertID(newID, item)
+	c.InsertID(newID, inode)
 	c.MoveContent(oldID, newID)
 	return nil
 }
 
 // MovePath an item to a new position
 func (c *Cache) MovePath(oldPath string, newPath string, auth *Auth) error {
-	item, err := c.GetPath(oldPath, auth)
+	inode, err := c.GetPath(oldPath, auth)
 	if err != nil {
 		return err
 	}
 
 	c.DeletePath(oldPath)
 	if newBase := filepath.Base(newPath); filepath.Base(oldPath) != newBase {
-		item.SetName(newBase)
+		inode.SetName(newBase)
 	}
-	if err := c.InsertPath(newPath, auth, item); err != nil {
+	if err := c.InsertPath(newPath, auth, inode); err != nil {
 		// insert failed, reinsert in old location
-		item.SetName(filepath.Base(oldPath))
-		c.InsertPath(oldPath, auth, item)
+		inode.SetName(filepath.Base(oldPath))
+		c.InsertPath(oldPath, auth, inode)
 		return err
 	}
 	return nil
 }
 
-// GetContent read a file's content from disk.
+// GetContent reads a file's content from disk.
 func (c *Cache) GetContent(id string) []byte {
 	var content []byte // nil
 	c.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		if tmp := b.Get([]byte(id)); tmp != nil {
 			content = make([]byte, len(tmp))
 			copy(content, tmp)
@@ -410,7 +456,7 @@ func (c *Cache) GetContent(id string) []byte {
 // InsertContent writes file content to disk.
 func (c *Cache) InsertContent(id string, content []byte) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		return b.Put([]byte(id), content)
 	})
 }
@@ -418,7 +464,7 @@ func (c *Cache) InsertContent(id string, content []byte) error {
 // DeleteContent deletes content from disk.
 func (c *Cache) DeleteContent(id string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		return b.Delete([]byte(id))
 	})
 }
@@ -426,7 +472,7 @@ func (c *Cache) DeleteContent(id string) error {
 // MoveContent moves content from one ID to another
 func (c *Cache) MoveContent(oldID string, newID string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("content"))
+		b := tx.Bucket(CONTENT)
 		content := b.Get([]byte(oldID))
 		if content == nil {
 			return errors.New("Content not found for ID: " + oldID)
@@ -434,5 +480,28 @@ func (c *Cache) MoveContent(oldID string, newID string) error {
 		b.Put([]byte(newID), content)
 		b.Delete([]byte(oldID))
 		return nil
+	})
+}
+
+// SerializeAll dumps all inode metadata currently in the cache to disk. This
+// metadata is only used later if an item could not be found in memory AND the
+// cache is offline. Old metadata is not removed, only overwritten (to avoid an
+// offline session from wiping all metadata on a subsequent serialization).
+func (c *Cache) SerializeAll() {
+	log.Info("Serializing cache metadata to disk.")
+	c.metadata.Range(func(key interface{}, value interface{}) bool {
+		c.db.Batch(func(tx *bolt.Tx) error {
+			id := fmt.Sprint(key)
+			contents := value.(*Inode).AsJSON()
+			b := tx.Bucket(METADATA)
+			b.Put([]byte(id), contents)
+			if id == c.root {
+				// root item must be updated manually (since there's actually
+				// two copies)
+				b.Put([]byte("root"), contents)
+			}
+			return nil
+		})
+		return true
 	})
 }

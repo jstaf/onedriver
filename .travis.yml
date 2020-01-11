@@ -1,33 +1,42 @@
-dist: xenial
+dist: bionic
 addons:
   apt:
     packages:
       - gcc
       - pkg-config
       - libwebkit2gtk-4.0-dev
+      - make
+      - wget
 
 language: go
 go:
-  - "1.12"
+  - "1.13"
 env:
   - GO111MODULE=on
 
-# we copy the auth_tokens for the test account to and from s3 each build.
 cache: pip
 install:
   - pip install --user awscli
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/goimports
+  - make unshare
 script:
-  - go build
+  - make onedriver
+  - bash .travis_lint.sh
+  # we copy the auth_tokens for the test account to and from s3 each build.
   - aws s3 cp s3://fusefs-travis/auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
   - go test -v -covermode=count -coverprofile=coverage.out ./graph
+  # build test binary for ./offline with coverage enabled for ./graph,
+  # then run tests offline
+  - go test -c -covermode=count -coverpkg=./graph ./offline
+  - sudo ./unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.out
 after_script:
   - aws s3 cp auth_tokens.json s3://fusefs-travis/
   - aws s3 cp fusefs_tests.log s3://fusefs-travis/
-  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out,offline.out -service=travis-ci -repotoken $COVERALLS_TOKEN
 
 notifications:
   email: false

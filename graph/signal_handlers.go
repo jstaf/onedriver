@@ -22,7 +22,7 @@ func UnmountHandler(signal <-chan os.Signal, server *fuse.Server) {
 		text = "SIGTERM"
 		code = int(syscall.SIGTERM)
 	}
-	log.Info(text, " received, unmounting filesystem.")
+	log.Infof("%s received, unmounting filesystem.\n", text)
 	err := server.Unmount()
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -31,5 +31,5 @@ func UnmountHandler(signal <-chan os.Signal, server *fuse.Server) {
 	}
 
 	// convention when exiting via signal is 128 + signal value
-	os.Exit(128 + int(code))
+	os.Exit(128 + code)
 }

@@ -16,10 +16,12 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 	for { // eva
 		// get deltas
 		log.Debug("Fetching deltas from server.")
-		deltas := make(map[string]*DriveItem)
+		deltas := make(map[string]*Inode)
 		for {
 			incoming, cont, err := c.pollDeltas(c.auth)
 			if err != nil {
+				// TODO the only thing that should be able to bring the FS out
+				// of a read-only state is a successful delta call
 				log.WithField("err", err).Error("Error during delta fetch.")
 				break
 			}
@@ -36,20 +38,24 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		}
 
 		// now apply deltas
-		for _, item := range deltas {
-			c.applyDelta(item)
+		for _, delta := range deltas {
+			c.applyDelta(delta)
+		}
+
+		log.Info("Sync complete!")
+		if !c.offline {
+			c.SerializeAll()
 		}
 
 		// sleep till next sync interval
-		log.Info("Sync complete!")
 		time.Sleep(interval)
 	}
 }
 
 type deltaResponse struct {
-	NextLink  string       `json:"@odata.nextLink,omitempty"`
-	DeltaLink string       `json:"@odata.deltaLink,omitempty"`
-	Values    []*DriveItem `json:"value,omitempty"`
+	NextLink  string   `json:"@odata.nextLink,omitempty"`
+	DeltaLink string   `json:"@odata.deltaLink,omitempty"`
+	Values    []*Inode `json:"value,omitempty"`
 }
 
 // Polls the delta endpoint and return deltas + whether or not to continue
@@ -57,13 +63,10 @@ type deltaResponse struct {
 // client will actually appear as deltas from the server (there is no
 // distinction between local and remote changes from the server's perspective,
 // everything is a delta, regardless of where it came from).
-func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
+func (c *Cache) pollDeltas(auth *Auth) ([]*Inode, bool, error) {
 	resp, err := Get(c.deltaLink, auth)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Could not fetch server deltas.")
-		return make([]*DriveItem, 0), false, err
+		return make([]*Inode, 0), false, err
 	}
 
 	page := deltaResponse{}
@@ -85,7 +88,7 @@ func (c *Cache) pollDeltas(auth *Auth) ([]*DriveItem, bool, error) {
 // * Deleted items
 // * Changed content remotely, but not locally
 // * New items in a folder we have locally
-func (c *Cache) applyDelta(delta *DriveItem) error {
+func (c *Cache) applyDelta(delta *Inode) error {
 	id := delta.ID()
 	name := delta.Name()
 	log.WithFields(log.Fields{
@@ -180,8 +183,7 @@ func (c *Cache) applyDelta(delta *DriveItem) error {
 			"name":  name,
 			"delta": "overwrite",
 		}).Info("Overwriting local item, no local changes to preserve.")
-		// update modtime, hashes, purge local content
-		c.DeleteContent(id)
+		// update modtime, hashes, purge any local content in memory
 		local.mutex.Lock()
 		defer local.mutex.Unlock()
 		local.ModTimeInternal = delta.ModTimeInternal

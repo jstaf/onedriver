@@ -45,7 +45,7 @@ On Ubuntu, these dependencies can be installed with
 
 ```bash
 # to build and run the binary
-go build
+make
 mkdir mount
 ./onedriver mount/
 
@@ -63,6 +63,12 @@ the headless build should work on macOS, BSD, and even Windows as long as you
 have a variant of FUSE installed.
 
 ### Running the tests
+
+There are two test suites - one for online use and one for offline use. Note 
+that the offline tests require `sudo` to remove network access to simulate no 
+access to the network. A newer version of `unshare` is compiled before running
+tests to support running on older distributions like Ubuntu 18.04 where the
+default version of `unshare` is too old to use.
 
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account

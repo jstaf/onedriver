@@ -40,7 +40,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 
 	auth.Refresh()
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	request, _ := http.NewRequest(method, graphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
@@ -157,31 +157,31 @@ func GetDrive(auth *Auth) (Drive, error) {
 }
 
 // GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
-func GetItem(id string, auth *Auth) (*DriveItem, error) {
+func GetItem(id string, auth *Auth) (*Inode, error) {
 	path := "/me/drive/items/" + id
 	if id == "root" {
 		path = "/me/drive/root"
 	}
 
 	body, err := Get(path, auth)
-	item := &DriveItem{}
 	if err != nil {
-		return item, err
+		return nil, err
 	}
-	err = json.Unmarshal(body, item)
-	return item, err
+	inode := &Inode{}
+	err = json.Unmarshal(body, inode)
+	return inode, err
 }
 
 // GetItemPath fetches a DriveItem by path. Only used in special cases, like for the
 // root item.
-func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
+func GetItemPath(path string, auth *Auth) (*Inode, error) {
 	body, err := Get(ResourcePath(path), auth)
-	item := &DriveItem{}
+	inode := &Inode{}
 	if err != nil {
-		return item, err
+		return inode, err
 	}
-	err = json.Unmarshal(body, item)
-	return item, err
+	err = json.Unmarshal(body, inode)
+	return inode, err
 }
 
 // GetItemContent retrieves an item's content from the Graph endpoint.
@@ -195,9 +195,9 @@ func Remove(id string, auth *Auth) error {
 }
 
 // Mkdir creates a directory on the server at the specified parent ID.
-func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
+func Mkdir(name string, parentID string, auth *Auth) (*Inode, error) {
 	// create a new folder on the server
-	newFolderPost := APIItem{
+	newFolderPost := DriveItem{
 		NameInternal: name,
 		Folder:       &Folder{},
 	}
@@ -207,7 +207,7 @@ func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
 		return nil, err
 	}
 
-	item := NewDriveItem(name, 0755|fuse.S_IFDIR, nil)
+	item := NewInode(name, 0755|fuse.S_IFDIR, nil)
 	err = json.Unmarshal(resp, &item)
 	return item, err
 }
@@ -217,7 +217,7 @@ func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
 func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 	// start creating patch content for server
 	// mutex does not need to be initialized since it is never used locally
-	patchContent := APIItem{
+	patchContent := DriveItem{
 		ConflictBehavior: "replace", // overwrite existing content at new location
 		NameInternal:     itemName,
 		Parent: &DriveItemParent{
@@ -237,4 +237,13 @@ func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 		_, err = Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
 	}
 	return err
+}
+
+// IsOffline checks if an error is indicative of being offline.
+func IsOffline(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "network is unreachable") ||
+		strings.Contains(err.Error(), "connection refused")
 }
