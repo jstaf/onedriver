@@ -93,8 +93,7 @@ func TestMain(m *testing.M) {
 	fmt.Printf("\n")
 
 	// unmount
-	err := server.Unmount()
-	if err != nil {
+	if server.Unmount() != nil {
 		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}

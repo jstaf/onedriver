@@ -38,12 +38,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	logFile, _ := os.OpenFile("offline_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	defer logFile.Close()
 	log.SetOutput(logFile)
 	log.SetReportCaller(true)
 	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.DebugLevel)
+
+	log.Info("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
 	root := graph.NewFS("test.db", 5*time.Second)
@@ -67,9 +69,14 @@ func TestMain(m *testing.M) {
 	// mount fs in background thread
 	go server.Serve()
 
+	log.Info("Start offline tests ------------------------------")
 	code := m.Run()
+	log.Info("Finish offline tests ------------------------------")
 
-	server.Unmount()
-	time.Sleep(time.Second)
+	if server.Unmount() != nil {
+		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
+		exec.Command("fusermount", "-zu", "mount").Run()
+	}
+	fmt.Println("Successfully unmounted fuse server!")
 	os.Exit(code)
 }

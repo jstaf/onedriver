@@ -1,4 +1,4 @@
-.PHONY: all, test, test_no_race, rpm, clean
+.PHONY: all, test, rpm, clean
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
@@ -45,15 +45,8 @@ test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	rm -f *.race*
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph || true
 	go test -c ./offline
-	@echo "sudo required to run offline test suite:"
-	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
-
-
-test_no_race: onedriver dmel.fa $(EXTRA_TEST_DEPS)
-	go test -v -count=1 ./graph
-	go test -c ./offline
-	@echo "sudo required to run offline test suite:"
-	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.count=1
+	@echo "sudo is required to run tests of offline functionality:"
+	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1 || true
 
 
 # used by travis CI since the version of unshare is too old on ubuntu 18.04
