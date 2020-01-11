@@ -646,7 +646,8 @@ func ignore(path string) bool {
 	return false
 }
 
-func octal(i uint32) string {
+// Octal converts a number to its octal representation in string form.
+func Octal(i uint32) string {
 	return strconv.FormatUint(uint64(i), 8)
 }
 
@@ -659,7 +660,7 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 		"id":   id,
 		"path": path,
 		"name": name,
-		"mode": octal(mode),
+		"mode": Octal(mode),
 	}).Debug()
 
 	cache := i.GetCache()
@@ -683,7 +684,7 @@ func (i *Inode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	log.WithFields(log.Fields{
 		"path": i.Path(),
 		"name": name,
-		"mode": octal(mode),
+		"mode": Octal(mode),
 	}).Debug()
 	cache := i.GetCache()
 	auth := cache.GetAuth()
