@@ -819,6 +819,16 @@ func (i *Inode) Rename(ctx context.Context, name string, newParent fs.InodeEmbed
 func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
 	path := i.Path()
 	id := i.ID()
+	f := int(flags)
+	if f&os.O_RDWR+f&os.O_WRONLY > 0 && i.GetCache().offline {
+		log.WithFields(log.Fields{
+			"path":  path,
+			"id":    id,
+			"flags": flags,
+		}).Debug("Refusing Open() with write flag, FS is offline.")
+		return nil, uint32(0), syscall.EROFS
+	}
+
 	log.WithFields(log.Fields{
 		"path": path,
 		"id":   id,

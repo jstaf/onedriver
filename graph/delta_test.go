@@ -90,6 +90,7 @@ func TestDeltaMoveParent(t *testing.T) {
 		[]byte("carrotcake"),
 		0644,
 	))
+	time.Sleep(time.Second)
 
 	item, err := GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
 	failOnErr(t, err)

@@ -163,8 +163,9 @@ func TestAppend(t *testing.T) {
 	var counter int
 	for scanner.Scan() {
 		counter++
-		if scanner.Text() != "append" {
-			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanner.Text())
+		scanned := scanner.Text()
+		if scanned != "append" {
+			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanned)
 		}
 	}
 	if counter != 5 {

@@ -46,7 +46,7 @@ test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph || true
 	go test -c ./offline
 	@echo "sudo is required to run tests of offline functionality:"
-	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1 || true
+	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
 # used by travis CI since the version of unshare is too old on ubuntu 18.04
