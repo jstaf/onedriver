@@ -183,8 +183,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			"name":  name,
 			"delta": "overwrite",
 		}).Info("Overwriting local item, no local changes to preserve.")
-		// update modtime, hashes, purge local content
-		c.DeleteContent(id)
+		// update modtime, hashes, purge any local content in memory
 		local.mutex.Lock()
 		defer local.mutex.Unlock()
 		local.ModTimeInternal = delta.ModTimeInternal

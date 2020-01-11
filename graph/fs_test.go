@@ -296,10 +296,8 @@ func TestUploadSession(t *testing.T) {
 	size := uint64(len(contents))
 	for i := 0; i < 60; i++ {
 		time.Sleep(time.Second)
-		//fmt.Printf(".")
 		item, _ := GetItemPath("/onedriver_tests/dmel.fa", auth)
 		if item != nil && item.Size() == size {
-			//fmt.Printf("\n")
 			return
 		}
 	}
