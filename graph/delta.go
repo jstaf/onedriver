@@ -14,9 +14,6 @@ import (
 func (c *Cache) deltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
-		// sleep till next sync interval
-		time.Sleep(interval)
-
 		// get deltas
 		log.Debug("Fetching deltas from server.")
 		deltas := make(map[string]*Inode)
@@ -45,6 +42,8 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 			c.applyDelta(delta)
 		}
 
+		// sleep till next sync interval
+		time.Sleep(interval)
 		log.Info("Sync complete!")
 		if !c.offline {
 			c.SerializeAll()
