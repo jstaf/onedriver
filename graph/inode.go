@@ -671,7 +671,7 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 			"path": path,
 			"name": name,
 		}).Warn("We are offline. Refusing Create() to avoid data loss later.")
-		return nil, nil, uint32(0), syscall.EREMOTEIO
+		return nil, nil, uint32(0), syscall.EROFS
 	}
 
 	inode := NewInode(name, mode, i)
