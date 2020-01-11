@@ -716,6 +716,9 @@ func (i *Inode) Unlink(ctx context.Context, name string) syscall.Errno {
 		// the file we are unlinking never existed
 		return syscall.ENOENT
 	}
+	if cache.offline {
+		return syscall.EROFS
+	}
 
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server

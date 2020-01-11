@@ -43,7 +43,7 @@ dmel.fa:
 # permission to mount the fuse filesystem.
 test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	rm -f *.race*
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph || true
 	go test -c ./offline
 	@echo "sudo required to run offline test suite:"
 	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
