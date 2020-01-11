@@ -42,12 +42,13 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 			c.applyDelta(delta)
 		}
 
-		// sleep till next sync interval
-		time.Sleep(interval)
 		log.Info("Sync complete!")
 		if !c.offline {
 			c.SerializeAll()
 		}
+
+		// sleep till next sync interval
+		time.Sleep(interval)
 	}
 }
 

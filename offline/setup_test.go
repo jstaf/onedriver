@@ -70,5 +70,6 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	server.Unmount()
+	time.Sleep(time.Second)
 	os.Exit(code)
 }

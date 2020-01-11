@@ -83,8 +83,11 @@ func TestOfflineFileModification(t *testing.T) {
 // Deleting a file offline should fail.
 func TestOfflineFileDeletion(t *testing.T) {
 	t.Parallel()
-	if os.Remove(filepath.Join(TestDir, "empty")) == nil {
+	if os.Remove(filepath.Join(TestDir, "write.txt")) == nil {
 		t.Fatal("Deleting a file while offline should fail.")
+	}
+	if os.Remove(filepath.Join(TestDir, "empty")) == nil {
+		t.Fatal("Deleting an empty file while offline should fail.")
 	}
 }
 
