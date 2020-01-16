@@ -440,3 +440,17 @@ func TestNoQuestionMarks(t *testing.T) {
 		t.FailNow()
 	}
 }
+
+// Trashing items through nautilus or other Linux file managers is done via
+// "gio trash". Make an item then trash it to verify that this works.
+func TestGIOTrash(t *testing.T) {
+	t.Parallel()
+	fname := filepath.Join(TestDir, "trash_me.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
+
+	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
+	failOnErr(t, err)
+	if strings.Contains(string(out), "Unable to find or create trash directory") {
+		t.Fatal(out)
+	}
+}

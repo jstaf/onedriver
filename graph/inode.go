@@ -629,9 +629,6 @@ func (i *Inode) Size() uint64 {
 func ignore(path string) bool {
 	ignoredFiles := []string{
 		"BDMV",
-		".Trash",
-		".Trash-1000",
-		".xdg-volume-info",
 		"autorun.inf",
 		".localized",
 		".DS_Store",

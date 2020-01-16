@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -65,11 +66,6 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				"err": err,
 			}).Fatal("Could not fetch root item of filesystem!")
 		}
-	} else {
-		// we need to label this as the root item for subsequent startups
-		cache.db.Update(func(tx *bolt.Tx) error {
-			return tx.Bucket(METADATA).Put([]byte("root"), root.AsJSON())
-		})
 	}
 	root.cache = cache
 	cache.root = root.ID()
@@ -79,6 +75,21 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	if drive, err := GetDrive(auth); err != nil {
 		cache.driveType = drive.DriveType
+	}
+
+	if !cache.offline {
+		// .Trash-UID is used by "gio trash" for user trash, create it if it
+		// does not exist
+		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
+		if child, _ := cache.GetChild(cache.root, trash, auth); child == nil {
+			item, err := Mkdir(trash, cache.root, auth)
+			if err != nil {
+				log.WithField("err", err).Error("Could not create trash folder. " +
+					"Trashing items through the file browser may result in errors.")
+			} else {
+				cache.InsertID(item.ID(), item)
+			}
+		}
 	}
 
 	// using token=latest because we don't care about existing items - they'll
