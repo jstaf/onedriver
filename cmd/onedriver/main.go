@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -38,6 +39,7 @@ func main() {
 		"Authenticate to Onedrive and then exit. Useful for running tests.")
 	logLevel := flag.String("log", "debug", "Set logging level/verbosity. "+
 		"Can be one of: fatal, error, warn, info, debug, trace")
+	wipeCache := flag.BoolP("wipe-cache", "w", false, "Wipe the existing onedriver cache.")
 	version := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
 	flag.BoolP("help", "h", false, "Display usage and help.")
@@ -49,9 +51,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	dir := graph.CacheDir()
 	if *authOnly {
 		// early quit if all we wanted to do was authenticate
-		graph.Authenticate()
+		graph.Authenticate(filepath.Join(dir, "auth_tokens.json"))
 		os.Exit(0)
 	}
 
@@ -65,10 +68,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *wipeCache {
+		os.RemoveAll(dir)
+	}
+
 	log.Info("onedriver v", onedriverVersion)
 
 	// setup filesystem
-	root := graph.NewFS("onedriver.db", 30*time.Second)
+	if st, _ := os.Stat(dir); st == nil {
+		os.Mkdir(dir, 0700)
+	}
+
+	root := graph.NewFS(
+		filepath.Join(dir, "onedriver.db"),
+		filepath.Join(dir, "auth_tokens.json"),
+		30*time.Second,
+	)
 	second := time.Second
 	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
 		EntryTimeout: &second,
