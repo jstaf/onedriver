@@ -37,6 +37,12 @@ var (
 	METADATA = []byte("metadata")
 )
 
+// CacheDir returns the default cache dir location.
+func CacheDir() string {
+	dir, _ := os.UserCacheDir()
+	return filepath.Join(dir, "onedriver")
+}
+
 // NewCache creates a new Cache
 func NewCache(auth *Auth, dbpath string) *Cache {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})

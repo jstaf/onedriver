@@ -27,10 +27,12 @@ type Auth struct {
 	ExpiresAt    int64  `json:"expires_at"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	path         string // auth tokens remember their path for use by Refresh()
 }
 
 // ToFile writes auth tokens to a file
 func (a Auth) ToFile(file string) error {
+	a.path = file
 	byteData, _ := json.Marshal(a)
 	return ioutil.WriteFile(file, byteData, 0600)
 }
@@ -41,6 +43,7 @@ func (a *Auth) FromFile(file string) error {
 	if err != nil {
 		return err
 	}
+	a.path = file
 	return json.Unmarshal(contents, a)
 }
 
@@ -77,10 +80,10 @@ func (a *Auth) Refresh() {
 			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
 		}
 		if a.AccessToken == "" || a.RefreshToken == "" {
-			os.Remove(authFile)
+			os.Remove(a.path)
 			log.Fatalf("Failed to renew access tokens. Response from server:\n%s\n", string(body))
 		}
-		a.ToFile(authFile)
+		a.ToFile(a.path)
 	}
 }
 
@@ -122,17 +125,17 @@ func getAuthTokens(authCode string) Auth {
 }
 
 // Authenticate performs first-time authentication to Graph
-func Authenticate() *Auth {
+func Authenticate(path string) *Auth {
 	var auth Auth
-	_, err := os.Stat(authFile)
+	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		// no tokens found, gotta start oauth flow from beginning
 		code := getAuthCode()
 		auth = getAuthTokens(code)
-		auth.ToFile(authFile)
+		auth.ToFile(path)
 	} else {
-		// we already have tokens, no need to force a refresh
-		auth.FromFile(authFile)
+		// we already have tokens, no need to force a new auth flow
+		auth.FromFile(path)
 		auth.Refresh()
 	}
 	return &auth
