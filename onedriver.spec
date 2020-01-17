@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.5
+Version:       0.6
 Release:       1%{?dist}
 Summary:       A native FUSE filesystem for Microsoft Onedrive
 
@@ -23,7 +23,7 @@ downloaded on-demand with the goal of having no local state to break.
 %autosetup
 
 %build
-GOOS=linux go build
+GOOS=linux go build ./cmd/onedriver
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -35,6 +35,11 @@ cp %{name} %{buildroot}/%{_bindir}
 %attr(755, root, root) %{_bindir}/%{name}
 
 %changelog
+* Thu Jan 16 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
+- Filesystem metadata is now serialized to disk at regular intervals.
+- Using on-disk metadata, onedriver can now be used in read-only mode while offline.
+- onedriver now stores its on-disk cache and auth tokens under the normal user cache directory.
+
 * Mon Nov 4 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.5
 - Add a dedicated thread responsible for syncing remote changes to local cache every 30s.
 - Add a dedicated thread to monitor, deduplicate, and retry uploads.
