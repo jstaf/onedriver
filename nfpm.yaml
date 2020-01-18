@@ -2,7 +2,7 @@
 name: "onedriver"
 arch: "amd64"
 platform: "linux"
-version: "v0.5"
+version: "v0.6"
 section: "default"
 priority: "extra"
 provides:
