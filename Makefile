@@ -18,6 +18,10 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 all: onedriver test onedriver.deb rpm
 
 
+install:
+	cp onedriver /usr/bin/onedriver
+
+
 # kind of a yucky build using nfpm - will be replaced later with a real .deb
 # build pipeline
 onedriver.deb: onedriver
