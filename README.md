@@ -104,7 +104,7 @@ For instance, to mount OneDrive at the path `~/Documents/OneDrive`,
 
 ```bash
 # create the mountpoint and determine the service name
-mkdir -p "$MOUNTPOINT"
+mkdir -p ~/"$MOUNTPOINT"
 export SERVICE_NAME=$(systemd-escape --template onedriver@.service "$MOUNTPOINT")
 
 # mount onedrive
