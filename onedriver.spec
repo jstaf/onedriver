@@ -12,6 +12,7 @@ BuildRequires: golang >= 1.12.0
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
+Requires:      fuse
 Requires:      webkit2gtk3
 
 %description
