@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -111,14 +110,16 @@ func Caller(level int) string {
 
 // LogrusFormatter returns a textformatter to be used during development
 func LogrusFormatter() *log.TextFormatter {
-	wd, _ := os.Getwd()
-	wd += "/"
 	return &log.TextFormatter{
 		FullTimestamp:   true,
 		TimestampFormat: "2006-01-02T15:04:05",
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := fmt.Sprintf("%s:%d", strings.Replace(f.File, wd, "", -1), f.Line)
-			function := fmt.Sprintf("%06d:%s()", goroutineID(), strings.Replace(f.Function, "github.com/jstaf/onedriver/", "", -1))
+			filename := fmt.Sprintf("%s:%d", filepath.Base(f.File), f.Line)
+			function := fmt.Sprintf(
+				"%06d:%s()",
+				goroutineID(),
+				strings.Replace(f.Function, "github.com/jstaf/onedriver/", "", -1),
+			)
 			return function, filename
 		},
 	}
