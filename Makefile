@@ -53,7 +53,7 @@ rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
 	rpmdev-setuptree
 	cp $< ~/rpmbuild/SOURCES
 	# skip generation of debuginfo package
-	rpmbuild -bb --define "debug_package %{nil}" onedriver.spec
+	rpmbuild -bb onedriver.spec
 	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
 
 
