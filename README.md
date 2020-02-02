@@ -26,8 +26,9 @@ your files on OneDrive!
   interface beyond your normal file browser.
 * Files are opened and downloaded on-demand, with aggressive caching of file 
   contents and metadata locally. onedriver does not waste disk space on files
-  that are supposed to be stored in the cloud. (An internet connection is still
-  required, however.)
+  that are supposed to be stored in the cloud.
+* Can be used offline. Files you've opened previously will be available even if 
+  your computer has no access to the internet.
 * Stateless. Unlike a few other OneDrive clients, there's nothing to break 
   locally. You never have to worry about somehow messing up your local copy and 
   having to figure out how to fix things before you can access your files again.
@@ -74,6 +75,47 @@ default version of `unshare` is too old to use.
 # note - the tests will write and delete files/folders on your onedrive account
 # at the path /onedriver_tests
 make test
+```
+
+### Installation
+
+onedriver has multiple installation methods depending on your needs.
+
+```bash
+# create an RPM for system-wide installation on RHEL/CentOS/Fedora
+make rpm
+
+# create a .deb for system-wide installation on Ubuntu/Debian
+make onedriver.deb
+
+# install directly from source
+make
+sudo make install
+
+# install for current user only
+make localinstall
+```
+
+To start onedriver automatically and ensure you always have access to your files,
+you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
+refers to where we want OneDrive to be mounted at relative to our home directory.
+For instance, to mount OneDrive at the path `~/Documents/OneDrive`, 
+`$MOUNTPOINT` would be `Documents/OneDrive`
+
+```bash
+# create the mountpoint and determine the service name
+mkdir -p "$MOUNTPOINT"
+systemctl --user daemon-reload
+export SERVICE_NAME=$(systemd-escape --template onedriver@.service "$MOUNTPOINT")
+
+# mount onedrive
+systemctl --user start $SERVICE_NAME
+
+# mount onedrive on login
+systemctl --user enable $SERVICE_NAME
+
+# check onedriver's logs
+journalctl --user -u $SERVICE_NAME
 ```
 
 ## Troubleshooting

@@ -12,6 +12,8 @@ BuildRequires: golang >= 1.12.0
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
+Requires:      fuse
+Requires:      systemd
 Requires:      webkit2gtk3
 
 %description
@@ -31,6 +33,9 @@ mkdir -p %{buildroot}/%{_bindir}
 mkdir -p %{buildroot}/usr/lib/systemd/user
 cp onedriver %{buildroot}/%{_bindir}
 cp onedriver@.service %{buildroot}/usr/lib/systemd/user
+
+%post
+systemctl daemon-reload
 
 %files
 %defattr(-,root,root,-)
