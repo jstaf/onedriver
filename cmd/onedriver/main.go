@@ -39,7 +39,11 @@ func main() {
 		"Authenticate to Onedrive and then exit. Useful for running tests.")
 	logLevel := flag.String("log", "debug", "Set logging level/verbosity. "+
 		"Can be one of: fatal, error, warn, info, debug, trace")
-	wipeCache := flag.BoolP("wipe-cache", "w", false, "Wipe the existing onedriver cache.")
+	cacheDir := flag.StringP("cache-dir", "c", "",
+		"Change the default cache directory used by onedriver. "+
+			"Will be created if the path does not already exist.")
+	wipeCache := flag.BoolP("wipe-cache", "w", false,
+		"Delete the existing onedriver cache directory.")
 	version := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
 	flag.BoolP("help", "h", false, "Display usage and help.")
@@ -51,7 +55,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	dir := graph.CacheDir()
+	dir := *cacheDir
+	if dir == "" {
+		dir = graph.CacheDir()
+	}
+
 	if *authOnly {
 		// early quit if all we wanted to do was authenticate
 		graph.Authenticate(filepath.Join(dir, "auth_tokens.json"))
