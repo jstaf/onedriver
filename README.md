@@ -98,14 +98,12 @@ make localinstall
 
 To start onedriver automatically and ensure you always have access to your files,
 you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
-refers to where we want OneDrive to be mounted at relative to our home directory.
-For instance, to mount OneDrive at the path `~/Documents/OneDrive`, 
-`$MOUNTPOINT` would be `Documents/OneDrive`
+refers to where we want OneDrive to be mounted at (for instance, `~/OneDrive`).
 
 ```bash
 # create the mountpoint and determine the service name
-mkdir -p ~/"$MOUNTPOINT"
-export SERVICE_NAME=$(systemd-escape --template onedriver@.service "$MOUNTPOINT")
+mkdir -p $MOUNTPOINT
+export SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNTPOINT)
 
 # mount onedrive
 systemctl --user daemon-reload
