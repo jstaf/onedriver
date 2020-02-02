@@ -5,7 +5,7 @@ Summary:       A native FUSE filesystem for Microsoft Onedrive
 
 License:       GPLv3
 URL:           https://github.com/jstaf/onedriver
-Source0:       https://github.com/jstaf/onedriver/archive/v%{version}.tar.gz
+Source0:       https://github.com/jstaf/onedriver/archive/onedriver-%{version}.tar.gz
 
 BuildRequires: rpmdevtools
 BuildRequires: golang >= 1.12.0
@@ -35,7 +35,7 @@ cp %{name} %{buildroot}/%{_bindir}
 %attr(755, root, root) %{_bindir}/%{name}
 
 %changelog
-* Thu Jan 16 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
+* Thu Jan 16 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
 - Filesystem metadata is now serialized to disk at regular intervals.
 - Using on-disk metadata, onedriver can now be used in read-only mode while offline.
 - onedriver now stores its on-disk cache and auth tokens under the normal user cache directory.
