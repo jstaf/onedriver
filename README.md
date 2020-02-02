@@ -105,10 +105,10 @@ For instance, to mount OneDrive at the path `~/Documents/OneDrive`,
 ```bash
 # create the mountpoint and determine the service name
 mkdir -p "$MOUNTPOINT"
-systemctl --user daemon-reload
 export SERVICE_NAME=$(systemd-escape --template onedriver@.service "$MOUNTPOINT")
 
 # mount onedrive
+systemctl --user daemon-reload
 systemctl --user start $SERVICE_NAME
 
 # mount onedrive on login
