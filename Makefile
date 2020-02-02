@@ -39,19 +39,22 @@ onedriver.deb: onedriver
 	nfpm pkg --target $@
 
 
-rpm: onedriver.spec
-	# create release tarball in rpmbuild directory
-	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm *.tar.gz
-	rm -rf onedriver-$(RPM_VERSION)
-	mkdir onedriver-$(RPM_VERSION)
+# used to create release tarball for rpmbuild
+onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
+	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
-	rpmdev-setuptree
-	tar -czvf ~/rpmbuild/SOURCES/onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)/
+	tar -czvf $@ onedriver-$(RPM_VERSION)/
+	rm -rf onedriver-$(RPM_VERSION)
 
+
+# build the rpm for the current version defined in the specfile
+rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
+	rpmdev-setuptree
+	cp $< ~/rpmbuild/SOURCES
 	# skip generation of debuginfo package
-	rpmbuild -bb --define "debug_package %{nil}" $<
-	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
+	rpmbuild -bb --define "debug_package %{nil}" onedriver.spec
+	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
 
 
 # a large text file for us to test upload sessions with. #science
