@@ -1,7 +1,8 @@
-.PHONY: all, test, rpm, clean
+.PHONY: all, test, rpm, clean, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
+RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
 UNSHARE_VERSION = 2.34
 ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
@@ -18,8 +19,18 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 all: onedriver test onedriver.deb rpm
 
 
-install:
-	cp onedriver /usr/bin/onedriver
+install: onedriver
+	cp $< /usr/bin/$<
+	cp onedriver@.service /etc/systemd/user/
+	systemctl daemon-reload
+
+
+localinstall: onedriver
+	mkdir -p ~/.config/systemd/user ~/.local/bin
+	cp $< ~/.local/bin/$<
+	cp onedriver@.service ~/.config/systemd/user/
+	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
+	systemctl --user daemon-reload
 
 
 # kind of a yucky build using nfpm - will be replaced later with a real .deb
@@ -28,13 +39,22 @@ onedriver.deb: onedriver
 	nfpm pkg --target $@
 
 
-rpm: onedriver.spec
-	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
-	mkdir -p ~/rpmbuild/SOURCES
-	spectool -g -R $<
+# used to create release tarball for rpmbuild
+onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
+	mkdir -p onedriver-$(RPM_VERSION)
+	git ls-files > filelist.txt
+	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
+	tar -czvf $@ onedriver-$(RPM_VERSION)/
+	rm -rf onedriver-$(RPM_VERSION)
+
+
+# build the rpm for the current version defined in the specfile
+rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
+	rpmdev-setuptree
+	cp $< ~/rpmbuild/SOURCES
 	# skip generation of debuginfo package
-	rpmbuild -bb --define "debug_package %{nil}" $<
-	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
+	rpmbuild -bb onedriver.spec
+	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
 
 
 # a large text file for us to test upload sessions with. #science
@@ -72,5 +92,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json
+	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json filelist.txt
 	rm -rf util-linux-*

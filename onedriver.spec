@@ -1,11 +1,11 @@
 Name:          onedriver
 Version:       0.6
 Release:       1%{?dist}
-Summary:       A native FUSE filesystem for Microsoft Onedrive
+Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
 URL:           https://github.com/jstaf/onedriver
-Source0:       https://github.com/jstaf/onedriver/archive/v%{version}.tar.gz
+Source0:       https://github.com/jstaf/onedriver/archive/onedriver-%{version}.tar.gz
 
 BuildRequires: rpmdevtools
 BuildRequires: golang >= 1.12.0
@@ -15,9 +15,9 @@ BuildRequires: webkit2gtk3-devel
 Requires:      webkit2gtk3
 
 %description
-Onedriver is a native Linux filesystem for Microsoft Onedrive. Unlike other 
-Onedrive clients, Onedriver is not a file sync client - files and metadata are 
-downloaded on-demand with the goal of having no local state to break.
+Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
+metadata are downloaded on-demand with the goal of having no local state to
+break.
 
 %prep
 %autosetup
@@ -28,14 +28,17 @@ GOOS=linux go build ./cmd/onedriver
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/%{_bindir}
-cp %{name} %{buildroot}/%{_bindir}
+mkdir -p %{buildroot}/usr/lib/systemd/user
+cp onedriver %{buildroot}/%{_bindir}
+cp onedriver@.service %{buildroot}/usr/lib/systemd/user
 
 %files
 %defattr(-,root,root,-)
-%attr(755, root, root) %{_bindir}/%{name}
+%attr(755, root, root) %{_bindir}/onedriver
+%attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
 %changelog
-* Thu Jan 16 2019 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
+* Thu Jan 16 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
 - Filesystem metadata is now serialized to disk at regular intervals.
 - Using on-disk metadata, onedriver can now be used in read-only mode while offline.
 - onedriver now stores its on-disk cache and auth tokens under the normal user cache directory.

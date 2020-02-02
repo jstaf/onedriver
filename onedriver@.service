@@ -1,0 +1,8 @@
+[Unit]
+Description=onedriver
+
+[Service]
+ExecStart=/usr/bin/onedriver %h/%I
+
+[Install]
+WantedBy=default.target

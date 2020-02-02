@@ -13,9 +13,11 @@ mount/
 *.deb
 *.test
 *.out
+*.txt
 
 # do not include binaries, but do include sources
 onedriver
+onedriver-*/
 !cmd/onedriver
 
 util-linux*
