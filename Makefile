@@ -2,6 +2,7 @@
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
+RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
 UNSHARE_VERSION = 2.34
 ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
@@ -39,9 +40,15 @@ onedriver.deb: onedriver
 
 
 rpm: onedriver.spec
-	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
-	mkdir -p ~/rpmbuild/SOURCES
-	#spectool -g -R $<
+	# create release tarball in rpmbuild directory
+	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm *.tar.gz
+	rm -rf onedriver-$(RPM_VERSION)
+	mkdir onedriver-$(RPM_VERSION)
+	git ls-files > filelist.txt
+	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
+	rpmdev-setuptree
+	tar -czvf ~/rpmbuild/SOURCES/onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)/
+
 	# skip generation of debuginfo package
 	rpmbuild -bb --define "debug_package %{nil}" $<
 	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
@@ -82,5 +89,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json
+	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json filelist.txt
 	rm -rf util-linux-*
