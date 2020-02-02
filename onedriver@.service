@@ -1,5 +1,5 @@
 [Unit]
-Description=Mounts onedrive at a target directory.
+Description=onedriver
 
 [Service]
 ExecStart=/usr/bin/onedriver %h/%I
