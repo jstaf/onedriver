@@ -20,13 +20,16 @@ all: onedriver test onedriver.deb rpm
 
 install: onedriver
 	cp $< /usr/bin/$<
-	cp data/onedriver@.service /etc/systemd/system/
+	cp onedriver@.service /etc/systemd/system/
+	systemctl daemon-reload
 
 
 localinstall: onedriver
+	mkdir -p ~/.config/systemd/user ~/.local/bin
 	cp $< ~/.local/bin/$<
-	mkdir -p  ~/.config/systemd/user/
-	cp data/onedriver@.service ~/.config/systemd/user/
+	cp onedriver@.service ~/.config/systemd/user/
+	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
+	systemctl --user daemon-reload
 
 
 # kind of a yucky build using nfpm - will be replaced later with a real .deb

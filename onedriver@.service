@@ -2,7 +2,7 @@
 Description=Mounts onedrive at a target directory.
 
 [Service]
-ExecStart=onedriver %h/%I
+ExecStart=/usr/bin/onedriver %h/%I
 
 [Install]
 WantedBy=default.target
