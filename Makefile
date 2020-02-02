@@ -20,7 +20,7 @@ all: onedriver test onedriver.deb rpm
 
 install: onedriver
 	cp $< /usr/bin/$<
-	cp onedriver@.service /etc/systemd/system/
+	cp onedriver@.service /etc/systemd/user/
 	systemctl daemon-reload
 
 
@@ -41,7 +41,7 @@ onedriver.deb: onedriver
 rpm: onedriver.spec
 	rm -f ~/rpmbuild/RPMS/x86_64/onedriver*.rpm
 	mkdir -p ~/rpmbuild/SOURCES
-	spectool -g -R $<
+	#spectool -g -R $<
 	# skip generation of debuginfo package
 	rpmbuild -bb --define "debug_package %{nil}" $<
 	cp ~/rpmbuild/RPMS/x86_64/onedriver*.rpm .
