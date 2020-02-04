@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,7 +37,7 @@ type UploadSession struct {
 	Size               uint64    `json:"-"`
 	data               []byte
 
-	mutex mu.Mutex
+	mutex sync.Mutex
 	state int
 }
 

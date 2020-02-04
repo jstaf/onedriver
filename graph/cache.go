@@ -12,7 +12,6 @@ import (
 
 	bolt "github.com/etcd-io/bbolt"
 	"github.com/hanwen/go-fuse/v2/fs"
-	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,7 +26,7 @@ type Cache struct {
 	uploads   *UploadManager
 	offline   bool
 
-	mu.RWMutex
+	sync.RWMutex
 	auth *Auth
 }
 
