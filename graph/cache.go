@@ -267,6 +267,7 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 
 	// If item.children is not nil, it means we have the item's children
 	// already and can fetch them directly from the cache
+	inode.mutex.RLock()
 	if inode.children != nil {
 		for _, id := range inode.children {
 			child := c.GetID(id)
@@ -276,8 +277,10 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 			}
 			children[strings.ToLower(child.Name())] = child
 		}
+		inode.mutex.RUnlock()
 		return children, nil
 	}
+	inode.mutex.RUnlock()
 
 	// We haven't fetched the children for this item yet, get them from the
 	// server.
