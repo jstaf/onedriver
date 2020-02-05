@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	mu "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -77,7 +77,7 @@ type DriveItem struct {
 type Inode struct {
 	fs.Inode `json:"-"`
 
-	mutex mu.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
+	mutex sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
 	DriveItem
 	cache         *Cache
 	children      []string       // a slice of ids, nil when uninitialized

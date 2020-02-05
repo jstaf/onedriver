@@ -1,5 +1,7 @@
 [Unit]
 Description=onedriver
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/onedriver %I
