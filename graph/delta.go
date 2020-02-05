@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	bolt "github.com/etcd-io/bbolt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,13 +17,17 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 	for { // eva
 		// get deltas
 		log.Debug("Fetching deltas from server.")
+		pollSuccess := false
 		deltas := make(map[string]*Inode)
 		for {
 			incoming, cont, err := c.pollDeltas(c.auth)
 			if err != nil {
-				// TODO the only thing that should be able to bring the FS out
+				// the only thing that should be able to bring the FS out
 				// of a read-only state is a successful delta call
-				log.WithField("err", err).Error("Error during delta fetch.")
+				log.WithField("err", err).Error(
+					"Error during delta fetch, marking fs as offline.",
+				)
+				c.offline = true
 				break
 			}
 
@@ -33,6 +38,7 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 			}
 			if !cont {
 				log.Infof("Fetched %d deltas.", len(deltas))
+				pollSuccess = true
 				break
 			}
 		}
@@ -43,6 +49,13 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		}
 
 		log.Info("Sync complete!")
+		if pollSuccess {
+			// mark cache as online and write deltaLink to disk for use later
+			c.offline = false
+			c.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
+			})
+		}
 		if !c.offline {
 			c.SerializeAll()
 		}

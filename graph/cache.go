@@ -34,6 +34,7 @@ type Cache struct {
 var (
 	CONTENT  = []byte("content")
 	METADATA = []byte("metadata")
+	DELTA    = []byte("delta")
 )
 
 // CacheDir returns the default cache dir location.
@@ -51,6 +52,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(CONTENT)
 		tx.CreateBucketIfNotExists(METADATA)
+		tx.CreateBucketIfNotExists(DELTA)
 		return nil
 	})
 	cache := &Cache{
@@ -66,6 +68,17 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 			if root = cache.GetID("root"); root == nil {
 				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
 			}
+			// when offline, we load the cache deltaLink from disk
+			cache.db.View(func(tx *bolt.Tx) error {
+				if link := tx.Bucket(DELTA).Get([]byte("deltaLink")); link != nil {
+					cache.deltaLink = string(link)
+				} else {
+					// only reached if a previous online session never survived
+					// long enough to save its delta link
+					cache.deltaLink = "/me/drive/root/delta?token=latest"
+				}
+				return nil
+			})
 		} else {
 			log.WithFields(log.Fields{
 				"err": err,
@@ -95,11 +108,11 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				cache.InsertID(item.ID(), item)
 			}
 		}
+		// using token=latest because we don't care about existing items - they'll
+		// be downloaded on-demand by the cache
+		cache.deltaLink = "/me/drive/root/delta?token=latest"
 	}
 
-	// using token=latest because we don't care about existing items - they'll
-	// be downloaded on-demand by the cache
-	cache.deltaLink = "/me/drive/root/delta?token=latest"
 	// deltaloop is started manually
 	return cache
 }
