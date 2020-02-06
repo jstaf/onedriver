@@ -91,10 +91,6 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
 
-	if drive, err := GetDrive(auth); err != nil {
-		cache.driveType = drive.DriveType
-	}
-
 	if !cache.offline {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
 		// does not exist
@@ -122,6 +118,19 @@ func (c *Cache) GetAuth() *Auth {
 	c.RLock()
 	defer c.RUnlock()
 	return c.auth
+}
+
+// DriveType lazily fetches the OneDrive drivetype
+func (c *Cache) DriveType() string {
+	if c.driveType == "" {
+		drive, err := GetDrive(c.GetAuth())
+		if err == nil {
+			c.driveType = drive.DriveType
+		} else {
+			log.Error("Drivetype was empty and could not be fetched!")
+		}
+	}
+	return c.driveType
 }
 
 func leadingSlash(path string) string {

@@ -463,7 +463,7 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 
 		// recompute hashes when saving new content
 		i.FileInternal = &File{}
-		if i.cache.driveType == "personal" {
+		if i.cache.DriveType() == "personal" {
 			i.FileInternal.Hashes.SHA1Hash = SHA1Hash(i.data)
 		} else {
 			i.FileInternal.Hashes.QuickXorHash = QuickXORHash(i.data)
@@ -838,6 +838,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 
 	// try grabbing from disk
 	cache := i.GetCache()
+	driveType := cache.DriveType()
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashWanted, hashActual, hashType string
@@ -845,7 +846,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just use the zero values and accept the cached content.
 			hashType = "none"
-		} else if cache.driveType == "personal" {
+		} else if driveType == "personal" {
 			i.mutex.RLock()
 			hashWanted = strings.ToLower(i.FileInternal.Hashes.SHA1Hash)
 			i.mutex.RUnlock()
@@ -876,6 +877,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 		log.WithFields(log.Fields{
 			"id":          id,
 			"path":        path,
+			"drivetype":   driveType,
 			"hash_wanted": hashWanted,
 			"hash_actual": hashActual,
 			"hash_type":   hashType,
