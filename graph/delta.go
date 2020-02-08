@@ -27,7 +27,9 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 				log.WithField("err", err).Error(
 					"Error during delta fetch, marking fs as offline.",
 				)
+				c.Lock()
 				c.offline = true
+				c.Unlock()
 				break
 			}
 
@@ -51,7 +53,9 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		log.Info("Sync complete!")
 		if pollSuccess {
 			// mark cache as online and write deltaLink to disk for use later
+			c.Lock()
 			c.offline = false
+			c.Unlock()
 			c.db.Update(func(tx *bolt.Tx) error {
 				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
 			})

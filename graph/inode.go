@@ -663,7 +663,7 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 	}).Debug()
 
 	cache := i.GetCache()
-	if cache.offline {
+	if cache.IsOffline() {
 		// nope, we are refusing op to avoid data loss later
 		log.WithFields(log.Fields{
 			"id":   id,
@@ -715,7 +715,7 @@ func (i *Inode) Unlink(ctx context.Context, name string) syscall.Errno {
 		// the file we are unlinking never existed
 		return syscall.ENOENT
 	}
-	if cache.offline {
+	if cache.IsOffline() {
 		return syscall.EROFS
 	}
 

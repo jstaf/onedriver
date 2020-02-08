@@ -24,10 +24,10 @@ type Cache struct {
 	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
-	offline   bool
 
 	sync.RWMutex
-	auth *Auth
+	auth    *Auth
+	offline bool
 }
 
 // boltdb buckets
@@ -91,7 +91,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
 
-	if !cache.offline {
+	if !cache.IsOffline() {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
@@ -119,6 +119,13 @@ func (c *Cache) GetAuth() *Auth {
 	c.RLock()
 	defer c.RUnlock()
 	return c.auth
+}
+
+// IsOffline returns whether or not the cache thinks its offline.
+func (c *Cache) IsOffline() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.offline
 }
 
 // DriveType lazily fetches the OneDrive drivetype
