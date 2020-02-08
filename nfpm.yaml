@@ -9,6 +9,8 @@ provides:
 - onedriver
 depends:
 - libwebkit2gtk-4.0
+- systemd
+- fuse
 maintainer: "Jeff Stafford <jeff.stafford@protonmail.com>"
 description: |
   Onedriver is a native Linux filesystem for Microsoft Onedrive.
