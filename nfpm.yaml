@@ -11,9 +11,11 @@ depends:
 - libwebkit2gtk-4.0
 maintainer: "Jeff Stafford <jeff.stafford@protonmail.com>"
 description: |
-  Onedriver is a native Linux filesystem for Microsoft Onedrive
+  Onedriver is a native Linux filesystem for Microsoft Onedrive.
 homepage: "https://github.com/jstaf/onedriver"
 license: "GPL3"
 bindir: "/usr/bin"
 files:
   ./onedriver: "/usr/bin/onedriver"
+  ./onedriver.png: "/usr/share/icons/onedriver.png"
+  ./onedriver@.service: "/usr/lib/systemd/user/onedriver@.service"
