@@ -361,13 +361,26 @@ func (i *Inode) Path() string {
 
 // Read from an Inode like a file
 func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+	path := i.Path()
+	if !i.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   i.ID(),
+			"path": path,
+		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
+		i.Open(ctx, 0)
+	}
+
+	// we are locked for the remainder of this op
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+
 	end := int(off) + int(len(buf))
 	oend := end
-	size := int(i.Size())
+	size := len(*i.data) // worse than using i.size(), but some edge cases require it
 	if int(off) > size {
 		log.WithFields(log.Fields{
-			"id":        i.ID(),
-			"path":      i.Path(),
+			"id":        i.IDInternal,
+			"path":      path,
 			"bufsize":   int64(end) - off,
 			"file_size": size,
 			"offset":    off,
@@ -375,27 +388,16 @@ func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64
 		return fuse.ReadResultData(make([]byte, 0)), syscall.EINVAL
 	}
 	if end > size {
-		// i.Size() called once for one fewer RLock
 		end = size
 	}
 	log.WithFields(log.Fields{
-		"id":               i.ID(),
-		"path":             i.Path(),
+		"id":               i.IDInternal,
+		"path":             path,
 		"original_bufsize": int64(oend) - off,
 		"bufsize":          int64(end) - off,
 		"file_size":        size,
 		"offset":           off,
 	}).Trace("Read file")
-
-	if !i.HasContent() {
-		log.WithFields(log.Fields{
-			"id":   i.ID(),
-			"path": i.Path(),
-		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
-		i.Open(ctx, 0)
-	}
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
 	return fuse.ReadResultData((*i.data)[off:end]), 0
 }
 

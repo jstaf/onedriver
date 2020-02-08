@@ -104,6 +104,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				cache.InsertID(item.ID(), item)
 			}
 		}
+
 		// using token=latest because we don't care about existing items - they'll
 		// be downloaded on-demand by the cache
 		cache.deltaLink = "/me/drive/root/delta?token=latest"

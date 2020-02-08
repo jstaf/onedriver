@@ -127,6 +127,23 @@ func ChildrenPathID(id string) string {
 	return "/me/drive/items/" + id + "/children"
 }
 
+// User represents the user. Currently only used to fetch the account email so
+// we can display it in file managers with .xdg-volume-info
+// https://docs.microsoft.com/en-ca/graph/api/user-get
+type User struct {
+	UserPrincipalName string `json:"userPrincipalName"`
+}
+
+// GetUser fetches the current user details from the Graph API.
+func GetUser(auth *Auth) (User, error) {
+	resp, err := Get("/me", auth)
+	user := User{}
+	if err == nil {
+		err = json.Unmarshal(resp, &user)
+	}
+	return user, err
+}
+
 // DriveQuota is used to parse the User's current storage quotas from the API
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/quota
 type DriveQuota struct {

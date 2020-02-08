@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,6 +94,39 @@ func main() {
 		filepath.Join(dir, "auth_tokens.json"),
 		30*time.Second,
 	)
+
+	// Create .xdg-volume-info for a nice little onedrive logo in the corner of the
+	// mountpoint and show the account name in the nautilus sidebar
+	cache := root.GetCache()
+	auth := cache.GetAuth()
+	if child, _ := cache.GetPath("/.xdg-volume-info", auth); child == nil {
+		log.Info("Creating .xdg-volume-info")
+		user, err := graph.GetUser(auth)
+		if err != nil {
+			log.Error("Could not create .xdg-volume-info: ", err)
+		} else {
+			xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
+			if _, err := os.Stat("/usr/share/icons/onedriver.png"); err == nil {
+				xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver.png\n"
+			}
+			// just upload directly and shove it in the cache
+			// (since the fs isn't mounted yet)
+			resp, err := graph.Put(
+				graph.ResourcePath("/.xdg-volume-info")+":/content",
+				auth,
+				strings.NewReader(xdgVolumeInfo),
+			)
+			if err != nil {
+				log.Error(err)
+			}
+			inode := graph.NewInode(".xdg-volume-info", 0644, root)
+			err = json.Unmarshal(resp, &inode)
+			if err == nil {
+				cache.InsertID(inode.ID(), inode)
+			}
+		}
+	}
+
 	second := time.Second
 	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
 		EntryTimeout: &second,
