@@ -24,10 +24,10 @@ type Cache struct {
 	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
-	offline   bool
 
 	sync.RWMutex
-	auth *Auth
+	auth    *Auth
+	offline bool
 }
 
 // boltdb buckets
@@ -91,11 +91,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 
 	cache.uploads = NewUploadManager(2*time.Second, auth)
 
-	if drive, err := GetDrive(auth); err != nil {
-		cache.driveType = drive.DriveType
-	}
-
-	if !cache.offline {
+	if !cache.IsOffline() {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
@@ -108,6 +104,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				cache.InsertID(item.ID(), item)
 			}
 		}
+
 		// using token=latest because we don't care about existing items - they'll
 		// be downloaded on-demand by the cache
 		cache.deltaLink = "/me/drive/root/delta?token=latest"
@@ -122,6 +119,26 @@ func (c *Cache) GetAuth() *Auth {
 	c.RLock()
 	defer c.RUnlock()
 	return c.auth
+}
+
+// IsOffline returns whether or not the cache thinks its offline.
+func (c *Cache) IsOffline() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.offline
+}
+
+// DriveType lazily fetches the OneDrive drivetype
+func (c *Cache) DriveType() string {
+	if c.driveType == "" {
+		drive, err := GetDrive(c.GetAuth())
+		if err == nil {
+			c.driveType = drive.DriveType
+		} else {
+			log.Error("Drivetype was empty and could not be fetched!")
+		}
+	}
+	return c.driveType
 }
 
 func leadingSlash(path string) string {

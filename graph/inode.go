@@ -361,13 +361,26 @@ func (i *Inode) Path() string {
 
 // Read from an Inode like a file
 func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+	path := i.Path()
+	if !i.HasContent() {
+		log.WithFields(log.Fields{
+			"id":   i.ID(),
+			"path": path,
+		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
+		i.Open(ctx, 0)
+	}
+
+	// we are locked for the remainder of this op
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+
 	end := int(off) + int(len(buf))
 	oend := end
-	size := int(i.Size())
+	size := len(*i.data) // worse than using i.size(), but some edge cases require it
 	if int(off) > size {
 		log.WithFields(log.Fields{
-			"id":        i.ID(),
-			"path":      i.Path(),
+			"id":        i.IDInternal,
+			"path":      path,
 			"bufsize":   int64(end) - off,
 			"file_size": size,
 			"offset":    off,
@@ -375,27 +388,16 @@ func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64
 		return fuse.ReadResultData(make([]byte, 0)), syscall.EINVAL
 	}
 	if end > size {
-		// i.Size() called once for one fewer RLock
 		end = size
 	}
 	log.WithFields(log.Fields{
-		"id":               i.ID(),
-		"path":             i.Path(),
+		"id":               i.IDInternal,
+		"path":             path,
 		"original_bufsize": int64(oend) - off,
 		"bufsize":          int64(end) - off,
 		"file_size":        size,
 		"offset":           off,
 	}).Trace("Read file")
-
-	if !i.HasContent() {
-		log.WithFields(log.Fields{
-			"id":   i.ID(),
-			"path": i.Path(),
-		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
-		i.Open(ctx, 0)
-	}
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
 	return fuse.ReadResultData((*i.data)[off:end]), 0
 }
 
@@ -463,7 +465,7 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 
 		// recompute hashes when saving new content
 		i.FileInternal = &File{}
-		if i.cache.driveType == "personal" {
+		if i.cache.DriveType() == "personal" {
 			i.FileInternal.Hashes.SHA1Hash = SHA1Hash(i.data)
 		} else {
 			i.FileInternal.Hashes.QuickXorHash = QuickXORHash(i.data)
@@ -661,7 +663,7 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 	}).Debug()
 
 	cache := i.GetCache()
-	if cache.offline {
+	if cache.IsOffline() {
 		// nope, we are refusing op to avoid data loss later
 		log.WithFields(log.Fields{
 			"id":   id,
@@ -713,7 +715,7 @@ func (i *Inode) Unlink(ctx context.Context, name string) syscall.Errno {
 		// the file we are unlinking never existed
 		return syscall.ENOENT
 	}
-	if cache.offline {
+	if cache.IsOffline() {
 		return syscall.EROFS
 	}
 
@@ -838,6 +840,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 
 	// try grabbing from disk
 	cache := i.GetCache()
+	driveType := cache.DriveType()
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashWanted, hashActual, hashType string
@@ -845,7 +848,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just use the zero values and accept the cached content.
 			hashType = "none"
-		} else if cache.driveType == "personal" {
+		} else if driveType == "personal" {
 			i.mutex.RLock()
 			hashWanted = strings.ToLower(i.FileInternal.Hashes.SHA1Hash)
 			i.mutex.RUnlock()
@@ -876,6 +879,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 		log.WithFields(log.Fields{
 			"id":          id,
 			"path":        path,
+			"drivetype":   driveType,
 			"hash_wanted": hashWanted,
 			"hash_actual": hashActual,
 			"hash_type":   hashType,
