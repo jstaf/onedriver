@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.6
+Version:       0.7.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -45,6 +45,12 @@ systemctl daemon-reload
 %attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
 %changelog
+* Wed Feb 12 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.7.0
+- Now has drive username in Nautilus sidebar and small OneDrive logo on mountpoint.
+- No longer requires manually closing the authentication window.
+- Add systemd user service for automount on boot.
+- Now transitions gracefully from online to offline (or vice-versa) depending on network availability.
+
 * Thu Jan 16 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.6
 - Filesystem metadata is now serialized to disk at regular intervals.
 - Using on-disk metadata, onedriver can now be used in read-only mode while offline.
