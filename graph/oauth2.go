@@ -50,9 +50,7 @@ func (a *Auth) FromFile(file string) error {
 // Refresh auth tokens if expired.
 func (a *Auth) Refresh() {
 	if a.ExpiresAt <= time.Now().Unix() {
-		log.Info("Auth tokens expired, attempting renewal.")
 		oldTime := a.ExpiresAt
-
 		postData := strings.NewReader("client_id=" + authClientID +
 			"&redirect_uri=" + authRedirectURL +
 			"&refresh_token=" + a.RefreshToken +
@@ -60,17 +58,22 @@ func (a *Auth) Refresh() {
 		resp, err := http.Post(authTokenURL,
 			"application/x-www-form-urlencoded",
 			postData)
+
+		var reauth bool
 		if err != nil {
 			if IsOffline(err) {
 				log.WithFields(log.Fields{
 					"err": err,
-				}).Error("Network unreachable, postponing renewal by 5 min.")
-				a.ExpiresAt = time.Now().Add(5 * time.Minute).Unix()
+				}).Trace("Network unreachable during token renewal, ignoring.")
 				return
 			}
 			log.WithFields(log.Fields{
 				"err": err,
-			}).Fatal("Could not POST to renew tokens, exiting.")
+			}).Error("Could not POST to renew tokens, forcing reauth.")
+			reauth = true
+		} else {
+			// put here so as to avoid spamming the log when offline
+			log.Info("Auth tokens expired, attempting renewal.")
 		}
 		defer resp.Body.Close()
 
@@ -80,8 +83,15 @@ func (a *Auth) Refresh() {
 			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
 		}
 		if a.AccessToken == "" || a.RefreshToken == "" {
-			os.Remove(a.path)
-			log.Fatalf("Failed to renew access tokens. Response from server:\n%s\n", string(body))
+			log.Errorf("Failed to renew access tokens. Response from server:\n%s\n", string(body))
+			reauth = true
+		}
+
+		if reauth {
+			// one of the above calls failed and we were not offline,
+			// give the user a chance to reauthenticate before exiting
+			new := getAuthTokens(getAuthCode())
+			a = &new
 		}
 		a.ToFile(a.path)
 	}

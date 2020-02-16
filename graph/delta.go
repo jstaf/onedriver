@@ -20,7 +20,7 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		pollSuccess := false
 		deltas := make(map[string]*Inode)
 		for {
-			incoming, cont, err := c.pollDeltas(c.auth)
+			incoming, cont, err := c.pollDeltas(c.GetAuth())
 			if err != nil {
 				// the only thing that should be able to bring the FS out
 				// of a read-only state is a successful delta call
@@ -60,12 +60,14 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
 			})
 		}
-		if !c.offline {
-			c.SerializeAll()
-		}
 
-		// sleep till next sync interval
-		time.Sleep(interval)
+		if !c.IsOffline() {
+			c.SerializeAll()
+			time.Sleep(interval)
+		} else {
+			// shortened duration while offline
+			time.Sleep(2 * time.Second)
+		}
 	}
 }
 
