@@ -183,6 +183,7 @@ func (c *Cache) GetID(id string) *Inode {
 		})
 		if found != nil {
 			found.cache = c
+			c.metadata.Store(id, found) // move to memory for next time
 		}
 		return found
 	}
