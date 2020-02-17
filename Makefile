@@ -13,7 +13,7 @@ endif
 
 
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
-	go build ./cmd/onedriver
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
 all: onedriver test onedriver.deb rpm

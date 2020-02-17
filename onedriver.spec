@@ -24,7 +24,7 @@ break.
 %autosetup
 
 %build
-GOOS=linux go build ./cmd/onedriver
+GOOS=linux go build -ldflags="main.commit $(git rev-parse HEAD)" ./cmd/onedriver
 
 %install
 rm -rf $RPM_BUILD_ROOT
