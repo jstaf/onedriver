@@ -21,13 +21,13 @@ type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
 	root      string // the id of the filesystem's root item
-	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
 
 	sync.RWMutex
-	auth    *Auth
-	offline bool
+	auth      *Auth
+	driveType string // personal | business
+	offline   bool
 }
 
 // boltdb buckets
@@ -135,15 +135,21 @@ func (c *Cache) IsOffline() bool {
 
 // DriveType lazily fetches the OneDrive drivetype
 func (c *Cache) DriveType() string {
-	if c.driveType == "" {
+	c.RLock()
+	driveType := c.driveType
+	c.RUnlock()
+
+	if driveType == "" {
 		drive, err := GetDrive(c.GetAuth())
 		if err == nil {
+			c.Lock()
 			c.driveType = drive.DriveType
-		} else {
-			log.Error("Drivetype was empty and could not be fetched!")
+			c.Unlock()
+			return drive.DriveType
 		}
+		log.Error("Drivetype was empty and could not be fetched!")
 	}
-	return c.driveType
+	return driveType
 }
 
 func leadingSlash(path string) string {
