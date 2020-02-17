@@ -75,9 +75,12 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				if link := tx.Bucket(DELTA).Get([]byte("deltaLink")); link != nil {
 					cache.deltaLink = string(link)
 				} else {
-					// only reached if a previous online session never survived
-					// long enough to save its delta link
-					cache.deltaLink = "/me/drive/root/delta?token=latest"
+					// Only reached if a previous online session never survived
+					// long enough to save its delta link. We explicitly disallow these
+					// types of startups as it's possible for things to get out of sync
+					// this way.
+					log.Fatal("Cannot perform an offline startup without a valid delta " +
+						"link from a previous session.")
 				}
 				return nil
 			})
@@ -298,6 +301,9 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 	// already and can fetch them directly from the cache
 	inode.mutex.RLock()
 	if inode.children != nil {
+		// can potentially have out-of-date child metadata if started offline, but since
+		// changes are disallowed while offline, the children will be back in sync after
+		// the first successful delta fetch (which also brings the fs back online)
 		for _, childID := range inode.children {
 			child := c.GetID(childID)
 			if child == nil {
