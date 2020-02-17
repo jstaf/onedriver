@@ -39,14 +39,12 @@ onedriver.deb: onedriver
 	nfpm pkg --target $@
 
 
-.commit:
-	git rev-parse HEAD > .commit
-
-
 # used to create release tarball for rpmbuild
-onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files) .commit
+onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
+	# no git repo while making rpm, so need to add the git commit info as a file
+	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
 	tar -czvf $@ onedriver-$(RPM_VERSION)/
@@ -88,6 +86,7 @@ unshare:
 	cp util-linux-$(UNSHARE_VERSION)/unshare .
 
 
+# force auth renewal the next time onedriver starts
 expire_now:
 	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
 
