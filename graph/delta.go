@@ -50,19 +50,22 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 			c.applyDelta(delta)
 		}
 
-		log.Info("Sync complete!")
+		if !c.IsOffline() {
+			c.SerializeAll()
+		}
+
 		if pollSuccess {
-			// mark cache as online and write deltaLink to disk for use later
+			// mark cache as online and write deltaLink to disk for use later.
+			// this happens AFTER serialization because otherwise it'll blank
+			// out the root item's children, giving us an empty filesystem
 			c.Lock()
 			c.offline = false
 			c.Unlock()
 			c.db.Update(func(tx *bolt.Tx) error {
 				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
 			})
-		}
 
-		if !c.IsOffline() {
-			c.SerializeAll()
+			// wait until next interval
 			time.Sleep(interval)
 		} else {
 			// shortened duration while offline
