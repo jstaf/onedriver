@@ -1,4 +1,4 @@
-.PHONY: all, test, rpm, clean, install, localinstall
+.PHONY: all, test, rpm, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
@@ -81,6 +81,10 @@ unshare:
 	cd util-linux-$(UNSHARE_VERSION) && ./configure --disable-dependency-tracking
 	make -C util-linux-$(UNSHARE_VERSION) unshare
 	cp util-linux-$(UNSHARE_VERSION)/unshare .
+
+
+expire_now:
+	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
 
 
 # for autocompletion by ide-clangd
