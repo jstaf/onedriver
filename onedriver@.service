@@ -1,13 +1,11 @@
 [Unit]
 Description=onedriver
-After=network-online.target
-Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/onedriver %I
 ExecStop=/usr/bin/fusermount -uz %I
-Restart=on-failure
-RestartSec=5s
+Restart=always
+RestartSec=1s
 
 [Install]
 WantedBy=default.target
