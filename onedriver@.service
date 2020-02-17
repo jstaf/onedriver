@@ -8,7 +8,6 @@ ExecStartPre=/usr/bin/sleep 10
 ExecStart=/usr/bin/onedriver %I
 ExecStop=/usr/bin/fusermount -uz %I
 Restart=always
-RestartSec=1s
 
 [Install]
 WantedBy=default.target
