@@ -55,12 +55,13 @@ func (c *Cache) deltaLoop(interval time.Duration) {
 		}
 
 		if pollSuccess {
-			// mark cache as online and write deltaLink to disk for use later.
-			// this happens AFTER serialization because otherwise it'll blank
-			// out the root item's children, giving us an empty filesystem
 			c.Lock()
+			if c.offline {
+				log.Info("Delta fetch success, marking fs as online.")
+			}
 			c.offline = false
 			c.Unlock()
+
 			c.db.Update(func(tx *bolt.Tx) error {
 				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
 			})

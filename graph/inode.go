@@ -854,12 +854,17 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			i.mutex.RUnlock()
 			hashActual = strings.ToLower(SHA1Hash(&content))
 			hashType = "SHA1"
-		} else {
+		} else if driveType == "business" {
 			i.mutex.RLock()
 			hashWanted = strings.ToLower(i.FileInternal.Hashes.QuickXorHash)
 			i.mutex.RUnlock()
 			hashActual = strings.ToLower(QuickXORHash(&content))
 			hashType = "QuickXORHash"
+		} else {
+			log.WithFields(log.Fields{
+				"path": path,
+				"id":   id,
+			}).Warn("Could not determine drive type, not checking hashes.")
 		}
 
 		if hashActual == hashWanted {

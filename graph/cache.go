@@ -64,7 +64,9 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 	if err != nil {
 		if IsOffline(err) {
 			// no network, load from db if possible and go to read-only state
+			cache.Lock()
 			cache.offline = true
+			cache.Unlock()
 			if root = cache.GetID("root"); root == nil {
 				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
 			}
@@ -159,7 +161,7 @@ func (c *Cache) InodePath(fuseInode *fs.Inode) string {
 func (c *Cache) GetID(id string) *Inode {
 	entry, exists := c.metadata.Load(id)
 	if !exists {
-		if c.offline {
+		if c.IsOffline() {
 			// disk is only used if we are offline
 			var found *Inode
 			c.db.View(func(tx *bolt.Tx) error {
@@ -299,8 +301,8 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 	// already and can fetch them directly from the cache
 	inode.mutex.RLock()
 	if inode.children != nil {
-		for _, id := range inode.children {
-			child := c.GetID(id)
+		for _, childID := range inode.children {
+			child := c.GetID(childID)
 			if child == nil {
 				// will be nil if deleted or never existed
 				continue
@@ -323,6 +325,9 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 			return children, nil
 		}
 		// something else happened besides being offline
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Error while fetching children.")
 		return nil, err
 	}
 	var fetched driveChildren

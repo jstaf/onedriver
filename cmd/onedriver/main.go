@@ -90,7 +90,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Infof("onedriver v%s %s\n", version, commit[:clen])
+	log.Infof("onedriver v%s %s", version, commit[:clen])
 
 	// setup filesystem
 	if st, _ := os.Stat(dir); st == nil {
