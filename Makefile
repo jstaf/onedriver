@@ -39,10 +39,15 @@ onedriver.deb: onedriver
 	nfpm pkg --target $@
 
 
+.commit:
+	git rev-parse HEAD > .commit
+
+
 # used to create release tarball for rpmbuild
-onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
+onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files) .commit
 	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
+	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
 	tar -czvf $@ onedriver-$(RPM_VERSION)/
 	rm -rf onedriver-$(RPM_VERSION)
