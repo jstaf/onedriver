@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const retrySeconds = 15
+
 // In this test, we create a directory through the API, and wait to see if
 // the cache picks it up post-creation.
 func TestDeltaMkdir(t *testing.T) {
@@ -42,7 +44,7 @@ func TestDeltaRmdir(t *testing.T) {
 	failOnErr(t, Remove(item.ID(), auth))
 
 	// wait for delta sync
-	for i := 0; i < 10; i++ {
+	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		_, err := os.Stat(fname)
 		if err != nil {
@@ -68,7 +70,7 @@ func TestDeltaRename(t *testing.T) {
 
 	failOnErr(t, Rename(item.ID(), "delta_rename_end", item.ParentID(), auth))
 	fpath := filepath.Join(DeltaDir, "delta_rename_end")
-	for i := 0; i < 10; i++ {
+	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		if _, err := os.Stat(fpath); err == nil {
 			content, err := ioutil.ReadFile(fpath)
@@ -100,7 +102,7 @@ func TestDeltaMoveParent(t *testing.T) {
 
 	failOnErr(t, Rename(item.ID(), "delta_rename_end", newParent.ID(), auth))
 	fpath := filepath.Join(TestDir, "delta_rename_end")
-	for i := 0; i < 10; i++ {
+	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		if _, err := os.Stat(fpath); err == nil {
 			content, err := ioutil.ReadFile(fpath)
@@ -141,7 +143,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	}
 
 	var content []byte
-	for i := 0; i < 10; i++ {
+	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		content, err = ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
 		failOnErr(t, err)
@@ -176,7 +178,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("local"), 0644))
 
 	// file has been changed both remotely and locally
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * retrySeconds)
 	content, err := ioutil.ReadFile(fpath)
 	failOnErr(t, err)
 
@@ -199,7 +201,7 @@ func TestDeltaBadContentInCache(t *testing.T) {
 		0644,
 	))
 	var id string
-	for i := 0; i < 10; i++ {
+	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		item, err := GetItemPath("/onedriver_tests/delta/corrupted", auth)
 		if err == nil {
