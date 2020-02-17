@@ -21,13 +21,13 @@ type Cache struct {
 	metadata  sync.Map
 	db        *bolt.DB
 	root      string // the id of the filesystem's root item
-	driveType string // personal | business
 	deltaLink string
 	uploads   *UploadManager
 
 	sync.RWMutex
-	auth    *Auth
-	offline bool
+	auth      *Auth
+	driveType string // personal | business
+	offline   bool
 }
 
 // boltdb buckets
@@ -75,9 +75,12 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 				if link := tx.Bucket(DELTA).Get([]byte("deltaLink")); link != nil {
 					cache.deltaLink = string(link)
 				} else {
-					// only reached if a previous online session never survived
-					// long enough to save its delta link
-					cache.deltaLink = "/me/drive/root/delta?token=latest"
+					// Only reached if a previous online session never survived
+					// long enough to save its delta link. We explicitly disallow these
+					// types of startups as it's possible for things to get out of sync
+					// this way.
+					log.Fatal("Cannot perform an offline startup without a valid delta " +
+						"link from a previous session.")
 				}
 				return nil
 			})
@@ -132,15 +135,21 @@ func (c *Cache) IsOffline() bool {
 
 // DriveType lazily fetches the OneDrive drivetype
 func (c *Cache) DriveType() string {
-	if c.driveType == "" {
+	c.RLock()
+	driveType := c.driveType
+	c.RUnlock()
+
+	if driveType == "" {
 		drive, err := GetDrive(c.GetAuth())
 		if err == nil {
+			c.Lock()
 			c.driveType = drive.DriveType
-		} else {
-			log.Error("Drivetype was empty and could not be fetched!")
+			c.Unlock()
+			return drive.DriveType
 		}
+		log.Error("Drivetype was empty and could not be fetched!")
 	}
-	return c.driveType
+	return driveType
 }
 
 func leadingSlash(path string) string {
@@ -161,26 +170,24 @@ func (c *Cache) InodePath(fuseInode *fs.Inode) string {
 func (c *Cache) GetID(id string) *Inode {
 	entry, exists := c.metadata.Load(id)
 	if !exists {
-		if c.IsOffline() {
-			// disk is only used if we are offline
-			var found *Inode
-			c.db.View(func(tx *bolt.Tx) error {
-				data := tx.Bucket(METADATA).Get([]byte(id))
-				var err error
-				if data != nil {
-					found, err = NewInodeJSON(data)
-				}
-				return err
-			})
-			if found != nil {
-				found.cache = c
+		// we allow fetching from disk as a fallback while offline (and it's also
+		// necessary while transitioning from offline->online)
+		var found *Inode
+		c.db.View(func(tx *bolt.Tx) error {
+			data := tx.Bucket(METADATA).Get([]byte(id))
+			var err error
+			if data != nil {
+				found, err = NewInodeJSON(data)
 			}
-			return found
+			return err
+		})
+		if found != nil {
+			found.cache = c
+			c.metadata.Store(id, found) // move to memory for next time
 		}
-		return nil
+		return found
 	}
-	inode := entry.(*Inode)
-	return inode
+	return entry.(*Inode)
 }
 
 // InsertID inserts a single item into the cache by ID and sets its parent using
@@ -301,6 +308,9 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 	// already and can fetch them directly from the cache
 	inode.mutex.RLock()
 	if inode.children != nil {
+		// can potentially have out-of-date child metadata if started offline, but since
+		// changes are disallowed while offline, the children will be back in sync after
+		// the first successful delta fetch (which also brings the fs back online)
 		for _, childID := range inode.children {
 			child := c.GetID(childID)
 			if child == nil {
