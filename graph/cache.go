@@ -161,26 +161,23 @@ func (c *Cache) InodePath(fuseInode *fs.Inode) string {
 func (c *Cache) GetID(id string) *Inode {
 	entry, exists := c.metadata.Load(id)
 	if !exists {
-		if c.IsOffline() {
-			// disk is only used if we are offline
-			var found *Inode
-			c.db.View(func(tx *bolt.Tx) error {
-				data := tx.Bucket(METADATA).Get([]byte(id))
-				var err error
-				if data != nil {
-					found, err = NewInodeJSON(data)
-				}
-				return err
-			})
-			if found != nil {
-				found.cache = c
+		// we allow fetching from disk as a fallback while offline (and it's also
+		// necessary while transitioning from offline->online)
+		var found *Inode
+		c.db.View(func(tx *bolt.Tx) error {
+			data := tx.Bucket(METADATA).Get([]byte(id))
+			var err error
+			if data != nil {
+				found, err = NewInodeJSON(data)
 			}
-			return found
+			return err
+		})
+		if found != nil {
+			found.cache = c
 		}
-		return nil
+		return found
 	}
-	inode := entry.(*Inode)
-	return inode
+	return entry.(*Inode)
 }
 
 // InsertID inserts a single item into the cache by ID and sets its parent using
