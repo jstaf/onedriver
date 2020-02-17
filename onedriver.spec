@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.7.1
+Version:       0.7.2
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -45,6 +45,9 @@ systemctl daemon-reload
 %attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
 %changelog
+* Mon Feb 17 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.7.2
+- Allow use of disk cache after filesystem transitions from offline to online.
+
 * Mon Feb 17 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.7.1
 - Fix for filesystem coming up blank after user systemd session start.
 
