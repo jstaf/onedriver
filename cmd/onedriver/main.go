@@ -18,15 +18,18 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-const onedriverVersion = "0.7.0"
+const version = "0.7.0"
+
+var commit string
 
 func usage() {
-	fmt.Printf(`onedriver - A Linux client for Onedrive.
+	fmt.Printf(`onedriver - A Linux client for Microsoft OneDrive.
 
-This program will mount your Onedrive account as a Linux filesystem at the
+This program will mount your OneDrive account as a Linux filesystem at the
 specified mountpoint. Note that this is not a sync client - files are fetched
 on-demand and cached locally. Only files you actually use will be downloaded.
-This filesystem requires an active internet connection to work.
+While offline, the filesystem will be read-only until connectivity is re-
+established.
 
 Usage: onedriver [options] <mountpoint>
 
@@ -38,22 +41,27 @@ Valid options:
 func main() {
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
-		"Authenticate to Onedrive and then exit. Useful for running tests.")
-	logLevel := flag.String("log", "debug", "Set logging level/verbosity. "+
+		"Authenticate to OneDrive and then exit.")
+	logLevel := flag.StringP("log", "l", "debug", "Set logging level/verbosity. "+
 		"Can be one of: fatal, error, warn, info, debug, trace")
 	cacheDir := flag.StringP("cache-dir", "c", "",
 		"Change the default cache directory used by onedriver. "+
 			"Will be created if the path does not already exist.")
 	wipeCache := flag.BoolP("wipe-cache", "w", false,
-		"Delete the existing onedriver cache directory.")
-	version := flag.BoolP("version", "v", false, "Display program version.")
+		"Delete the existing onedriver cache directory and then exit. "+
+			"Equivalent to resetting the program.")
+	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
-	flag.BoolP("help", "h", false, "Display usage and help.")
+	flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
 	flag.Parse()
 
-	if *version {
-		fmt.Println("onedriver v" + onedriverVersion)
+	clen := 0
+	if len(commit) > 7 {
+		clen = 8
+	}
+	if *versionFlag {
+		fmt.Printf("onedriver v%s %s\n", version, commit[:clen])
 		os.Exit(0)
 	}
 
@@ -62,9 +70,13 @@ func main() {
 		dir = graph.CacheDir()
 	}
 
+	if *wipeCache {
+		os.RemoveAll(dir)
+	}
 	if *authOnly {
-		// early quit if all we wanted to do was authenticate
 		graph.Authenticate(filepath.Join(dir, "auth_tokens.json"))
+	}
+	if *wipeCache || *authOnly {
 		os.Exit(0)
 	}
 
@@ -78,11 +90,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *wipeCache {
-		os.RemoveAll(dir)
-	}
-
-	log.Info("onedriver v", onedriverVersion)
+	log.Infof("onedriver v%s %s", version, commit[:clen])
 
 	// setup filesystem
 	if st, _ := os.Stat(dir); st == nil {

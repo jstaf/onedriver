@@ -1,4 +1,4 @@
-.PHONY: all, test, rpm, clean, install, localinstall
+.PHONY: all, test, rpm, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
@@ -13,7 +13,7 @@ endif
 
 
 onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
-	go build ./cmd/onedriver
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
 all: onedriver test onedriver.deb rpm
@@ -43,6 +43,9 @@ onedriver.deb: onedriver
 onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
+	# no git repo while making rpm, so need to add the git commit info as a file
+	git rev-parse HEAD > .commit
+	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
 	tar -czvf $@ onedriver-$(RPM_VERSION)/
 	rm -rf onedriver-$(RPM_VERSION)
@@ -81,6 +84,11 @@ unshare:
 	cd util-linux-$(UNSHARE_VERSION) && ./configure --disable-dependency-tracking
 	make -C util-linux-$(UNSHARE_VERSION) unshare
 	cp util-linux-$(UNSHARE_VERSION)/unshare .
+
+
+# force auth renewal the next time onedriver starts
+expire_now:
+	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
 
 
 # for autocompletion by ide-clangd

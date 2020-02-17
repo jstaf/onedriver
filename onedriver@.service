@@ -1,13 +1,13 @@
 [Unit]
 Description=onedriver
-After=network-online.target
-Wants=network-online.target
 
 [Service]
+# there is a race condition on session start as the computer network goes from offline to
+# online that messes up the initial mount if done immediately on login
+ExecStartPre=/usr/bin/sleep 10
 ExecStart=/usr/bin/onedriver %I
 ExecStop=/usr/bin/fusermount -uz %I
-Restart=on-failure
-RestartSec=5s
+Restart=always
 
 [Install]
 WantedBy=default.target
