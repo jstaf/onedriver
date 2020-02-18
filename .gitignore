@@ -15,12 +15,18 @@ mount/
 *.test
 *.out
 *.txt
-*.build
 
 # do not include binaries, but do include sources
 onedriver
 onedriver-*/
 !cmd/onedriver
 
+# for tests on older linuxes
 util-linux*
 unshare
+
+# debian build stuff
+debian/debhelper-build-stamp
+debian/*.substvars
+debian/files
+

@@ -60,6 +60,12 @@ rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
 	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
 
 
+# create the rpm for the current version
+deb: onedriver-$(RPM_VERSION).tar.gz
+	cp $< ../onedriver_$(RPM_VERSION).orig.tar.gz
+	debuild -us -uc
+
+
 # a large text file for us to test upload sessions with. #science
 dmel.fa:
 	curl ftp://ftp.ensemblgenomes.org/pub/metazoa/release-42/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.chromosome.X.fa.gz | zcat > $@

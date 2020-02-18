@@ -83,9 +83,12 @@ onedriver has multiple installation methods depending on your needs.
 
 ```bash
 # create an RPM for system-wide installation on RHEL/CentOS/Fedora
+sudo dnf install golang gcc webkit2gtk-devel pkg-config rpmdevtools
 make rpm
 
 # create a .deb for system-wide installation on Ubuntu/Debian
+sudo apt update
+sudo apt install golang gcc libwebkit2gtk-4.0-dev devscripts debhelper build-essential
 make onedriver.deb
 
 # install directly from source
