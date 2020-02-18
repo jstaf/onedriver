@@ -91,7 +91,7 @@ make rpm
 sudo apt update
 sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
     devscripts debhelper build-essential
-make onedriver.deb
+make deb
 
 # install directly from source
 make

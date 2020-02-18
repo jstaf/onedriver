@@ -1,4 +1,4 @@
-.PHONY: all, test, rpm, clean, expire_now, install, localinstall
+.PHONY: all, test, rpm, deb, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
@@ -16,7 +16,7 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-all: onedriver test onedriver.deb rpm
+all: onedriver test
 
 
 install: onedriver
@@ -31,12 +31,6 @@ localinstall: onedriver
 	cp onedriver@.service ~/.config/systemd/user/
 	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
 	systemctl --user daemon-reload
-
-
-# kind of a yucky build using nfpm - will be replaced later with a real .deb
-# build pipeline
-onedriver.deb: onedriver
-	nfpm pkg --target $@
 
 
 # used to create release tarball for rpmbuild
