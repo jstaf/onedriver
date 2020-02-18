@@ -15,6 +15,7 @@ mount/
 *.test
 *.out
 *.txt
+*.build
 
 # do not include binaries, but do include sources
 onedriver
