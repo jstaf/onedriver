@@ -9,6 +9,6 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	install -D -m 0755 onedriver $$(pwd)/debian/onedriver/usr/bin/onedriver
-	install -D -m 0644 onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver
+	install -D -m 0644 onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver.png
 	install -D -m 0644 onedriver@.service $$(pwd)/debian/onedriver/usr/lib/systemd/user/onedriver@.service
 

@@ -28,5 +28,6 @@ unshare
 # debian build stuff
 debian/debhelper-build-stamp
 debian/*.substvars
+debian/*.debhelper
 debian/files
 

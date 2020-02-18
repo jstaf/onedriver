@@ -59,6 +59,7 @@ rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
 deb: onedriver-$(RPM_VERSION).tar.gz
 	cp $< ../onedriver_$(RPM_VERSION).orig.tar.gz
 	debuild -us -uc
+	cp ../onedriver_$(RPM_VERSION)*.deb .
 
 
 # a large text file for us to test upload sessions with. #science
