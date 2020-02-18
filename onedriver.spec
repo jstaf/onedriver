@@ -39,6 +39,8 @@ cp onedriver@.service %{buildroot}/usr/lib/systemd/user
 %post
 systemctl daemon-reload
 
+# fix for el8 build in mock
+%define _empty_manifest_terminate_build 0
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/onedriver
