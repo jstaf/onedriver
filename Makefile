@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, deb, clean, expire_now, install, localinstall
+.PHONY: all, test, srpm, rpm, dsc, deb, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
