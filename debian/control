@@ -10,7 +10,7 @@ Homepage: https://github.com/jstaf/onedriver
 
 Package: onedriver
 Architecture: any
-Depends: libwebkit2gtk-4.0-dev, fuse
+Depends: libwebkit2gtk-4.0-37, fuse
 Suggests: systemd
 Description: A native Linux filesystem for Microsoft Onedrive
  Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
