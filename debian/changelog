@@ -1,4 +1,4 @@
-onedriver (0.7.2) unstable; urgency=low
+onedriver (0.7.2-1) unstable; urgency=low
 
   * Initial debian build.
 

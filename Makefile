@@ -64,11 +64,14 @@ onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_V
 	cp ~/rpmbuild/RPMS/x86_64/$@ .
 
 
-# create the rpm for the current version
-deb: onedriver-$(RPM_VERSION).tar.gz
-	cp $< ../onedriver_$(RPM_VERSION).orig.tar.gz
-	debuild -us -uc
-	cp ../onedriver_$(RPM_VERSION)*.deb .
+# create the deb for the current version
+dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
+	rm -rf build/
+	mkdir -p build/
+	cp $< build/onedriver_$(RPM_VERSION).orig.tar.gz
+	cd build && tar -xzf onedriver_$(RPM_VERSION).orig.tar.gz && dpkg-source --build onedriver-0.7.2
+	cp build/$@ .
 
 
 # a large text file for us to test upload sessions with. #science
