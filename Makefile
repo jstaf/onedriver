@@ -43,7 +43,9 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
-	tar -czvf $@ onedriver-$(RPM_VERSION)/
+	go mod vendor
+	cp -R vendor/ onedriver-$(RPM_VERSION)
+	tar -czf $@ onedriver-$(RPM_VERSION)
 	rm -rf onedriver-$(RPM_VERSION)
 
 

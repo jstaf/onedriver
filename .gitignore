@@ -18,6 +18,7 @@ mount/
 onedriver
 onedriver-*/
 !cmd/onedriver
+vendor/
 
 # rpm build stuff
 *.rpm
