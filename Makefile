@@ -1,8 +1,10 @@
-.PHONY: all, test, rpm, deb, clean, expire_now, install, localinstall
+.PHONY: all, test, srpm, rpm, deb, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
 RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
+RPM_DIST = $(shell rpm --eval "%{?dist}")
 UNSHARE_VERSION = 2.34
 ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
@@ -45,13 +47,21 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	rm -rf onedriver-$(RPM_VERSION)
 
 
-# build the rpm for the current version defined in the specfile
-rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
-	rpmdev-setuptree
+srpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm 
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
+	mkdir -p ~/rpmbuild/SOURCES
 	cp $< ~/rpmbuild/SOURCES
-	rpmbuild -ba onedriver.spec
-	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
-	cp ~/rpmbuild/SRPMS/onedriver-$(RPM_VERSION)-*.src.rpm .
+	rpmbuild -bs onedriver.spec
+	cp ~/rpmbuild/SRPMS/$@ .
+
+
+# build the rpm for the current version defined in the specfile
+rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
+	mkdir -p ~/rpmbuild/SOURCES
+	cp $< ~/rpmbuild/SOURCES
+	rpmbuild -bb onedriver.spec
+	cp ~/rpmbuild/RPMS/x86_64/$@ .
 
 
 # create the rpm for the current version
