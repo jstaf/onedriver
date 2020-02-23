@@ -8,12 +8,13 @@ URL:           https://github.com/jstaf/onedriver
 Source0:       https://github.com/jstaf/onedriver/archive/onedriver-%{version}.tar.gz
 
 BuildRequires: golang >= 1.12.0
+BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
 Requires:      fuse
-Requires:      systemd
 Requires:      webkit2gtk3
+Suggests:      systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
@@ -24,7 +25,7 @@ break.
 %autosetup
 
 %build
-GOOS=linux go build -ldflags="-X main.commit=$(cat .commit)" ./cmd/onedriver
+GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)" ./cmd/onedriver
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -38,6 +39,8 @@ cp onedriver@.service %{buildroot}/usr/lib/systemd/user
 %post
 systemctl daemon-reload
 
+# fix for el8 build in mock
+%define _empty_manifest_terminate_build 0
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/onedriver

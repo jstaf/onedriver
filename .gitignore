@@ -10,8 +10,6 @@ mount/
 *.fa
 *.gz
 *.db
-*.rpm
-*.deb
 *.test
 *.out
 *.txt
@@ -20,6 +18,21 @@ mount/
 onedriver
 onedriver-*/
 !cmd/onedriver
+vendor/
 
+# rpm build stuff
+*.rpm
+
+# for tests on older linuxes
 util-linux*
 unshare
+
+# debian build stuff
+debian/debhelper-build-stamp
+debian/*.substvars
+debian/*.debhelper
+debian/files
+build/
+*.dsc
+*.deb
+*.tar.xz

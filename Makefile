@@ -1,8 +1,10 @@
-.PHONY: all, test, rpm, clean, expire_now, install, localinstall
+.PHONY: all, test, srpm, rpm, dsc, deb, clean, expire_now, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
 RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
+RPM_DIST = $(shell rpm --eval "%{?dist}")
 UNSHARE_VERSION = 2.34
 ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
@@ -16,7 +18,7 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-all: onedriver test onedriver.deb rpm
+all: onedriver test
 
 
 install: onedriver
@@ -33,31 +35,50 @@ localinstall: onedriver
 	systemctl --user daemon-reload
 
 
-# kind of a yucky build using nfpm - will be replaced later with a real .deb
-# build pipeline
-onedriver.deb: onedriver
-	nfpm pkg --target $@
-
-
 # used to create release tarball for rpmbuild
 onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
+	rm -rf onedriver-$(RPM_VERSION)
 	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
 	# no git repo while making rpm, so need to add the git commit info as a file
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
-	tar -czvf $@ onedriver-$(RPM_VERSION)/
-	rm -rf onedriver-$(RPM_VERSION)
+	go mod vendor
+	cp -R vendor/ onedriver-$(RPM_VERSION)
+	tar -czf $@ onedriver-$(RPM_VERSION)
 
 
-# build the rpm for the current version defined in the specfile
-rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
-	rpmdev-setuptree
+# build srpm package used for rpm build with mock
+srpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm 
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
+	mkdir -p ~/rpmbuild/SOURCES
 	cp $< ~/rpmbuild/SOURCES
-	# skip generation of debuginfo package
-	rpmbuild -bb onedriver.spec
-	cp ~/rpmbuild/RPMS/x86_64/onedriver-$(RPM_VERSION)-*.rpm .
+	rpmbuild -bs onedriver.spec
+	cp ~/rpmbuild/SRPMS/$@ .
+
+
+# build the rpm for the default mock target
+MOCK_CONFIG=$(shell readlink -f /etc/mock/default.cfg | grep -oP '[a-z0-9-]+x86_64')
+rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm
+	mock -r /etc/mock/$(MOCK_CONFIG).cfg $<
+	cp /var/lib/mock/$(MOCK_CONFIG)/result/$@ .
+
+
+# create the debian source package for the current version
+dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
+	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
+	dpkg-source --build onedriver-0.7.2
+
+
+# create the debian package in a chroot via pbuilder
+deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb 
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
+	sudo mkdir -p /var/cache/pbuilder/aptcache
+	sudo pbuilder --build $<
+	cp /var/cache/pbuilder/result/$@ .
 
 
 # a large text file for us to test upload sessions with. #science
@@ -100,5 +121,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver unshare auth_tokens.json filelist.txt
 	rm -rf util-linux-*
