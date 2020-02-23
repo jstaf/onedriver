@@ -35,3 +35,4 @@ debian/files
 build/
 *.dsc
 *.deb
+*.tar.xz

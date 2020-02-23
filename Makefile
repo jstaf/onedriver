@@ -37,6 +37,7 @@ localinstall: onedriver
 
 # used to create release tarball for rpmbuild
 onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
+	rm -rf onedriver-$(RPM_VERSION)
 	mkdir -p onedriver-$(RPM_VERSION)
 	git ls-files > filelist.txt
 	# no git repo while making rpm, so need to add the git commit info as a file
@@ -46,9 +47,9 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	go mod vendor
 	cp -R vendor/ onedriver-$(RPM_VERSION)
 	tar -czf $@ onedriver-$(RPM_VERSION)
-	rm -rf onedriver-$(RPM_VERSION)
 
 
+# build srpm package used for rpm build with mock
 srpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm 
 onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
 	mkdir -p ~/rpmbuild/SOURCES
@@ -57,23 +58,27 @@ onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERS
 	cp ~/rpmbuild/SRPMS/$@ .
 
 
-# build the rpm for the current version defined in the specfile
+# build the rpm for the default mock target
+MOCK_CONFIG=$(shell readlink -f /etc/mock/default.cfg | grep -oP '[a-z0-9-]+x86_64')
 rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm
-onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
-	mkdir -p ~/rpmbuild/SOURCES
-	cp $< ~/rpmbuild/SOURCES
-	rpmbuild -bb onedriver.spec
-	cp ~/rpmbuild/RPMS/x86_64/$@ .
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm
+	mock -r /etc/mock/$(MOCK_CONFIG).cfg $<
+	cp /var/lib/mock/$(MOCK_CONFIG)/result/$@ .
 
 
-# create the deb for the current version
+# create the debian source package for the current version
 dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
-	rm -rf build/
-	mkdir -p build/
-	cp $< build/onedriver_$(RPM_VERSION).orig.tar.gz
-	cd build && tar -xzf onedriver_$(RPM_VERSION).orig.tar.gz && dpkg-source --build onedriver-0.7.2
-	cp build/$@ .
+	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
+	dpkg-source --build onedriver-0.7.2
+
+
+# create the debian package in a chroot via pbuilder
+deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb 
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
+	sudo mkdir -p /var/cache/pbuilder/aptcache
+	sudo pbuilder --build $<
+	cp /var/cache/pbuilder/result/$@ .
 
 
 # a large text file for us to test upload sessions with. #science
