@@ -38,7 +38,7 @@ your files on OneDrive!
 
 ## Building onedriver
 
-In addition to the traditional Go tooling, you will need a C compiler and
+In addition to the traditional Go tooling (see: <https://golang.org/doc/install>), you will need a C compiler and
 development headers for `webkit2gtk-4.0`. On Fedora, these can be obtained with 
 `dnf install golang gcc pkg-config webkit2gtk3-devel`. 
 On Ubuntu, these dependencies can be installed with
@@ -103,6 +103,10 @@ refers to where we want OneDrive to be mounted at (for instance, `~/OneDrive`).
 ```bash
 # create the mountpoint and determine the service name
 mkdir -p $MOUNTPOINT
+
+# ensure onedriver is configured to connect to OneDrive
+onedriver -a $MOUNTPOINT
+
 export SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNTPOINT)
 
 # mount onedrive
