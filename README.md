@@ -82,23 +82,23 @@ make test
 onedriver has multiple installation methods depending on your needs.
 
 ```bash
-# create an RPM for system-wide installation on RHEL/CentOS/Fedora
-sudo dnf install golang gcc webkit2gtk-devel pkg-config git rsync rpmdevtools \
-    rpm-build
-make rpm
-
-# create a .deb for system-wide installation on Ubuntu/Debian
-sudo apt update
-sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
-    devscripts debhelper build-essential
-make deb
-
 # install directly from source
 make
 sudo make install
 
 # install for current user only
 make localinstall
+
+# create an RPM for system-wide installation on RHEL/CentOS/Fedora
+sudo dnf install golang gcc webkit2gtk-devel pkgconf-pkg-config git rsync \
+    rpmdevtools rpm-build mock
+make rpm
+
+# create a .deb for system-wide installation on Ubuntu/Debian
+sudo apt update
+sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
+    devscripts debhelper build-essential pbuilder
+make deb
 ```
 
 To start onedriver automatically and ensure you always have access to your files,
