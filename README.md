@@ -38,8 +38,9 @@ your files on OneDrive!
 
 ## Building onedriver
 
-In addition to the traditional Go tooling, you will need a C compiler and
-development headers for `webkit2gtk-4.0`. On Fedora, these can be obtained with 
+In addition to the traditional [Go tooling](https://golang.org/dl/), 
+you will need a C compiler and development headers for `webkit2gtk-4.0`. 
+On Fedora, these can be obtained with 
 `dnf install golang gcc pkg-config webkit2gtk3-devel`. 
 On Ubuntu, these dependencies can be installed with
 `apt install golang gcc pkg-config libwebkit2gtk-4.0-dev`.
@@ -89,15 +90,17 @@ sudo make install
 # install for current user only
 make localinstall
 
-# create an RPM for system-wide installation on RHEL/CentOS/Fedora
-sudo dnf install golang gcc webkit2gtk-devel pkgconf-pkg-config git rsync \
+# create an RPM for system-wide installation on RHEL/CentOS/Fedora using mock
+sudo dnf install golang gcc webkit2gtk-devel pkg-config git rsync \
     rpmdevtools rpm-build mock
+sudo usermod -aG mock $USER
 make rpm
 
-# create a .deb for system-wide installation on Ubuntu/Debian
+# create a .deb for system-wide installation on Ubuntu/Debian using pbuilder
 sudo apt update
 sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
     devscripts debhelper build-essential pbuilder
+sudo pbuilder create  # may need to specify "--distribution eoan" on ubuntu
 make deb
 ```
 
@@ -149,5 +152,3 @@ filesystem restarts.
 This project is still in active development and key features may still be
 missing. To see current progress, check out the 
 [projects page](https://github.com/jstaf/onedriver/projects/1). 
-I don't recommend using it until the initial release is complete (though
-testing is always welcome!).

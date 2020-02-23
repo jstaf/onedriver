@@ -121,5 +121,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.log *.fa *.gz *.test onedriver unshare auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver unshare auth_tokens.json filelist.txt
 	rm -rf util-linux-*
