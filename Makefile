@@ -18,7 +18,14 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-all: onedriver test
+onedriver-headless: graph/*.go logger/*.go cmd/onedriver/*.go
+	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
+
+
+# run all tests, build all artifacts, compute checksums for release
+all: test checksums.txt
+checksums.txt: onedriver onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
+	sha256sum $^ > checksums.txt
 
 
 install: onedriver
@@ -70,11 +77,11 @@ onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_V
 dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
 	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
-	dpkg-source --build onedriver-0.7.2
+	dpkg-source --build onedriver-$(RPM_VERSION)
 
 
 # create the debian package in a chroot via pbuilder
-deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb 
+deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 	sudo mkdir -p /var/cache/pbuilder/aptcache
 	sudo pbuilder --build $<
@@ -121,5 +128,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver unshare auth_tokens.json filelist.txt
-	rm -rf util-linux-*
+	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare auth_tokens.json filelist.txt
+	rm -rf util-linux-*/ onedriver-*/
