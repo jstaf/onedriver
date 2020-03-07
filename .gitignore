@@ -16,6 +16,7 @@ mount/
 
 # do not include binaries, but do include sources
 onedriver
+onedriver-headless
 onedriver-*/
 !cmd/onedriver
 vendor/

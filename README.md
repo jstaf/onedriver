@@ -58,11 +58,13 @@ ls -l mount
 fusermount -u mount
 ```
 
-A headless, Go-only binary can be built with `CGO_ENABLED=0 go build ./cmd/onedriver`. Note
-that this build will not have any kind of GUI for authentication (follow the
-text instructions in the terminal). Though it's not officially supported, 
-the headless build should work on macOS, BSD, and even Windows as long as you 
-have a variant of FUSE installed.
+A headless binary (no GUI) can be built with `make onedriver-headless`.
+If you don't know which target to build, this isn't the one for you (run
+`make` instead). When using the headless build, follow the text instructions
+in the terminal to perform first-time authentication to the Microsoft Graph
+API. Though it's not officially supported, the headless build should work on
+macOS, BSD, and even Windows as long as you have a variant of FUSE installed
+(for instance, OSXFUSE on macOS or libfuse on BSD).
 
 ### Running the tests
 

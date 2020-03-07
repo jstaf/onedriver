@@ -18,7 +18,11 @@ onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-all: onedriver test
+onedriver-headless: graph/*.go logger/*.go cmd/onedriver/*.go
+	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
+
+
+all: onedriver onedriver-headless test rpm deb
 
 
 install: onedriver
@@ -70,7 +74,7 @@ onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_V
 dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
 	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
-	dpkg-source --build onedriver-0.7.2
+	dpkg-source --build onedriver-$(RPM_VERSION)
 
 
 # create the debian package in a chroot via pbuilder
