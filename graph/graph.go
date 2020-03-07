@@ -61,7 +61,19 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 	body, _ := ioutil.ReadAll(response.Body)
 	response.Body.Close()
 
-	if response.StatusCode >= 500 {
+	if response.StatusCode == 401 {
+		var err graphError
+		json.Unmarshal(body, &err)
+		log.WithFields(log.Fields{
+			"code":    err.Error.Code,
+			"message": err.Error.Message,
+		}).Warn("Authentication token invalid or new app permissions required, " +
+			"forcing reauth before retrying.")
+
+		auth = newAuth(auth.path)
+		request.Header.Set("Authorization", "bearer "+auth.AccessToken)
+	}
+	if response.StatusCode >= 500 || response.StatusCode == 401 {
 		// the onedrive API is having issues, retry once
 		response, err = client.Do(request)
 		if err != nil {
