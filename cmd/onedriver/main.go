@@ -73,8 +73,12 @@ func main() {
 	if *wipeCache {
 		os.RemoveAll(dir)
 	}
+
+	os.Mkdir(dir, 0700)
+	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
-		graph.Authenticate(filepath.Join(dir, "auth_tokens.json"))
+		os.Remove(authPath)
+		graph.Authenticate(authPath)
 	}
 	if *wipeCache || *authOnly {
 		os.Exit(0)
@@ -91,15 +95,9 @@ func main() {
 	}
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
-
-	// setup filesystem
-	if st, _ := os.Stat(dir); st == nil {
-		os.Mkdir(dir, 0700)
-	}
-
 	root := graph.NewFS(
 		filepath.Join(dir, "onedriver.db"),
-		filepath.Join(dir, "auth_tokens.json"),
+		authPath,
 		30*time.Second,
 	)
 
