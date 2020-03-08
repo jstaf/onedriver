@@ -70,7 +70,10 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		}).Warn("Authentication token invalid or new app permissions required, " +
 			"forcing reauth before retrying.")
 
-		auth = newAuth(auth.path)
+		reauth := newAuth(auth.path)
+		auth.AccessToken = reauth.AccessToken
+		auth.RefreshToken = reauth.RefreshToken
+		auth.ExpiresAt = reauth.ExpiresAt
 		request.Header.Set("Authorization", "bearer "+auth.AccessToken)
 	}
 	if response.StatusCode >= 500 || response.StatusCode == 401 {
@@ -87,7 +90,8 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		// something was wrong with the request
 		var err graphError
 		json.Unmarshal(body, &err)
-		return nil, fmt.Errorf("HTTP %d - %s: %s", response.StatusCode, err.Error.Code, err.Error.Message)
+		return nil, fmt.Errorf("HTTP %d - %s: %s",
+			response.StatusCode, err.Error.Code, err.Error.Message)
 	}
 	return body, nil
 }

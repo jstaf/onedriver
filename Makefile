@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, dsc, deb, clean, expire_now, install, localinstall
+.PHONY: all, test, srpm, rpm, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
 
 TEST_UID = $(shell id -u)
 TEST_GID = $(shell id -g)
@@ -115,8 +115,12 @@ unshare:
 
 
 # force auth renewal the next time onedriver starts
-expire_now:
+auth_expire_now:
 	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
+
+
+auth_invalidate:
+	sed -i 's/"access_token":.\{5\}/"access_token":"/g' ~/.cache/onedriver/auth_tokens.json
 
 
 # for autocompletion by ide-clangd
