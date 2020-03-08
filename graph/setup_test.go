@@ -85,6 +85,12 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	log.Info("Test session end -----------------------------------")
+	fmt.Printf("Waiting 5 seconds for any remaining uploads to complete")
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Second)
+		fmt.Printf(".")
+	}
+	fmt.Printf("\n")
 
 	// unmount
 	if server.Unmount() != nil {
