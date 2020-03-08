@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
 	go UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
@@ -85,12 +85,6 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	log.Info("Test session end -----------------------------------")
-	fmt.Printf("Waiting 5 seconds for any remaining uploads to complete")
-	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second)
-		fmt.Printf(".")
-	}
-	fmt.Printf("\n")
 
 	// unmount
 	if server.Unmount() != nil {

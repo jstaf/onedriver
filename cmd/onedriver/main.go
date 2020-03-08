@@ -151,7 +151,7 @@ func main() {
 	}
 	server.SetDebug(*debugOn)
 
-	// setup sigint handler for graceful unmount on interrupt
+	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go graph.UnmountHandler(sigChan, server)
