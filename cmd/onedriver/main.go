@@ -73,8 +73,12 @@ func main() {
 	if *wipeCache {
 		os.RemoveAll(dir)
 	}
+
+	os.Mkdir(dir, 0700)
+	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
-		graph.Authenticate(filepath.Join(dir, "auth_tokens.json"))
+		os.Remove(authPath)
+		graph.Authenticate(authPath)
 	}
 	if *wipeCache || *authOnly {
 		os.Exit(0)
@@ -91,15 +95,9 @@ func main() {
 	}
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
-
-	// setup filesystem
-	if st, _ := os.Stat(dir); st == nil {
-		os.Mkdir(dir, 0700)
-	}
-
 	root := graph.NewFS(
 		filepath.Join(dir, "onedriver.db"),
-		filepath.Join(dir, "auth_tokens.json"),
+		authPath,
 		30*time.Second,
 	)
 
@@ -153,7 +151,7 @@ func main() {
 	}
 	server.SetDebug(*debugOn)
 
-	// setup sigint handler for graceful unmount on interrupt
+	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go graph.UnmountHandler(sigChan, server)

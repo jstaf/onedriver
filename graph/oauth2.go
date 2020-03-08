@@ -82,18 +82,15 @@ func (a *Auth) Refresh() {
 		if a.ExpiresAt == oldTime {
 			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
 		}
-		if a.AccessToken == "" || a.RefreshToken == "" {
-			log.Errorf("Failed to renew access tokens. Response from server:\n%s\n", string(body))
-			reauth = true
-		}
 
-		if reauth {
-			// one of the above calls failed and we were not offline,
-			// give the user a chance to reauthenticate before exiting
-			new := getAuthTokens(getAuthCode())
-			a = &new
+		if reauth || a.AccessToken == "" || a.RefreshToken == "" {
+			log.WithField("response", string(body)).Error(
+				"Failed to renew access tokens. Attempting to reauthenticate.",
+			)
+			a = newAuth(a.path)
+		} else {
+			a.ToFile(a.path)
 		}
-		a.ToFile(a.path)
 	}
 }
 
@@ -107,12 +104,11 @@ func getAuthURL() string {
 }
 
 // Exchange an auth code for a set of access tokens
-func getAuthTokens(authCode string) Auth {
-	postData := strings.NewReader(
-		"client_id=" + authClientID +
-			"&redirect_uri=" + authRedirectURL +
-			"&code=" + authCode +
-			"&grant_type=authorization_code")
+func getAuthTokens(authCode string) *Auth {
+	postData := strings.NewReader("client_id=" + authClientID +
+		"&redirect_uri=" + authRedirectURL +
+		"&code=" + authCode +
+		"&grant_type=authorization_code")
 	resp, err := http.Post(authTokenURL,
 		"application/x-www-form-urlencoded",
 		postData)
@@ -131,22 +127,27 @@ func getAuthTokens(authCode string) Auth {
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
 		log.Fatalf("Failed to retrieve access tokens. Response from server:\n%s\n", string(body))
 	}
+	return &auth
+}
+
+// newAuth performs initial authentication flow and saves tokens to disk
+func newAuth(path string) *Auth {
+	auth := getAuthTokens(getAuthCode())
+	auth.ToFile(path)
 	return auth
 }
 
 // Authenticate performs first-time authentication to Graph
 func Authenticate(path string) *Auth {
-	var auth Auth
+	auth := &Auth{}
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		// no tokens found, gotta start oauth flow from beginning
-		code := getAuthCode()
-		auth = getAuthTokens(code)
-		auth.ToFile(path)
+		auth = newAuth(path)
 	} else {
 		// we already have tokens, no need to force a new auth flow
 		auth.FromFile(path)
 		auth.Refresh()
 	}
-	return &auth
+	return auth
 }

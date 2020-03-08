@@ -8,9 +8,9 @@ import (
 func TestAuthFromfile(t *testing.T) {
 	t.Parallel()
 	var auth Auth
-	auth.FromFile("auth_tokens.json")
+	auth.FromFile(".auth_tokens.json")
 	if auth.AccessToken == "" {
-		t.Fatal("Could not load auth tokens from 'auth_tokens.json'! " +
+		t.Fatal("Could not load auth tokens from '.auth_tokens.json'! " +
 			"Check that this file exists before running any more tests.")
 	}
 }
@@ -18,7 +18,7 @@ func TestAuthFromfile(t *testing.T) {
 func TestAuthRefresh(t *testing.T) {
 	t.Parallel()
 	var auth Auth
-	auth.FromFile("auth_tokens.json")
+	auth.FromFile(".auth_tokens.json")
 	auth.ExpiresAt = 0 // force an auth refresh
 	auth.Refresh()
 	if auth.ExpiresAt <= time.Now().Unix() {

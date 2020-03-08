@@ -129,4 +129,4 @@ compile_flags.txt:
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare auth_tokens.json filelist.txt
-	rm -rf util-linux-*/ onedriver-*/
+	rm -rf util-linux-*/ onedriver-*/ vendor/

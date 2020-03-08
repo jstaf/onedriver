@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	log.SetFormatter(logger.LogrusFormatter())
 	log.SetLevel(log.DebugLevel)
 
-	root := NewFS("test.db", "auth_tokens.json", 5*time.Second)
+	root := NewFS("test.db", ".auth_tokens.json", 5*time.Second)
 	fsCache = root.GetCache()
 	auth = fsCache.GetAuth()
 	second := time.Second
@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
 	go UnmountHandler(sigChan, server)
 
 	// mount fs in background thread

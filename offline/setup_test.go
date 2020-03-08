@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 
-	auth := graph.Authenticate("auth_tokens.json")
+	auth := graph.Authenticate(".auth_tokens.json")
 	inode, err := graph.GetItem("root", auth)
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")
@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	log.Info("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
-	root := graph.NewFS("test.db", "auth_tokens.json", 5*time.Second)
+	root := graph.NewFS("test.db", ".auth_tokens.json", 5*time.Second)
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
 	go graph.UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
