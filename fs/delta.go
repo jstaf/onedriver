@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	bolt "github.com/etcd-io/bbolt"
+	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -86,8 +87,8 @@ type deltaResponse struct {
 // client will actually appear as deltas from the server (there is no
 // distinction between local and remote changes from the server's perspective,
 // everything is a delta, regardless of where it came from).
-func (c *Cache) pollDeltas(auth *Auth) ([]*Inode, bool, error) {
-	resp, err := Get(c.deltaLink, auth)
+func (c *Cache) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
+	resp, err := graph.Get(c.deltaLink, auth)
 	if err != nil {
 		return make([]*Inode, 0), false, err
 	}
@@ -99,10 +100,10 @@ func (c *Cache) pollDeltas(auth *Auth) ([]*Inode, bool, error) {
 	// reached the end of this polling cycle and should not continue until the
 	// next poll interval.
 	if page.NextLink != "" {
-		c.deltaLink = strings.TrimPrefix(page.NextLink, graphURL)
+		c.deltaLink = strings.TrimPrefix(page.NextLink, graph.GraphURL)
 		return page.Values, true, nil
 	}
-	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graphURL)
+	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graph.GraphURL)
 	return page.Values, false, nil
 }
 
@@ -209,8 +210,8 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		// update modtime, hashes, purge any local content in memory
 		local.mutex.Lock()
 		defer local.mutex.Unlock()
-		local.ModTimeInternal = delta.ModTimeInternal
-		local.FileInternal = delta.FileInternal
+		local.DriveItem.ModTime = delta.DriveItem.ModTime
+		local.DriveItem.File = delta.DriveItem.File
 		local.hasChanges = false
 		local.data = nil
 		return nil

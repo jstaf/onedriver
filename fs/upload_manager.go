@@ -1,8 +1,9 @@
-package graph
+package fs
 
 import (
 	"time"
 
+	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -10,11 +11,11 @@ import (
 type UploadManager struct {
 	queue    chan *UploadSession
 	sessions map[string]*UploadSession
-	auth     *Auth
+	auth     *graph.Auth
 }
 
 // NewUploadManager creates a new queue/thread for uploads
-func NewUploadManager(duration time.Duration, auth *Auth) *UploadManager {
+func NewUploadManager(duration time.Duration, auth *graph.Auth) *UploadManager {
 	manager := UploadManager{
 		queue:    make(chan *UploadSession),
 		sessions: make(map[string]*UploadSession),

@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"fmt"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -23,7 +24,7 @@ const (
 	DeltaDir = TestDir + "/delta"
 )
 
-var auth *Auth
+var auth *graph.Auth
 var fsCache *Cache // used to inject bad content into the fs for some tests
 
 // Tests are done in the main project directory with a mounted filesystem to

@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -75,7 +76,7 @@ func (u *UploadSession) setState(state int) {
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(inode *Inode, auth *Auth) (*UploadSession, error) {
+func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	id, err := inode.RemoteID(auth)
 	if err != nil || isLocalID(id) {
 		log.WithFields(log.Fields{
@@ -88,14 +89,14 @@ func NewUploadSession(inode *Inode, auth *Auth) (*UploadSession, error) {
 	inode.mutex.RLock()
 	// create a generic session for all files
 	session := UploadSession{
-		ID:   inode.IDInternal,
-		Size: inode.SizeInternal,
-		data: make([]byte, inode.SizeInternal),
+		ID:   inode.DriveItem.ID,
+		Size: inode.DriveItem.Size,
+		data: make([]byte, inode.DriveItem.Size),
 	}
 	if inode.data == nil {
 		log.WithFields(log.Fields{
-			"id":   inode.IDInternal,
-			"name": inode.NameInternal,
+			"id":   inode.DriveItem.ID,
+			"name": inode.DriveItem.Name,
 		}).Error("Tried to dereference a nil pointer.")
 		defer inode.mutex.RUnlock()
 		return nil, errors.New("inode data was nil")
@@ -112,7 +113,7 @@ func NewUploadSession(inode *Inode, auth *Auth) (*UploadSession, error) {
 			},
 		})
 
-		resp, err := Post(
+		resp, err := graph.Post(
 			fmt.Sprintf("/me/drive/items/%s/createUploadSession", session.ID),
 			auth,
 			bytes.NewReader(sessionResp),
@@ -130,18 +131,18 @@ func NewUploadSession(inode *Inode, auth *Auth) (*UploadSession, error) {
 }
 
 // cancel the upload session by deleting the temp file at the endpoint.
-func (u *UploadSession) cancel(auth *Auth) {
+func (u *UploadSession) cancel(auth *graph.Auth) {
 	// is it an actual API upload session?
 	if u.isLargeSession() {
 		// dont care about result, this is purely us being polite to the server
-		go Delete(u.UploadURL, auth)
+		go graph.Delete(u.UploadURL, auth)
 	}
 }
 
 // Internal method used for uploading individual chunks of a DriveItem. We have
 // to make things this way because the internal Put func doesn't work all that
 // well when we need to add custom headers.
-func (u *UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, error) {
+func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
 	if u.UploadURL == "" {
 		return nil, -1, errors.New("uploadSession UploadURL cannot be empty")
 	}
@@ -186,11 +187,11 @@ func (u *UploadSession) uploadChunk(auth *Auth, offset uint64) ([]byte, int, err
 
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time.
-func (u *UploadSession) Upload(auth *Auth) error {
+func (u *UploadSession) Upload(auth *graph.Auth) error {
 	log.WithField("id", u.ID).Debug("Uploading file.")
 	u.setState(started)
 	if !u.isLargeSession() {
-		resp, err := Put(
+		resp, err := graph.Put(
 			fmt.Sprintf("/me/drive/items/%s/content", u.ID),
 			auth,
 			bytes.NewReader(u.data),
@@ -198,7 +199,7 @@ func (u *UploadSession) Upload(auth *Auth) error {
 		if err != nil && strings.Contains(err.Error(), "resourceModified") {
 			// retry the request after a second, likely the server is having issues
 			time.Sleep(time.Second)
-			resp, err = Put(
+			resp, err = graph.Put(
 				fmt.Sprintf("/me/drive/items/%s/content", u.ID),
 				auth,
 				bytes.NewReader(u.data),

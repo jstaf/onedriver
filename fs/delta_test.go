@@ -1,5 +1,5 @@
 // Run tests to verify that we are syncing changes from the server.
-package graph
+package fs
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/jstaf/onedriver/fs/graph"
 )
 
 const retrySeconds = 15
@@ -16,11 +18,11 @@ const retrySeconds = 15
 // the cache picks it up post-creation.
 func TestDeltaMkdir(t *testing.T) {
 	t.Parallel()
-	parent, err := GetItemPath("/onedriver_tests/delta", auth)
+	parent, err := graph.GetItemPath("/onedriver_tests/delta", auth)
 	failOnErr(t, err)
 
 	// create the directory directly through the API and bypass the cache
-	_, err = Mkdir("first", parent.ID(), auth)
+	_, err = graph.Mkdir("first", parent.ID, auth)
 	failOnErr(t, err)
 
 	// give the delta thread time to fetch the item
@@ -39,9 +41,9 @@ func TestDeltaRmdir(t *testing.T) {
 	fname := filepath.Join(DeltaDir, "delete_me")
 	failOnErr(t, os.Mkdir(fname, 0755))
 
-	item, err := GetItemPath("/onedriver_tests/delta/delete_me", auth)
+	item, err := graph.GetItemPath("/onedriver_tests/delta/delete_me", auth)
 	failOnErr(t, err)
-	failOnErr(t, Remove(item.ID(), auth))
+	failOnErr(t, graph.Remove(item.ID, auth))
 
 	// wait for delta sync
 	for i := 0; i < retrySeconds; i++ {
@@ -65,10 +67,11 @@ func TestDeltaRename(t *testing.T) {
 		0644,
 	))
 
-	item, err := GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
 	failOnErr(t, err)
+	inode := NewInodeDriveItem(item)
 
-	failOnErr(t, Rename(item.ID(), "delta_rename_end", item.ParentID(), auth))
+	failOnErr(t, graph.Rename(inode.ID(), "delta_rename_end", inode.ParentID(), auth))
 	fpath := filepath.Join(DeltaDir, "delta_rename_end")
 	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
@@ -94,13 +97,13 @@ func TestDeltaMoveParent(t *testing.T) {
 	))
 	time.Sleep(time.Second)
 
-	item, err := GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
 	failOnErr(t, err)
 
-	newParent, err := GetItemPath("/onedriver_tests/", auth)
+	newParent, err := graph.GetItemPath("/onedriver_tests/", auth)
 	failOnErr(t, err)
 
-	failOnErr(t, Rename(item.ID(), "delta_rename_end", newParent.ID(), auth))
+	failOnErr(t, graph.Rename(item.ID, "delta_rename_end", newParent.ID, auth))
 	fpath := filepath.Join(TestDir, "delta_rename_end")
 	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
@@ -127,17 +130,18 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 
 	// change and upload it via the API
 	time.Sleep(time.Second * 10)
-	item, err := GetItemPath("/onedriver_tests/delta/remote_content", auth)
+	item, err := graph.GetItemPath("/onedriver_tests/delta/remote_content", auth)
+	inode := NewInodeDriveItem(item)
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
-	item.SizeInternal = uint64(len(newContent))
-	item.data = &newContent
-	session, err := NewUploadSession(item, auth)
+	inode.DriveItem.Size = uint64(len(newContent))
+	inode.data = &newContent
+	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
 	time.Sleep(time.Second * 5)
-	body, _ := GetItemContent(item.ID(), auth)
+	body, _ := graph.GetItemContent(inode.ID(), auth)
 	if bytes.Compare(body, newContent) != 0 {
 		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
 	}
@@ -166,11 +170,12 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
 
 	// change and upload it via the API
-	item, err := GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
+	item, err := graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
+	inode := NewInodeDriveItem(item)
 	failOnErr(t, err)
 	newContent := []byte("remote")
-	item.data = &newContent
-	session, err := NewUploadSession(item, auth)
+	inode.data = &newContent
+	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -203,9 +208,9 @@ func TestDeltaBadContentInCache(t *testing.T) {
 	var id string
 	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
-		item, err := GetItemPath("/onedriver_tests/delta/corrupted", auth)
+		item, err := graph.GetItemPath("/onedriver_tests/delta/corrupted", auth)
 		if err == nil {
-			id = item.ID()
+			id = item.ID
 			break
 		}
 	}

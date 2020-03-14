@@ -14,11 +14,11 @@ else
 endif
 
 
-onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
+onedriver: $(wildcard fs/**/*) logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-onedriver-headless: graph/*.go logger/*.go cmd/onedriver/*.go
+onedriver-headless: $(wildcard fs/**/*) logger/*.go cmd/onedriver/*.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 

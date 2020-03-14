@@ -12,7 +12,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/jstaf/onedriver/graph"
+	odfs "github.com/jstaf/onedriver/fs"
+	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
@@ -67,7 +68,7 @@ func main() {
 
 	dir := *cacheDir
 	if dir == "" {
-		dir = graph.CacheDir()
+		dir = odfs.CacheDir()
 	}
 
 	if *wipeCache {
@@ -95,7 +96,7 @@ func main() {
 	}
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
-	root := graph.NewFS(
+	root := odfs.NewFS(
 		filepath.Join(dir, "onedriver.db"),
 		authPath,
 		30*time.Second,
@@ -125,7 +126,7 @@ func main() {
 			if err != nil {
 				log.Error(err)
 			}
-			inode := graph.NewInode(".xdg-volume-info", 0644, root)
+			inode := odfs.NewInode(".xdg-volume-info", 0644, root)
 			err = json.Unmarshal(resp, &inode)
 			if err == nil {
 				cache.InsertID(inode.ID(), inode)
@@ -154,7 +155,7 @@ func main() {
 	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go graph.UnmountHandler(sigChan, server)
+	go odfs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
 	server.Wait()

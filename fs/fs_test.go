@@ -1,7 +1,7 @@
 // A bunch of "black box" filesystem integration tests that test the
 // functionality of key syscalls and their implementation. If something fails
 // here, the filesystem is not functional.
-package graph
+package fs
 
 import (
 	"bufio"
@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/jstaf/onedriver/fs/graph"
 )
 
 // does ls work and can we find the Documents/Pictures folders
@@ -297,21 +299,13 @@ func TestUploadSession(t *testing.T) {
 	size := uint64(len(contents))
 	for i := 0; i < 60; i++ {
 		time.Sleep(time.Second)
-		item, _ := GetItemPath("/onedriver_tests/dmel.fa", auth)
-		if item != nil && item.Size() == size {
+		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
+		inode := NewInodeDriveItem(item)
+		if item != nil && inode.Size() == size {
 			return
 		}
 	}
 	t.Fatalf("\nUpload session did not complete successfully!")
-}
-
-func TestIgnoredFiles(t *testing.T) {
-	t.Parallel()
-	fname := filepath.Join(TestDir, ".Trash-1000")
-	_, err := os.Stat(fname)
-	if err == nil || !strings.Contains(err.Error(), "no such file or directory") {
-		t.Fatal("Somehow we found a non-existent file.")
-	}
 }
 
 // OneDrive is case-insensitive due to limitations imposed by Windows NTFS

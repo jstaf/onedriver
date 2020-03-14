@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"context"
@@ -15,60 +15,13 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 )
 
-// DriveItemParent describes a DriveItem's parent in the Graph API (just another
-// DriveItem's ID and its path)
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/itemreference
-type DriveItemParent struct {
-	//TODO Path is technically available, but we shouldn't use it
-	Path string `json:"path,omitempty"`
-	ID   string `json:"id,omitempty"`
-}
-
-// Folder is used for parsing only
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/folder
-type Folder struct {
-	ChildCount uint32 `json:"childCount,omitempty"`
-}
-
-// Hashes are integrity hashes used to determine if file content has changed.
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/hashes
-type Hashes struct {
-	SHA1Hash     string `json:"sha1Hash,omitempty"`
-	QuickXorHash string `json:"quickXorHash,omitempty"`
-}
-
-// File is used for checking for changes in local files (relative to the server).
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/file
-type File struct {
-	Hashes Hashes `json:"hashes,omitempty"`
-}
-
-// Deleted is used for detecting when items get deleted on the server
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/deleted
-type Deleted struct {
-	State string `json:"state,omitempty"`
-}
-
-// DriveItem contains the data fields from the Graph API
-// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/driveitem
-type DriveItem struct {
-	IDInternal       string           `json:"id,omitempty"`
-	NameInternal     string           `json:"name,omitempty"`
-	SizeInternal     uint64           `json:"size,omitempty"`
-	ModTimeInternal  *time.Time       `json:"lastModifiedDatetime,omitempty"`
-	Parent           *DriveItemParent `json:"parentReference,omitempty"`
-	Folder           *Folder          `json:"folder,omitempty"`
-	FileInternal     *File            `json:"file,omitempty"`
-	Deleted          *Deleted         `json:"deleted,omitempty"`
-	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
-}
-
 // Inode represents a file or folder fetched from the Graph API. All struct
 // fields are pointers so as to avoid including them when marshaling to JSON
-// if not present. Fields named "xxxxxInternal" should never be accessed, they
+// if not present. The embedded DriveItem's fields should never be accessed, they
 // are there for JSON umarshaling/marshaling only. (They are not safe to access
 // concurrently.) This struct's methods are thread-safe and can be called
 // concurrently. Reads/writes are done directly to DriveItems instead of
@@ -78,7 +31,7 @@ type Inode struct {
 	fs.Inode `json:"-"`
 
 	mutex sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
-	DriveItem
+	graph.DriveItem
 	cache         *Cache
 	children      []string       // a slice of ids, nil when uninitialized
 	uploadSession *UploadSession // current upload session, or nil
@@ -91,7 +44,7 @@ type Inode struct {
 // SerializeableInode is like a Inode, but can be serialized for local storage
 // to disk
 type SerializeableInode struct {
-	DriveItem
+	graph.DriveItem
 	Children []string
 	Subdir   uint32
 	Mode     uint32
@@ -99,7 +52,7 @@ type SerializeableInode struct {
 
 // NewInode initializes a new DriveItem
 func NewInode(name string, mode uint32, parent *Inode) *Inode {
-	itemParent := &DriveItemParent{ID: "", Path: ""}
+	itemParent := &graph.DriveItemParent{ID: "", Path: ""}
 	if parent != nil {
 		itemParent.ID = parent.ID()
 		itemParent.Path = parent.Path()
@@ -108,11 +61,11 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	var empty []byte
 	currentTime := time.Now()
 	return &Inode{
-		DriveItem: DriveItem{
-			IDInternal:      localID(),
-			NameInternal:    name,
-			Parent:          itemParent,
-			ModTimeInternal: &currentTime,
+		DriveItem: graph.DriveItem{
+			ID:      localID(),
+			Name:    name,
+			Parent:  itemParent,
+			ModTime: &currentTime,
 		},
 		children: make([]string, 0),
 		data:     &empty,
@@ -149,6 +102,16 @@ func NewInodeJSON(data []byte) (*Inode, error) {
 	}, nil
 }
 
+// NewInodeDriveItem creates a new DriveItem from an Inode
+func NewInodeDriveItem(item *graph.DriveItem) *Inode {
+	var empty []byte
+	return &Inode{
+		DriveItem: *item,
+		children:  make([]string, 0),
+		data:      &empty,
+	}
+}
+
 // String is only used for debugging by go-fuse
 func (i *Inode) String() string {
 	return i.Name()
@@ -158,13 +121,13 @@ func (i *Inode) String() string {
 func (i *Inode) Name() string {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return i.NameInternal
+	return i.DriveItem.Name
 }
 
 // SetName sets the name of the item in a thread-safe manner.
 func (i *Inode) SetName(name string) {
 	i.mutex.Lock()
-	i.NameInternal = name
+	i.DriveItem.Name = name
 	i.mutex.Unlock()
 }
 
@@ -190,7 +153,7 @@ func isLocalID(id string) bool {
 func (i *Inode) ID() string {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return i.IDInternal
+	return i.DriveItem.ID
 }
 
 // ParentID returns the ID of this item's parent.
@@ -214,7 +177,7 @@ func (i *Inode) GetCache() *Cache {
 // quotas and storage limits.
 func (i *Inode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	log.WithFields(log.Fields{"path": i.Path()}).Debug()
-	drive, err := GetDrive(i.GetCache().GetAuth())
+	drive, err := graph.GetDrive(i.GetCache().GetAuth())
 	if err != nil {
 		return syscall.EREMOTEIO
 	}
@@ -269,9 +232,6 @@ func (i *Inode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 
 // Lookup an individual child of an inode.
 func (i *Inode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	if ignore(name) {
-		return nil, syscall.ENOENT
-	}
 	log.WithFields(log.Fields{
 		"path": i.Path(),
 		"id":   i.ID(),
@@ -292,7 +252,7 @@ func (i *Inode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*f
 // file has not already been uploaded. You can use an empty Auth object if
 // you're sure that the item already has an ID or otherwise don't need to fetch
 // an ID (such as when deleting an item that is only local).
-func (i *Inode) RemoteID(auth *Auth) (string, error) {
+func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 	if i.IsDir() {
 		// Directories are always created with an ID. (And this method is only
 		// really used for files anyways...)
@@ -302,7 +262,7 @@ func (i *Inode) RemoteID(auth *Auth) (string, error) {
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
 		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", i.ParentID(), i.Name())
-		resp, err := Put(uploadPath, auth, strings.NewReader(""))
+		resp, err := graph.Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// This likely got fired off just as an initial upload completed.
@@ -315,11 +275,11 @@ func (i *Inode) RemoteID(auth *Auth) (string, error) {
 				}
 
 				// Does the server have it?
-				latest, err := GetItem(id, auth)
+				latest, err := graph.GetItem(id, auth)
 				if err == nil {
 					// hooray!
-					err := i.GetCache().MoveID(originalID, latest.IDInternal)
-					return latest.IDInternal, err
+					err := i.GetCache().MoveID(originalID, latest.ID)
+					return latest.ID, err
 				}
 			}
 			// failed to obtain an ID, return whatever it was beforehand
@@ -379,7 +339,7 @@ func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64
 	size := len(*i.data) // worse than using i.size(), but some edge cases require it
 	if int(off) > size {
 		log.WithFields(log.Fields{
-			"id":        i.IDInternal,
+			"id":        i.DriveItem.ID,
 			"path":      path,
 			"bufsize":   int64(end) - off,
 			"file_size": size,
@@ -391,7 +351,7 @@ func (i *Inode) Read(ctx context.Context, f fs.FileHandle, buf []byte, off int64
 		end = size
 	}
 	log.WithFields(log.Fields{
-		"id":               i.IDInternal,
+		"id":               i.DriveItem.ID,
 		"path":             path,
 		"original_bufsize": int64(oend) - off,
 		"bufsize":          int64(end) - off,
@@ -423,7 +383,7 @@ func (i *Inode) Write(ctx context.Context, f fs.FileHandle, data []byte, off int
 
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
-	if offset+nWrite > int(i.SizeInternal)-1 {
+	if offset+nWrite > int(i.DriveItem.Size)-1 {
 		// we've exceeded the file size, overwrite via append
 		*i.data = append((*i.data)[:offset], data...)
 	} else {
@@ -431,7 +391,7 @@ func (i *Inode) Write(ctx context.Context, f fs.FileHandle, data []byte, off int
 		copy((*i.data)[offset:], data)
 	}
 	// probably a better way to do this, but whatever
-	i.SizeInternal = uint64(len(*i.data))
+	i.DriveItem.Size = uint64(len(*i.data))
 	i.hasChanges = true
 
 	return uint32(nWrite), 0
@@ -464,11 +424,11 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 		i.hasChanges = false
 
 		// recompute hashes when saving new content
-		i.FileInternal = &File{}
+		i.DriveItem.File = &graph.File{}
 		if i.cache.DriveType() == "personal" {
-			i.FileInternal.Hashes.SHA1Hash = SHA1Hash(i.data)
+			i.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(i.data)
 		} else {
-			i.FileInternal.Hashes.QuickXorHash = QuickXORHash(i.data)
+			i.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(i.data)
 		}
 		i.mutex.Unlock()
 
@@ -497,7 +457,7 @@ func (i *Inode) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 	// wipe data from memory to avoid mem bloat over time
 	i.mutex.Lock()
 	if i.data != nil {
-		i.cache.InsertContent(i.IDInternal, *i.data)
+		i.cache.InsertContent(i.DriveItem.ID, *i.data)
 		i.data = nil
 	}
 	i.mutex.Unlock()
@@ -546,7 +506,7 @@ func (i *Inode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
-		i.ModTimeInternal = &mtime
+		i.DriveItem.ModTime = &mtime
 	}
 
 	// chmod
@@ -560,14 +520,14 @@ func (i *Inode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn
 
 	// truncate
 	if size, valid := in.GetSize(); valid {
-		if size > i.SizeInternal {
+		if size > i.DriveItem.Size {
 			// unlikely to be hit, but implementing just in case
-			extra := make([]byte, size-i.SizeInternal)
+			extra := make([]byte, size-i.DriveItem.Size)
 			*i.data = append(*i.data, extra...)
 		} else {
 			*i.data = (*i.data)[:size]
 		}
-		i.SizeInternal = size
+		i.DriveItem.Size = size
 		i.hasChanges = true
 	}
 
@@ -600,7 +560,7 @@ func (i *Inode) Mode() uint32 {
 func (i *Inode) ModTime() uint64 {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return uint64(i.ModTimeInternal.Unix())
+	return uint64(i.DriveItem.ModTime.Unix())
 }
 
 // NLink gives the number of hard links to an inode (or child count if a
@@ -624,25 +584,7 @@ func (i *Inode) Size() uint64 {
 	}
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return i.SizeInternal
-}
-
-// these files will never exist, and we should ignore them
-func ignore(path string) bool {
-	ignoredFiles := []string{
-		"BDMV",
-		"autorun.inf",
-		".localized",
-		".DS_Store",
-		"._.",
-		".hidden",
-	}
-	for _, ignore := range ignoredFiles {
-		if path == ignore {
-			return true
-		}
-	}
-	return false
+	return i.DriveItem.Size
 }
 
 // Octal converts a number to its octal representation in string form.
@@ -651,7 +593,7 @@ func Octal(i uint32) string {
 }
 
 // Create a new local file. The server doesn't have this yet. The uint32 part of
-// the return are fuseflags.
+// the return are fuse flags.
 func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	path := i.Path()
 	id := i.ID()
@@ -689,7 +631,7 @@ func (i *Inode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 	auth := cache.GetAuth()
 
 	// create a new folder on the server
-	item, err := Mkdir(name, i.ID(), auth)
+	item, err := graph.Mkdir(name, i.ID(), auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"path": name,
@@ -697,8 +639,9 @@ func (i *Inode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.E
 		}).Error("Error during directory creation:")
 		return nil, syscall.EREMOTEIO
 	}
-	cache.InsertChild(i.ID(), item)
-	return i.NewInode(ctx, item, fs.StableAttr{Mode: fuse.S_IFDIR}), 0
+	inode := NewInodeDriveItem(item)
+	cache.InsertChild(i.ID(), inode)
+	return i.NewInode(ctx, inode, fs.StableAttr{Mode: fuse.S_IFDIR}), 0
 }
 
 // Unlink a child file.
@@ -723,7 +666,7 @@ func (i *Inode) Unlink(ctx context.Context, name string) syscall.Errno {
 	// server
 	id := child.ID()
 	if !isLocalID(id) {
-		if err := Remove(id, cache.GetAuth()); err != nil {
+		if err := graph.Remove(id, cache.GetAuth()); err != nil {
 			log.WithFields(log.Fields{
 				"err":  err,
 				"id":   id,
@@ -789,7 +732,7 @@ func (i *Inode) Rename(ctx context.Context, name string, newParent fs.InodeEmbed
 		return syscall.EBADF
 	}
 
-	if err = Rename(id, filepath.Base(dest), parentID, auth); err != nil {
+	if err = graph.Rename(id, filepath.Base(dest), parentID, auth); err != nil {
 		log.WithFields(log.Fields{
 			"id":       id,
 			"parentID": parentID,
@@ -844,19 +787,19 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashWanted, hashActual, hashType string
-		if isLocalID(id) && i.FileInternal == nil {
+		if isLocalID(id) && i.DriveItem.File == nil {
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just use the zero values and accept the cached content.
 			hashType = "none"
 		} else if driveType == "personal" {
 			i.mutex.RLock()
-			hashWanted = strings.ToLower(i.FileInternal.Hashes.SHA1Hash)
+			hashWanted = strings.ToLower(i.DriveItem.File.Hashes.SHA1Hash)
 			i.mutex.RUnlock()
 			hashActual = strings.ToLower(SHA1Hash(&content))
 			hashType = "SHA1"
 		} else if driveType == "business" {
 			i.mutex.RLock()
-			hashWanted = strings.ToLower(i.FileInternal.Hashes.QuickXorHash)
+			hashWanted = strings.ToLower(i.DriveItem.File.Hashes.QuickXorHash)
 			i.mutex.RUnlock()
 			hashActual = strings.ToLower(QuickXORHash(&content))
 			hashType = "QuickXORHash"
@@ -877,7 +820,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			i.mutex.Lock()
 			defer i.mutex.Unlock()
 			// this check is here in case the API file sizes are WRONG (it happens)
-			i.SizeInternal = uint64(len(content))
+			i.DriveItem.Size = uint64(len(content))
 			i.data = &content
 			return nil, uint32(0), 0
 		}
@@ -908,7 +851,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 		return nil, uint32(0), syscall.EREMOTEIO
 	}
 
-	body, err := GetItemContent(id, auth)
+	body, err := graph.GetItemContent(id, auth)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":  err,
@@ -921,7 +864,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	// this check is here in case the API file sizes are WRONG (it happens)
-	i.SizeInternal = uint64(len(body))
+	i.DriveItem.Size = uint64(len(body))
 	i.data = &body
 	return nil, uint32(0), 0
 }
