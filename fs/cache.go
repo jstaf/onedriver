@@ -373,7 +373,6 @@ func (c *Cache) GetChildrenPath(path string, auth *graph.Auth) (map[string]*Inod
 	if err != nil {
 		return make(map[string]*Inode), err
 	}
-
 	return c.GetChildrenID(inode.ID(), auth)
 }
 

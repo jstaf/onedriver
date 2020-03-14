@@ -107,11 +107,8 @@ func NewInodeDriveItem(item *graph.DriveItem) *Inode {
 	if item == nil {
 		return nil
 	}
-	var empty []byte
 	return &Inode{
 		DriveItem: *item,
-		children:  make([]string, 0),
-		data:      &empty,
 	}
 }
 
