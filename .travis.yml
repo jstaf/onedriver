@@ -29,8 +29,8 @@ script:
   - aws s3 cp s3://fusefs-travis/.auth_tokens.json .
   - aws s3 cp s3://fusefs-travis/dmel.fa.gz .
   - gunzip dmel.fa.gz
-  - go test -v -covermode=count -coverprofile=graph.coverage ./fs/graph
-  - go test -v -covermode=count -coverprofile=fs.coverage ./fs
+  - go test -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
+  - go test -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
   # build test binary for ./offline with coverage enabled for ./fs,
   # then run tests offline
   - go test -c -covermode=count -coverpkg=./fs/... ./offline
