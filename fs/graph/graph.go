@@ -1,8 +1,9 @@
-// Package graph provides APIs to interact with Microsoft Graph
+// Package graph provides the basic APIs to interact with Microsoft Graph. This includes
+// the DriveItem resource and supporting resources which are the basis of working with
+// files and folders through the Microsoft Graph API.
 package graph
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
 
-const graphURL = "https://graph.microsoft.com/v1.0"
+// GraphURL is the API endpoint of Microsoft Graph
+const GraphURL = "https://graph.microsoft.com/v1.0"
 
 // graphError is an internal struct used when decoding Graph's error messages
 type graphError struct {
@@ -41,7 +42,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 	auth.Refresh()
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	request, _ := http.NewRequest(method, graphURL+resource, content)
+	request, _ := http.NewRequest(method, GraphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
 	case "PATCH":
@@ -187,89 +188,6 @@ func GetDrive(auth *Auth) (Drive, error) {
 		return drive, err
 	}
 	return drive, json.Unmarshal(resp, &drive)
-}
-
-// GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
-func GetItem(id string, auth *Auth) (*Inode, error) {
-	path := "/me/drive/items/" + id
-	if id == "root" {
-		path = "/me/drive/root"
-	}
-
-	body, err := Get(path, auth)
-	if err != nil {
-		return nil, err
-	}
-	inode := &Inode{}
-	err = json.Unmarshal(body, inode)
-	return inode, err
-}
-
-// GetItemPath fetches a DriveItem by path. Only used in special cases, like for the
-// root item.
-func GetItemPath(path string, auth *Auth) (*Inode, error) {
-	body, err := Get(ResourcePath(path), auth)
-	inode := &Inode{}
-	if err != nil {
-		return inode, err
-	}
-	err = json.Unmarshal(body, inode)
-	return inode, err
-}
-
-// GetItemContent retrieves an item's content from the Graph endpoint.
-func GetItemContent(id string, auth *Auth) ([]byte, error) {
-	return Get("/me/drive/items/"+id+"/content", auth)
-}
-
-// Remove removes a directory or file by ID
-func Remove(id string, auth *Auth) error {
-	return Delete("/me/drive/items/"+id, auth)
-}
-
-// Mkdir creates a directory on the server at the specified parent ID.
-func Mkdir(name string, parentID string, auth *Auth) (*Inode, error) {
-	// create a new folder on the server
-	newFolderPost := DriveItem{
-		NameInternal: name,
-		Folder:       &Folder{},
-	}
-	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(ChildrenPathID(parentID), auth, bytes.NewReader(bytePayload))
-	if err != nil {
-		return nil, err
-	}
-
-	item := NewInode(name, 0755|fuse.S_IFDIR, nil)
-	err = json.Unmarshal(resp, &item)
-	return item, err
-}
-
-// Rename moves and/or renames an item on the server. The itemName and parentID
-// arguments correspond to the *new* basename or id of the parent.
-func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
-	// start creating patch content for server
-	// mutex does not need to be initialized since it is never used locally
-	patchContent := DriveItem{
-		ConflictBehavior: "replace", // overwrite existing content at new location
-		NameInternal:     itemName,
-		Parent: &DriveItemParent{
-			ID: parentID,
-		},
-	}
-
-	// apply patch to server copy - note that we don't actually care about the
-	// response content, only if it returns an error
-	jsonPatch, _ := json.Marshal(patchContent)
-	_, err := Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
-	if err != nil && strings.Contains(err.Error(), "resourceModified") {
-		// Wait a second, then retry the request. The Onedrive servers sometimes
-		// aren't quick enough here if the object has been recently created
-		// (<1 second ago).
-		time.Sleep(time.Second)
-		_, err = Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
-	}
-	return err
 }
 
 // IsOffline checks if an error is indicative of being offline.

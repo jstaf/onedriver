@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -123,4 +124,14 @@ func LogrusFormatter() *log.TextFormatter {
 			return function, filename
 		},
 	}
+}
+
+// LogTestSetup is a helper function purely used during tests.
+func LogTestSetup() *os.File {
+	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	log.SetOutput(logFile)
+	log.SetReportCaller(true)
+	log.SetFormatter(LogrusFormatter())
+	log.SetLevel(log.DebugLevel)
+	return logFile
 }

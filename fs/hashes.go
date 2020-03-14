@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"crypto/sha1"

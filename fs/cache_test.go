@@ -1,5 +1,5 @@
 // these tests are independent of the mounted fs
-package graph
+package fs
 
 import (
 	"fmt"

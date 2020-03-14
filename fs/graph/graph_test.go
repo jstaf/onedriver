@@ -17,16 +17,3 @@ func TestRequestUnauthenticated(t *testing.T) {
 		t.Fatal("An unauthenticated request was not handled as an error")
 	}
 }
-
-func TestGetItem(t *testing.T) {
-	t.Parallel()
-	item, err := GetItemPath("/", auth)
-	if item.Name() != "root" {
-		t.Fatal("Failed to fetch directory root. Additional errors:", err)
-	}
-
-	item, err = GetItemPath("/lkjfsdlfjdwjkfl", auth)
-	if err == nil {
-		t.Fatal("We didn't return an error for a non-existent item!")
-	}
-}

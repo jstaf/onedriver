@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jstaf/onedriver/graph"
+	"github.com/jstaf/onedriver/fs"
 )
 
 // We should see more than zero items when we run ls.
@@ -38,7 +38,7 @@ func TestOfflineBagelDetection(t *testing.T) {
 			if f.IsDir() {
 				t.Fatal("\"bagels\" should be an ordinary file, not a directory")
 			}
-			octal := graph.Octal(uint32(f.Mode().Perm()))
+			octal := fs.Octal(uint32(f.Mode().Perm()))
 			if octal[0] != '6' || int(octal[1])-4 < 0 || octal[2] != '4' {
 				// middle bit just needs to be higher than 4
 				// for compatibility with 022 / 002 umasks on different distros

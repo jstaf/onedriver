@@ -14,11 +14,11 @@ else
 endif
 
 
-onedriver: graph/*.go graph/*.c graph/*.h logger/*.go cmd/onedriver/*.go
+onedriver: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-onedriver-headless: graph/*.go logger/*.go cmd/onedriver/*.go
+onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
@@ -97,8 +97,9 @@ dmel.fa:
 # disabled and tests are run. sudo is required - otherwise we don't have
 # permission to mount the fuse filesystem.
 test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
-	rm -f *.race*
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./graph || true
+	rm -f *.race* fusefs_tests.log
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./fs/graph
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" go test -race -v -parallel=8 -count=1 ./fs
 	go test -c ./offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1

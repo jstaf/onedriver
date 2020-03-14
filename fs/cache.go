@@ -1,4 +1,4 @@
-package graph
+package fs
 
 import (
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 
 	bolt "github.com/etcd-io/bbolt"
 	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +26,7 @@ type Cache struct {
 	uploads   *UploadManager
 
 	sync.RWMutex
-	auth      *Auth
+	auth      *graph.Auth
 	driveType string // personal | business
 	offline   bool
 }
@@ -44,7 +45,7 @@ func CacheDir() string {
 }
 
 // NewCache creates a new Cache
-func NewCache(auth *Auth, dbpath string) *Cache {
+func NewCache(auth *graph.Auth, dbpath string) *Cache {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
@@ -60,9 +61,10 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		db:   db,
 	}
 
-	root, err := GetItem("root", auth)
+	rootItem, err := graph.GetItem("root", auth)
+	root := NewInodeDriveItem(rootItem)
 	if err != nil {
-		if IsOffline(err) {
+		if graph.IsOffline(err) {
 			// no network, load from db if possible and go to read-only state
 			cache.Lock()
 			cache.offline = true
@@ -101,12 +103,12 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
 		if child, _ := cache.GetChild(cache.root, trash, auth); child == nil {
-			item, err := Mkdir(trash, cache.root, auth)
+			item, err := graph.Mkdir(trash, cache.root, auth)
 			if err != nil {
 				log.WithField("err", err).Error("Could not create trash folder. " +
 					"Trashing items through the file browser may result in errors.")
 			} else {
-				cache.InsertID(item.ID(), item)
+				cache.InsertID(item.ID, NewInodeDriveItem(item))
 			}
 		}
 
@@ -120,7 +122,7 @@ func NewCache(auth *Auth, dbpath string) *Cache {
 }
 
 // GetAuth returns the current auth
-func (c *Cache) GetAuth() *Auth {
+func (c *Cache) GetAuth() *graph.Auth {
 	c.RLock()
 	defer c.RUnlock()
 	return c.auth
@@ -140,7 +142,7 @@ func (c *Cache) DriveType() string {
 	c.RUnlock()
 
 	if driveType == "" {
-		drive, err := GetDrive(c.GetAuth())
+		drive, err := graph.GetDrive(c.GetAuth())
 		if err == nil {
 			c.Lock()
 			c.driveType = drive.DriveType
@@ -239,7 +241,7 @@ func (c *Cache) InsertChild(parentID string, child *Inode) {
 	child.mutex.Lock()
 	// should already be set, just double-checking here.
 	child.DriveItem.Parent.ID = parentID
-	id := child.IDInternal
+	id := child.DriveItem.ID
 	child.mutex.Unlock()
 	c.InsertID(id, child)
 }
@@ -270,7 +272,7 @@ type driveChildren struct {
 }
 
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
-func (c *Cache) GetChild(id string, name string, auth *Auth) (*Inode, error) {
+func (c *Cache) GetChild(id string, name string, auth *graph.Auth) (*Inode, error) {
 	children, err := c.GetChildrenID(id, auth)
 	if err != nil {
 		return nil, err
@@ -285,7 +287,7 @@ func (c *Cache) GetChild(id string, name string, auth *Auth) (*Inode, error) {
 
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If
 // items are not found, they are fetched.
-func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) {
+func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, error) {
 	// fetch item and catch common errors
 	inode := c.GetID(id)
 	children := make(map[string]*Inode)
@@ -326,9 +328,9 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 
 	// We haven't fetched the children for this item yet, get them from the
 	// server.
-	body, err := Get(ChildrenPathID(id), auth)
+	body, err := graph.Get(graph.ChildrenPathID(id), auth)
 	if err != nil {
-		if IsOffline(err) {
+		if graph.IsOffline(err) {
 			log.WithFields(log.Fields{
 				"id": id,
 			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
@@ -348,13 +350,13 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 	for _, child := range fetched.Children {
 		// we will always have an id after fetching from the server
 		child.cache = c
-		c.metadata.Store(child.IDInternal, child)
+		c.metadata.Store(child.DriveItem.ID, child)
 
 		// store in result map
 		children[strings.ToLower(child.Name())] = child
 
 		// store id in parent item and increment parents subdirectory count
-		inode.children = append(inode.children, child.IDInternal)
+		inode.children = append(inode.children, child.DriveItem.ID)
 		if child.IsDir() {
 			inode.subdir++
 		}
@@ -366,18 +368,17 @@ func (c *Cache) GetChildrenID(id string, auth *Auth) (map[string]*Inode, error) 
 
 // GetChildrenPath grabs all DriveItems that are the children of the resource at
 // the path. If items are not found, they are fetched.
-func (c *Cache) GetChildrenPath(path string, auth *Auth) (map[string]*Inode, error) {
+func (c *Cache) GetChildrenPath(path string, auth *graph.Auth) (map[string]*Inode, error) {
 	inode, err := c.GetPath(path, auth)
 	if err != nil {
 		return make(map[string]*Inode), err
 	}
-
 	return c.GetChildrenID(inode.ID(), auth)
 }
 
 // GetPath fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
-func (c *Cache) GetPath(path string, auth *Auth) (*Inode, error) {
+func (c *Cache) GetPath(path string, auth *graph.Auth) (*Inode, error) {
 	lastID := c.root
 	if path == "/" {
 		return c.GetID(lastID), nil
@@ -420,7 +421,7 @@ func (c *Cache) DeletePath(key string) {
 // InsertPath lets us manually insert an item to the cache (like if it was
 // created locally). Overwrites a cached item if present. Must be called after
 // delete if being used to move/rename an item.
-func (c *Cache) InsertPath(key string, auth *Auth, inode *Inode) error {
+func (c *Cache) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
 	key = strings.ToLower(key)
 
 	// set the item.Parent.ID properly if the item hasn't been in the cache
@@ -473,7 +474,7 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	parent.mutex.Unlock()
 
 	inode.mutex.Lock()
-	inode.IDInternal = newID
+	inode.DriveItem.ID = newID
 	inode.mutex.Unlock()
 
 	// now actually perform the metadata+content move
@@ -484,7 +485,7 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 }
 
 // MovePath an item to a new position
-func (c *Cache) MovePath(oldPath string, newPath string, auth *Auth) error {
+func (c *Cache) MovePath(oldPath string, newPath string, auth *graph.Auth) error {
 	inode, err := c.GetPath(oldPath, auth)
 	if err != nil {
 		return err
