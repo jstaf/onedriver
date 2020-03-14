@@ -42,12 +42,8 @@ func TestMain(m *testing.M) {
 		os.Remove(db)
 	}
 
-	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.SetReportCaller(true)
-	log.SetFormatter(logger.LogrusFormatter())
-	log.SetLevel(log.DebugLevel)
+	f := logger.LogTestSetup()
+	defer f.Close()
 
 	root := NewFS("test.db", ".auth_tokens.json", 5*time.Second)
 	fsCache = root.GetCache()

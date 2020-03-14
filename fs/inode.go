@@ -104,6 +104,9 @@ func NewInodeJSON(data []byte) (*Inode, error) {
 
 // NewInodeDriveItem creates a new DriveItem from an Inode
 func NewInodeDriveItem(item *graph.DriveItem) *Inode {
+	if item == nil {
+		return nil
+	}
 	var empty []byte
 	return &Inode{
 		DriveItem: *item,

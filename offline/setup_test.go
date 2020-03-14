@@ -11,7 +11,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/jstaf/onedriver/graph"
+	odfs "github.com/jstaf/onedriver/fs"
+	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/jstaf/onedriver/logger"
 	log "github.com/sirupsen/logrus"
 )
@@ -38,17 +39,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.SetReportCaller(true)
-	log.SetFormatter(logger.LogrusFormatter())
-	log.SetLevel(log.DebugLevel)
-
+	f := logger.LogTestSetup()
+	defer f.Close()
 	log.Info("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
-	root := graph.NewFS("test.db", ".auth_tokens.json", 5*time.Second)
+	root := odfs.NewFS("test.db", ".auth_tokens.json", 5*time.Second)
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
@@ -64,7 +60,7 @@ func TestMain(m *testing.M) {
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
-	go graph.UnmountHandler(sigChan, server)
+	go odfs.UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
 	go server.Serve()
