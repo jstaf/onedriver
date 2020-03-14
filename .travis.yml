@@ -39,7 +39,7 @@ after_script:
   - aws s3 cp .auth_tokens.json s3://fusefs-travis/
   - aws s3 cp fusefs_tests.log s3://fusefs-travis/
   - 'echo "mode: set" > all_coverage.out'
-  - 'grep -h -v "mode: set" *.part >> all_coverage.out'
+  - 'grep -h -v "mode: set" *.coverage >> all_coverage.out'
   - $HOME/gopath/bin/goveralls -coverprofile=all_coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
 
 notifications:
