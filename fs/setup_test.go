@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
@@ -35,6 +36,11 @@ func TestMain(m *testing.M) {
 	// failed and didn't clean themselves up)
 	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
+	// wipe all cached data from previous tests
+	toDelete, _ := filepath.Glob("test*.db")
+	for _, db := range toDelete {
+		os.Remove(db)
+	}
 
 	f := logger.LogTestSetup()
 	defer f.Close()
