@@ -20,6 +20,7 @@ install:
   - pip install --user awscli
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
+  - go get github.com/wadey/gocovmerge
   - go get golang.org/x/tools/cmd/goimports
   - make unshare
 script:
@@ -38,8 +39,7 @@ script:
 after_script:
   - aws s3 cp .auth_tokens.json s3://fusefs-travis/
   - aws s3 cp fusefs_tests.log s3://fusefs-travis/
-  - 'echo "mode: set" > all_coverage.out'
-  - 'grep -h -v "mode: set" *.coverage >> all_coverage.out'
+  - gocovmerge *.coverage > coverage.out
   - $HOME/gopath/bin/goveralls -coverprofile=all_coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
 
 notifications:
