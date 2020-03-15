@@ -45,10 +45,12 @@ func TestMain(m *testing.M) {
 	f := logger.LogTestSetup()
 	defer f.Close()
 
-	root := NewFS("test.db", ".auth_tokens.json", 5*time.Second)
-	fsCache = root.GetCache()
-	auth = fsCache.GetAuth()
+	auth = graph.Authenticate(".auth_tokens.json")
+	fsCache = NewCache(auth, "test.db")
+	go fsCache.DeltaLoop(5 * time.Second)
+
 	second := time.Second
+	root, _ := fsCache.GetPath("/", auth)
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,

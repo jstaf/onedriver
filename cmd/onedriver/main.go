@@ -107,15 +107,12 @@ func main() {
 	}
 	ioutil.WriteFile(filepath.Join(dir, "mountpoint"), []byte(mountpoint), 0700)
 
-	root := odfs.NewFS(
-		filepath.Join(dir, "onedriver.db"),
-		authPath,
-		30*time.Second,
-	)
+	// create a new filesystem
+	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
+	root, _ := cache.GetPath("/", auth)
+	go cache.DeltaLoop(30 * time.Second)
 
-	// Create .xdg-volume-info for a nice little onedrive logo in the corner of the
-	// mountpoint and show the account name in the nautilus sidebar
-	xdgVolumeInfo(root.GetCache(), auth)
+	xdgVolumeInfo(cache, auth)
 
 	second := time.Second
 	server, err := fs.Mount(mountpoint, root, &fs.Options{
@@ -132,7 +129,6 @@ func main() {
 		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
 			"(Try running \"fusermount -uz %s\")\n", mountpoint)
 	}
-	server.SetDebug(*debugOn)
 
 	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
@@ -140,6 +136,7 @@ func main() {
 	go odfs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
+	server.SetDebug(*debugOn)
 	server.Wait()
 }
 
