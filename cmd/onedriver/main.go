@@ -67,16 +67,18 @@ func main() {
 		os.Exit(0)
 	}
 
+	// determine cache directory and wipe if desired
 	dir := *cacheDir
 	if dir == "" {
-		dir = odfs.CacheDir()
+		xdgCacheDir, _ := os.UserCacheDir()
+		dir = filepath.Join(xdgCacheDir, "onedriver")
 	}
-
 	if *wipeCache {
 		os.RemoveAll(dir)
 		os.Exit(0)
 	}
 
+	// authenticate/re-authenticate if necessary
 	os.Mkdir(dir, 0700)
 	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
@@ -92,6 +94,7 @@ func main() {
 	log.SetFormatter(logger.LogrusFormatter())
 	log.Infof("onedriver v%s %s", version, commit[:clen])
 
+	// determine mountpoint
 	var mountpoint string
 	if len(flag.Args()) != 1 {
 		// no mountpoint provided
@@ -107,7 +110,7 @@ func main() {
 	}
 	ioutil.WriteFile(filepath.Join(dir, "mountpoint"), []byte(mountpoint), 0700)
 
-	// create a new filesystem
+	// create a new filesystem and mount it
 	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
 	root, _ := cache.GetPath("/", auth)
 	go cache.DeltaLoop(30 * time.Second)
