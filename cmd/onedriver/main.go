@@ -33,7 +33,7 @@ on-demand and cached locally. Only files you actually use will be downloaded.
 While offline, the filesystem will be read-only until connectivity is re-
 established.
 
-Usage: onedriver [options] [mountpoint]
+Usage: onedriver [options] <mountpoint>
 
 Valid options:
 `)
@@ -94,21 +94,22 @@ func main() {
 	log.SetFormatter(logger.LogrusFormatter())
 	log.Infof("onedriver v%s %s", version, commit[:clen])
 
-	// determine mountpoint
-	var mountpoint string
-	if len(flag.Args()) != 1 {
-		// no mountpoint provided
-		m, err := ioutil.ReadFile(filepath.Join(dir, "mountpoint"))
-		if err != nil {
-			log.Info("No mount specified and no prior mountpoint found, exiting.")
-			flag.Usage()
-			os.Exit(1)
-		}
-		mountpoint = string(m)
-	} else {
-		mountpoint = flag.Arg(0)
+	// determine and validate mountpoint
+	if len(flag.Args()) == 0 {
+		log.Fatal("No mountpoint provided, exiting.")
 	}
-	ioutil.WriteFile(filepath.Join(dir, "mountpoint"), []byte(mountpoint), 0700)
+	mountpoint := flag.Arg(0)
+	st, err := os.Stat(mountpoint)
+	if err != nil || !st.IsDir() {
+		log.WithField(
+			"mountpoint", mountpoint,
+		).Fatal("Mountpoint did not exist or was not a directory.")
+	}
+	if res, _ := ioutil.ReadDir(mountpoint); len(res) > 0 {
+		log.WithField(
+			"mountpoint", mountpoint,
+		).Fatal("Mountpoint must be empty.")
+	}
 
 	// create a new filesystem and mount it
 	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
