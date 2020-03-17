@@ -104,6 +104,9 @@ func main() {
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
 	mountpoint := flag.Arg(0)
+	if *makeMount {
+		os.Mkdir(mountpoint, 0755)
+	}
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
 		log.WithField(

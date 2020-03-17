@@ -2,6 +2,6 @@
 Name=Onedriver
 Comment=Mount a Microsoft OneDrive account as a Linux filesystem.
 Type=Application
-Exec=/usr/bin/onedriver OneDrive
+Exec=/usr/bin/onedriver -m OneDrive
 Icon=/usr/share/icons/onedriver.png
 Categories=Utility
