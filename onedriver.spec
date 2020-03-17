@@ -31,9 +31,11 @@ GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)" ./cmd/o
 rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/%{_bindir}
 mkdir -p %{buildroot}/usr/share/icons
+mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
 cp onedriver %{buildroot}/%{_bindir}
 cp onedriver.png %{buildroot}/usr/share/icons
+cp onedriver.desktop %{buildroot}/usr/share/applications
 cp onedriver@.service %{buildroot}/usr/lib/systemd/user
 
 %post
@@ -45,6 +47,7 @@ systemctl daemon-reload
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/onedriver
 %attr(644, root, root) /usr/share/icons/onedriver.png
+%attr(644, root, root) /usr/share/applications/onedriver.desktop
 %attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
 %changelog
