@@ -92,12 +92,15 @@ func main() {
 	log.SetLevel(logger.StringToLevel(*logLevel))
 	log.SetReportCaller(true)
 	log.SetFormatter(logger.LogrusFormatter())
-	log.Infof("onedriver v%s %s", version, commit[:clen])
 
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
-		log.Fatal("No mountpoint provided, exiting.")
+		flag.Usage()
+		fmt.Printf("\nNo mountpoint provided, exiting.\n")
+		os.Exit(1)
 	}
+
+	log.Infof("onedriver v%s %s", version, commit[:clen])
 	mountpoint := flag.Arg(0)
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
