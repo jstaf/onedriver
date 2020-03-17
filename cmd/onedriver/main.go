@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -66,22 +67,25 @@ func main() {
 		os.Exit(0)
 	}
 
+	// determine cache directory and wipe if desired
 	dir := *cacheDir
 	if dir == "" {
-		dir = odfs.CacheDir()
+		xdgCacheDir, _ := os.UserCacheDir()
+		dir = filepath.Join(xdgCacheDir, "onedriver")
 	}
-
 	if *wipeCache {
 		os.RemoveAll(dir)
+		os.Exit(0)
 	}
 
+	// authenticate/re-authenticate if necessary
 	os.Mkdir(dir, 0700)
 	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
 		os.Remove(authPath)
-		graph.Authenticate(authPath)
 	}
-	if *wipeCache || *authOnly {
+	auth := graph.Authenticate(authPath)
+	if *authOnly {
 		os.Exit(0)
 	}
 
@@ -89,53 +93,36 @@ func main() {
 	log.SetReportCaller(true)
 	log.SetFormatter(logger.LogrusFormatter())
 
-	if len(flag.Args()) != 1 {
-		// no mountpoint provided
+	// determine and validate mountpoint
+	if len(flag.Args()) == 0 {
 		flag.Usage()
+		fmt.Printf("\nNo mountpoint provided, exiting.\n")
 		os.Exit(1)
 	}
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
-	root := odfs.NewFS(
-		filepath.Join(dir, "onedriver.db"),
-		authPath,
-		30*time.Second,
-	)
-
-	// Create .xdg-volume-info for a nice little onedrive logo in the corner of the
-	// mountpoint and show the account name in the nautilus sidebar
-	cache := root.GetCache()
-	auth := cache.GetAuth()
-	if child, _ := cache.GetPath("/.xdg-volume-info", auth); child == nil {
-		log.Info("Creating .xdg-volume-info")
-		user, err := graph.GetUser(auth)
-		if err != nil {
-			log.Error("Could not create .xdg-volume-info: ", err)
-		} else {
-			xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
-			if _, err := os.Stat("/usr/share/icons/onedriver.png"); err == nil {
-				xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver.png\n"
-			}
-			// just upload directly and shove it in the cache
-			// (since the fs isn't mounted yet)
-			resp, err := graph.Put(
-				graph.ResourcePath("/.xdg-volume-info")+":/content",
-				auth,
-				strings.NewReader(xdgVolumeInfo),
-			)
-			if err != nil {
-				log.Error(err)
-			}
-			inode := odfs.NewInode(".xdg-volume-info", 0644, root)
-			err = json.Unmarshal(resp, &inode)
-			if err == nil {
-				cache.InsertID(inode.ID(), inode)
-			}
-		}
+	mountpoint := flag.Arg(0)
+	st, err := os.Stat(mountpoint)
+	if err != nil || !st.IsDir() {
+		log.WithField(
+			"mountpoint", mountpoint,
+		).Fatal("Mountpoint did not exist or was not a directory.")
+	}
+	if res, _ := ioutil.ReadDir(mountpoint); len(res) > 0 {
+		log.WithField(
+			"mountpoint", mountpoint,
+		).Fatal("Mountpoint must be empty.")
 	}
 
+	// create a new filesystem and mount it
+	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
+	root, _ := cache.GetPath("/", auth)
+	go cache.DeltaLoop(30 * time.Second)
+
+	xdgVolumeInfo(cache, auth)
+
 	second := time.Second
-	server, err := fs.Mount(flag.Arg(0), root, &fs.Options{
+	server, err := fs.Mount(mountpoint, root, &fs.Options{
 		EntryTimeout: &second,
 		AttrTimeout:  &second,
 		MountOptions: fuse.MountOptions{
@@ -146,11 +133,9 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Error(err)
-		log.Fatalf("Mount failed. Is the mountpoint already in use? "+
-			"(Try running \"fusermount -u %s\")\n", flag.Arg(0))
+		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
+			"(Try running \"fusermount -uz %s\")\n", mountpoint)
 	}
-	server.SetDebug(*debugOn)
 
 	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
@@ -158,5 +143,41 @@ func main() {
 	go odfs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
+	server.SetDebug(*debugOn)
 	server.Wait()
+}
+
+// xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
+// corner of the mountpoint and shows the account name in the nautilus sidebar
+func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
+	if child, _ := cache.GetPath("/.xdg-volume-info", auth); child != nil {
+		return
+	}
+	log.Info("Creating .xdg-volume-info")
+	user, err := graph.GetUser(auth)
+	if err != nil {
+		log.WithField("err", err).Error("Could not create .xdg-volume-info")
+		return
+	}
+
+	xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
+	if _, err := os.Stat("/usr/share/icons/onedriver.png"); err == nil {
+		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver.png\n"
+	}
+
+	// just upload directly and shove it in the cache
+	// (since the fs isn't mounted yet)
+	resp, err := graph.Put(
+		graph.ResourcePath("/.xdg-volume-info")+":/content",
+		auth,
+		strings.NewReader(xdgVolumeInfo),
+	)
+	if err != nil {
+		log.Error(err)
+	}
+	root, _ := cache.GetPath("/", auth) // cannot fail
+	inode := odfs.NewInode(".xdg-volume-info", 0644, root)
+	if json.Unmarshal(resp, &inode) == nil {
+		cache.InsertID(inode.ID(), inode)
+	}
 }

@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 
-	auth := graph.Authenticate(".auth_tokens.json")
+	auth = graph.Authenticate(".auth_tokens.json")
 	inode, err := graph.GetItem("root", auth)
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")
@@ -44,7 +44,9 @@ func TestMain(m *testing.M) {
 	log.Info("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
-	root := odfs.NewFS("test.db", ".auth_tokens.json", 5*time.Second)
+	cache := odfs.NewCache(auth, "test.db")
+	root, _ := cache.GetPath("/", auth)
+	go cache.DeltaLoop(5 * time.Second)
 	second := time.Second
 	server, _ := fs.Mount(mountLoc, root, &fs.Options{
 		EntryTimeout: &second,

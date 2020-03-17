@@ -12,8 +12,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// deltaLoop should be called as a goroutine
-func (c *Cache) deltaLoop(interval time.Duration) {
+// DeltaLoop creates a new thread to poll the server for changes and should be
+// called as a goroutine
+func (c *Cache) DeltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
