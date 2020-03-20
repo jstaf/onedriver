@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -185,6 +186,12 @@ func (i *Inode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	if drive.DriveType == "personal" {
 		log.Warn("Personal OneDrive accounts do not show number of files, " +
 			"inode counts reported by onedriver will be bogus.")
+	} else if drive.Quota.Total == 0 { // <-- check for if microsoft ever fixes their API
+		log.Warn("OneDrive for Business accounts do not report quotas, " +
+			"pretending the quota is 5TB and it's all unused.")
+		drive.Quota.Total = 5 * uint64(math.Pow(1024, 4))
+		drive.Quota.Remaining = 5 * uint64(math.Pow(1024, 4))
+		drive.Quota.FileCount = 0
 	}
 
 	// limits are pasted from https://support.microsoft.com/en-us/help/3125202
