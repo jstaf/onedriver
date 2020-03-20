@@ -7,7 +7,8 @@ require (
 	github.com/rclone/rclone v1.50.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.3
-	golang.org/x/sys v0.0.0-20190907184412-d223b2b6db03 // indirect
+	go.etcd.io/bbolt v1.3.4
+	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d // indirect
 )
 
 go 1.13

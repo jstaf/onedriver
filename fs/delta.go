@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	bolt "github.com/etcd-io/bbolt"
 	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 )
 
 // DeltaLoop creates a new thread to poll the server for changes and should be
