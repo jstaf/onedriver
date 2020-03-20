@@ -75,9 +75,12 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
 	os.Mkdir(DeltaDir, 0755)
+
+	// not created by default on onedrive for business
+	os.Mkdir(mountLoc+"/Documents", 0755)
+
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
-
 	log.Info("Test session start ---------------------------------")
 
 	// run tests
