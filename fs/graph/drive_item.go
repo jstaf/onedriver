@@ -68,6 +68,11 @@ func GetItem(id string, auth *Auth) (*DriveItem, error) {
 	}
 	item := &DriveItem{}
 	err = json.Unmarshal(body, item)
+	if err != nil && bytes.Contains(body, []byte("\"size\":-")) {
+		// onedrive for business directories can sometimes have negative sizes,
+		// ignore this error
+		err = nil
+	}
 	return item, err
 }
 
@@ -80,6 +85,11 @@ func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
 		return item, err
 	}
 	err = json.Unmarshal(body, item)
+	if err != nil && bytes.Contains(body, []byte("\"size\":-")) {
+		// onedrive for business directories can sometimes have negative sizes,
+		// ignore this error
+		err = nil
+	}
 	return item, err
 }
 

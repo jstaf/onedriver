@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	bolt "github.com/etcd-io/bbolt"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Cache caches Inodes for a filesystem. This cache never expires so that local

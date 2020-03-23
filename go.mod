@@ -1,13 +1,13 @@
 module github.com/jstaf/onedriver
 
 require (
-	github.com/etcd-io/bbolt v1.3.3
 	github.com/hanwen/go-fuse/v2 v2.0.3-0.20200103165319-0e3c45fc4899
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/rclone/rclone v1.50.0
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.4.3-0.20200322134359-d417be0fe654
 	github.com/spf13/pflag v1.0.3
-	golang.org/x/sys v0.0.0-20190907184412-d223b2b6db03 // indirect
+	go.etcd.io/bbolt v1.3.4
+	golang.org/x/sys v0.0.0-20200321134203-328b4cd54aae // indirect
 )
 
 go 1.13
