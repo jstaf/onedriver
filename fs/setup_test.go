@@ -7,6 +7,9 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -47,7 +50,6 @@ func TestMain(m *testing.M) {
 
 	auth = graph.Authenticate(".auth_tokens.json")
 	fsCache = NewCache(auth, "test.db")
-	go fsCache.DeltaLoop(5 * time.Second)
 
 	second := time.Second
 	root, _ := fsCache.GetPath("/", auth)
@@ -75,6 +77,11 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(TestDir)
 	os.Mkdir(TestDir, 0755)
 	os.Mkdir(DeltaDir, 0755)
+
+	// create paging test files before the delta thread is created
+	os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
+	createPagingTestFiles()
+	go fsCache.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business
 	os.Mkdir(mountLoc+"/Documents", 0755)
@@ -110,4 +117,30 @@ func failOnErr(t *testing.T, err error) {
 		t.Logf("Test failed at %s:%d:\n", file, line)
 		t.Fatal(err)
 	}
+}
+
+// Apparently 200 reqests is the default paging limit.
+// Upload at least this many for a later test before the delta thread is created.
+func createPagingTestFiles() {
+	fmt.Println("Setting up paging test files.")
+	var group sync.WaitGroup
+	var errCounter int64
+	for i := 0; i < 250; i++ {
+		group.Add(1)
+		go func(n int, wg *sync.WaitGroup) {
+			_, err := graph.Put(
+				graph.ResourcePath(fmt.Sprintf("/onedriver_tests/paging/%d.txt", n))+":/content",
+				auth,
+				strings.NewReader("test\n"),
+			)
+			if err != nil {
+				log.WithField("err", err).Error("Paging upload fail.")
+				atomic.AddInt64(&errCounter, 1)
+			}
+			wg.Done()
+		}(i, &group)
+	}
+	group.Wait()
+	log.Infof("%d failed paging uploads.\n", errCounter)
+	fmt.Println("Finished with paging test setup.")
 }

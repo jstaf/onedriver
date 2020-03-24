@@ -263,6 +263,7 @@ func (c *Cache) DeleteID(id string) {
 // only used for parsing
 type driveChildren struct {
 	Children []*Inode `json:"value"`
+	NextLink string   `json:"@odata.nextLink"`
 }
 
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
@@ -320,28 +321,35 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 	}
 	inode.mutex.RUnlock()
 
-	// We haven't fetched the children for this item yet, get them from the
-	// server.
-	body, err := graph.Get(graph.ChildrenPathID(id), auth)
-	if err != nil {
-		if graph.IsOffline(err) {
+	// We haven't fetched the children for this item yet, get them from the server.
+	fetched := make([]*Inode, 0)
+	for pollURL := graph.ChildrenPathID(id); pollURL != ""; {
+		body, err := graph.Get(pollURL, auth)
+		if err != nil {
+			if graph.IsOffline(err) {
+				log.WithFields(log.Fields{
+					"id": id,
+				}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
+				return children, nil
+			}
+			// something else happened besides being offline
 			log.WithFields(log.Fields{
-				"id": id,
-			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
-			return children, nil
+				"err": err,
+			}).Error("Error while fetching children.")
+			return nil, err
 		}
-		// something else happened besides being offline
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Error while fetching children.")
-		return nil, err
+		var pollResult driveChildren
+		json.Unmarshal(body, &pollResult)
+
+		// there can be multiple pages of 200 items each (default).
+		// continue to next interation if we have an @odata.nextLink value
+		fetched = append(fetched, pollResult.Children...)
+		pollURL = strings.TrimPrefix(pollResult.NextLink, graph.GraphURL)
 	}
-	var fetched driveChildren
-	json.Unmarshal(body, &fetched)
 
 	inode.mutex.Lock()
 	inode.children = make([]string, 0)
-	for _, child := range fetched.Children {
+	for _, child := range fetched {
 		// we will always have an id after fetching from the server
 		child.cache = c
 		c.metadata.Store(child.DriveItem.ID, child)

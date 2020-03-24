@@ -448,3 +448,15 @@ func TestGIOTrash(t *testing.T) {
 		t.Fatal(out)
 	}
 }
+
+// Test that we are able to work around onedrive paging limits when
+// listing a folder's children.
+func TestListChildrenPaging(t *testing.T) {
+	// files have been prepopulated during test setup to avoid being picked up by
+	// the delta thread
+	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
+	failOnErr(t, err)
+	if len(files) < 225 {
+		t.Fatalf("Paging limit failed. Got %d files, wanted at least 225.\n", len(files))
+	}
+}
