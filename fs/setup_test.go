@@ -122,6 +122,7 @@ func failOnErr(t *testing.T, err error) {
 // Apparently 200 reqests is the default paging limit.
 // Upload at least this many for a later test before the delta thread is created.
 func createPagingTestFiles() {
+	fmt.Println("Setting up paging test files.")
 	var group sync.WaitGroup
 	var errCounter int64
 	for i := 0; i < 250; i++ {
@@ -141,4 +142,5 @@ func createPagingTestFiles() {
 	}
 	group.Wait()
 	log.Infof("%d failed paging uploads.\n", errCounter)
+	fmt.Println("Finished with paging test setup.")
 }
