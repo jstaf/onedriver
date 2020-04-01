@@ -46,8 +46,6 @@ func main() {
 		"Authenticate to OneDrive and then exit.")
 	logLevel := flag.StringP("log", "l", "debug", "Set logging level/verbosity. "+
 		"Can be one of: fatal, error, warn, info, debug, trace")
-	makeMount := flag.BoolP("make-mount-dir", "m", false,
-		"Create the mount directory if it does not already exist.")
 	cacheDir := flag.StringP("cache-dir", "c", "",
 		"Change the default cache directory used by onedriver. "+
 			"Will be created if the path does not already exist.")
@@ -104,9 +102,6 @@ func main() {
 
 	log.Infof("onedriver v%s %s", version, commit[:clen])
 	mountpoint := flag.Arg(0)
-	if *makeMount {
-		os.Mkdir(mountpoint, 0755)
-	}
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
 		log.WithField(
