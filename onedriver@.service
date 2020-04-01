@@ -5,7 +5,7 @@ Description=onedriver
 ExecStart=/usr/bin/onedriver %I
 ExecStop=/usr/bin/fusermount -uz %I
 ExecStopPost=/usr/bin/sleep 1
-Restart=on-failure
+Restart=no
 
 [Install]
 WantedBy=default.target

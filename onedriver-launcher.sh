@@ -14,6 +14,7 @@ if ! $(mount | grep onedriver | grep -q $MOUNT); then
     mkdir -p $MOUNT
     systemctl --user daemon-reload
     systemctl start --user $SERVICE_NAME
+    sleep 2
 fi
 
 xdg-open $MOUNT
