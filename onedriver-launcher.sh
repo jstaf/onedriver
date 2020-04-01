@@ -10,11 +10,15 @@ MOUNT=$(realpath "$1")
 
 # Is onedriver running on that mountpoint? If not, mount it.
 SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNT)
-if ! $(mount | grep onedriver | grep -q $MOUNT); then
+if ! systemctl is-active --quiet --user $SERVICE_NAME; then
+    echo "Mounting filesystem..."
     mkdir -p $MOUNT
     systemctl --user daemon-reload
     systemctl start --user $SERVICE_NAME
     sleep 2
+else
+    echo "Filesystem already mounted."
 fi
+echo "Further logs can be checked via \"journalctl --user -u $SERVICE_NAME\""
 
 xdg-open $MOUNT
