@@ -11,11 +11,19 @@ MOUNT=$(realpath "$1")
 # Is onedriver running on that mountpoint? If not, mount it.
 SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNT)
 if ! systemctl is-active --quiet --user $SERVICE_NAME; then
-    echo "Mounting filesystem..."
+    echo "Mounting filesystem at $MOUNT"
     mkdir -p $MOUNT
     systemctl --user daemon-reload
     systemctl start --user $SERVICE_NAME
-    sleep 2
+    # poll for up to 10s until the mount comes up
+    for WAIT in {1..100}; do
+        echo -n "."
+        if [ -f $MOUNT/.xdg-volume-info ]; then
+            echo "Found mount."
+            break
+        fi
+        sleep 0.1
+    done
 else
     echo "Filesystem already mounted."
 fi
