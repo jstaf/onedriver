@@ -34,7 +34,9 @@ mkdir -p %{buildroot}/usr/share/icons
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
 cp onedriver %{buildroot}/%{_bindir}
+cp onedriver-launcher.sh %{buildroot}/%{_bindir}
 cp onedriver.png %{buildroot}/usr/share/icons
+cp onedriver.svg %{buildroot}/usr/share/icons
 cp onedriver.desktop %{buildroot}/usr/share/applications
 cp onedriver@.service %{buildroot}/usr/lib/systemd/user
 
@@ -46,7 +48,9 @@ systemctl daemon-reload
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/onedriver
+%attr(755, root, root) %{_bindir}/onedriver-launcher.sh
 %attr(644, root, root) /usr/share/icons/onedriver.png
+%attr(644, root, root) /usr/share/icons/onedriver.svg
 %attr(644, root, root) /usr/share/applications/onedriver.desktop
 %attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
