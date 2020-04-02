@@ -161,8 +161,8 @@ func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
 	}
 
 	xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
-	if _, err := os.Stat("/usr/share/icons/onedriver.png"); err == nil {
-		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver.png\n"
+	if _, err := os.Stat("/usr/share/icons/onedriver/onedriver.png"); err == nil {
+		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver/onedriver.png\n"
 	}
 
 	// just upload directly and shove it in the cache
