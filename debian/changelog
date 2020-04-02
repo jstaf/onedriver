@@ -1,3 +1,12 @@
+onedriver (0.8.0-1) unstable; urgency=low
+
+  * Add a desktop launcher for single drive scenarios (better multi-drive support coming soon!).
+  * Fix for directories containing more than 200 items.
+  * Miscellaneous fixes and tests for OneDrive for Business
+  * Compatibility with Go 1.14
+
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Thu, 2 Apr 2020 17:18:00 -0500
+
 onedriver (0.7.2-1) unstable; urgency=low
 
   * Initial debian build.

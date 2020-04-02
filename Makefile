@@ -24,7 +24,7 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
 
 # run all tests, build all artifacts, compute checksums for release
 all: test checksums.txt
-checksums.txt: onedriver onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
+checksums.txt: onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
 	sha256sum $^ > checksums.txt
 
 
@@ -133,5 +133,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
 	rm -rf util-linux-*/ onedriver-*/ vendor/
