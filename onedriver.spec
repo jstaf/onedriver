@@ -30,24 +30,34 @@ GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)" ./cmd/o
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}/%{_bindir}
-mkdir -p %{buildroot}/usr/share/icons
+mkdir -p %{buildroot}/usr/share/icons/onedriver
+mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
 cp onedriver %{buildroot}/%{_bindir}
-cp onedriver.png %{buildroot}/usr/share/icons
-cp onedriver@.service %{buildroot}/usr/lib/systemd/user
-
-%post
-systemctl daemon-reload
+cp resources/onedriver-launcher.sh %{buildroot}/%{_bindir}
+cp resources/onedriver.png %{buildroot}/usr/share/icons/onedriver
+cp resources/onedriver.svg %{buildroot}/usr/share/icons/onedriver
+cp resources/onedriver.desktop %{buildroot}/usr/share/applications
+cp resources/onedriver@.service %{buildroot}/usr/lib/systemd/user
 
 # fix for el8 build in mock
 %define _empty_manifest_terminate_build 0
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/onedriver
-%attr(644, root, root) /usr/share/icons/onedriver.png
+%attr(755, root, root) %{_bindir}/onedriver-launcher.sh
+%attr(644, root, root) /usr/share/icons/onedriver/onedriver.png
+%attr(644, root, root) /usr/share/icons/onedriver/onedriver.svg
+%attr(644, root, root) /usr/share/applications/onedriver.desktop
 %attr(644, root, root) /usr/lib/systemd/user/onedriver@.service
 
 %changelog
+* Wed Apr 1 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.8.0
+- Add a desktop launcher for single drive scenarios (better multi-drive support coming soon!).
+- Fix for directories containing more than 200 items.
+- Miscellaneous fixes and tests for OneDrive for Business
+- Compatibility with Go 1.14
+
 * Mon Feb 17 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.7.2
 - Allow use of disk cache after filesystem transitions from offline to online.
 
