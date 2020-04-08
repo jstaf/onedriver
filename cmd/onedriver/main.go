@@ -79,13 +79,11 @@ func main() {
 	}
 
 	// authenticate/re-authenticate if necessary
-	os.Mkdir(dir, 0700)
+	os.MkdirAll(dir, 0700)
 	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
 		os.Remove(authPath)
-	}
-	auth := graph.Authenticate(authPath)
-	if *authOnly {
+		graph.Authenticate(authPath)
 		os.Exit(0)
 	}
 
@@ -115,6 +113,7 @@ func main() {
 	}
 
 	// create a new filesystem and mount it
+	auth := graph.Authenticate(authPath)
 	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
 	root, _ := cache.GetPath("/", auth)
 	go cache.DeltaLoop(30 * time.Second)
