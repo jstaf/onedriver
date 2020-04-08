@@ -79,7 +79,7 @@ func main() {
 	}
 
 	// authenticate/re-authenticate if necessary
-	os.Mkdir(dir, 0700)
+	os.MkdirAll(dir, 0700)
 	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
 		os.Remove(authPath)
