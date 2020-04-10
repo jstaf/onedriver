@@ -1,6 +1,7 @@
 .vscode/
 compile_flags.txt
 .commit
+.date
 mount/
 *.json
 *.bak
