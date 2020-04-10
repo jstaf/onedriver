@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/jstaf/onedriver.svg?branch=master)](https://travis-ci.org/jstaf/onedriver)
 [![Coverage Status](https://coveralls.io/repos/github/jstaf/onedriver/badge.svg?branch=master)](https://coveralls.io/github/jstaf/onedriver?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jstaf/onedriver)](https://goreportcard.com/report/github.com/jstaf/onedriver)
+[![Copr build status](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/)
 
 onedriver
 ======================================
@@ -36,7 +36,28 @@ your files on OneDrive!
   perform as many tasks as you want simultaneously.
 * Free and open-source.
 
-## Building onedriver
+## Quick start
+
+Users on Fedora/CentOS/RHEL systems are recommended to install onedriver from 
+[COPR](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/).
+This will install the latest version of onedriver through your package manager 
+and ensure it stays up-to-date with bugfixes and new features.
+
+```bash
+sudo dnf copr enable jstaf/onedriver
+sudo dnf install onedriver
+```
+
+Ubuntu/Pop!_OS/Debian users should install the latest .deb from the 
+[Releases](https://github.com/jstaf/onedriver/releases) page
+(a PPA repo will be provided soon!).
+
+Post-installation, you can start onedriver either via the app launcher 
+(will authenticate and mount OneDrive at `~/OneDrive`, 
+before opening OneDrive in your default file browser)
+or via the command line: `onedriver /path/to/mount/onedrive/at/`.
+
+## Building onedriver yourself
 
 In addition to the traditional [Go tooling](https://golang.org/dl/), 
 you will need a C compiler and development headers for `webkit2gtk-4.0`. 
