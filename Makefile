@@ -67,11 +67,9 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 
 # build srpm package used for rpm build with mock
 srpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm 
-onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz onedriver.spec
-	mkdir -p ~/rpmbuild/SOURCES
-	cp $< ~/rpmbuild/SOURCES
-	rpmbuild -bs onedriver-$(RPM_VERSION)/onedriver.spec
-	cp ~/rpmbuild/SRPMS/$@ .
+onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz
+	rpmbuild -ts $<
+	cp $$(rpm --eval '%{_topdir}')/SRPMS/$@ .
 
 
 # build the rpm for the default mock target
