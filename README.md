@@ -57,6 +57,30 @@ Post-installation, you can start onedriver either via the app launcher
 before opening OneDrive in your default file browser)
 or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
+### Multiple drives and starting OneDrive on login
+
+To start onedriver automatically and ensure you always have access to your files,
+you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
+refers to where we want OneDrive to be mounted at (for instance, `~/OneDrive`).
+Mounting OneDrive via systemd allows multiple drives to be mounted at the same 
+time (as long as they use different mountpoints).
+
+```bash
+# create the mountpoint and determine the service name
+mkdir -p $MOUNTPOINT
+export SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNTPOINT)
+
+# mount onedrive
+systemctl --user daemon-reload
+systemctl --user start $SERVICE_NAME
+
+# mount onedrive on login
+systemctl --user enable $SERVICE_NAME
+
+# check onedriver's logs
+journalctl --user -u $SERVICE_NAME
+```
+
 ## Building onedriver yourself
 
 In addition to the traditional [Go tooling](https://golang.org/dl/), 
@@ -125,26 +149,6 @@ sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
     devscripts debhelper build-essential pbuilder
 sudo pbuilder create  # may need to specify "--distribution eoan" on ubuntu
 make deb
-```
-
-To start onedriver automatically and ensure you always have access to your files,
-you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
-refers to where we want OneDrive to be mounted at (for instance, `~/OneDrive`).
-
-```bash
-# create the mountpoint and determine the service name
-mkdir -p $MOUNTPOINT
-export SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNTPOINT)
-
-# mount onedrive
-systemctl --user daemon-reload
-systemctl --user start $SERVICE_NAME
-
-# mount onedrive on login
-systemctl --user enable $SERVICE_NAME
-
-# check onedriver's logs
-journalctl --user -u $SERVICE_NAME
 ```
 
 ## Troubleshooting
