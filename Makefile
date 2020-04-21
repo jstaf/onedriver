@@ -36,14 +36,14 @@ checksums.txt: onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RP
 
 install: onedriver
 	cp $< /usr/bin/$<
-	cp onedriver@.service /etc/systemd/user/
+	cp resources/onedriver@.service /etc/systemd/user/
 	systemctl daemon-reload
 
 
 localinstall: onedriver
 	mkdir -p ~/.config/systemd/user ~/.local/bin
 	cp $< ~/.local/bin/$<
-	cp onedriver@.service ~/.config/systemd/user/
+	cp resources/onedriver@.service ~/.config/systemd/user/
 	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
 	systemctl --user daemon-reload
 
