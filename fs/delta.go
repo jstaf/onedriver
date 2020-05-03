@@ -48,8 +48,17 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 		}
 
 		// now apply deltas
+		secondPass := make([]string, 0)
 		for _, delta := range deltas {
-			c.applyDelta(delta)
+			err := c.applyDelta(delta)
+			// retry deletion of non-empty directories after all other deltas applied
+			if err != nil && err.Error() == "Directory is non-empty" {
+				secondPass = append(secondPass, delta.ID())
+			}
+		}
+		for _, id := range secondPass {
+			// failures should explicitly be ignored the second time around as per docs
+			c.applyDelta(deltas[id])
 		}
 
 		if !c.IsOffline() {
@@ -137,11 +146,20 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		return nil
 	}
 
+	local := c.GetID(id)
+
 	// was it deleted?
 	if delta.Deleted != nil {
-		//TODO from docs:
-		// you should only delete a folder locally if it is empty after syncing
-		// all the changes.
+		if delta.IsDir() && local != nil && local.HasChildren() {
+			// from docs: you should only delete a folder locally if it is empty
+			// after syncing all the changes.
+			log.WithFields(log.Fields{
+				"id":    id,
+				"name":  name,
+				"delta": "delete",
+			}).Warn("Refusing delta deletion of non-empty folder as per API docs.")
+			return errors.New("Directory is non-empty")
+		}
 		log.WithFields(log.Fields{
 			"id":    id,
 			"name":  name,
@@ -153,7 +171,6 @@ func (c *Cache) applyDelta(delta *Inode) error {
 
 	// does the item exist locally? if not, add the delta to the cache under the
 	// appropriate parent
-	local := c.GetID(id)
 	if local == nil {
 		log.WithFields(log.Fields{
 			"id":       id,

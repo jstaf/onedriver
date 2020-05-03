@@ -51,7 +51,7 @@ type SerializeableInode struct {
 	Mode     uint32
 }
 
-// NewInode initializes a new DriveItem
+// NewInode initializes a new Inode
 func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	itemParent := &graph.DriveItemParent{ID: "", Path: ""}
 	if parent != nil {
@@ -417,6 +417,13 @@ func (i *Inode) HasChanges() bool {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
 	return i.hasChanges
+}
+
+// HasChildren returns true if the item has more than 0 children
+func (i *Inode) HasChildren() bool {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	return len(i.children) > 0
 }
 
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
