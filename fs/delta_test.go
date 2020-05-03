@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
@@ -221,5 +222,71 @@ func TestDeltaBadContentInCache(t *testing.T) {
 	if bytes.HasPrefix(contents, []byte("wrong")) {
 		t.Fatalf("File contents were wrong! Got \"%s\", wanted \"correct contents\"",
 			string(contents))
+	}
+}
+
+// Check that folders are deleted only when empty after syncing the complete set of
+// changes.
+func TestDeltaFolderDeletion(t *testing.T) {
+	t.Parallel()
+	failOnErr(t, os.MkdirAll(filepath.Join(DeltaDir, "nested/directory"), 0755))
+	nested, err := graph.GetItemPath("/onedriver_tests/delta/nested", auth)
+	failOnErr(t, err)
+	failOnErr(t, graph.Remove(nested.ID, auth))
+
+	// now poll and wait for deletion
+	var inodes []os.FileInfo
+	for i := 0; i < retrySeconds; i++ {
+		time.Sleep(time.Second)
+		var found bool
+		inodes, _ = ioutil.ReadDir(DeltaDir)
+		for _, inode := range inodes {
+			if inode.Name() == "nested" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+
+	var failures string
+	for _, inode := range inodes {
+		failures = failures + " " + inode.Name()
+	}
+
+	t.Fatalf("\"nested/\" directory was not deleted. Items in directory: %s", failures)
+}
+
+// We should only perform a delta deletion of a folder if it was nonempty
+func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
+	t.Parallel()
+	cache := NewCache(auth, "test_delta_folder_deletion_nonempty.db")
+	dir := NewInode("folder", 0755|fuse.S_IFDIR, nil)
+	file := NewInode("file", 0644|fuse.S_IFREG, nil)
+	cache.InsertPath("/folder", nil, dir)
+	cache.InsertPath("/folder/file", nil, file)
+
+	delta := &Inode{
+		DriveItem: graph.DriveItem{
+			ID:      dir.ID(),
+			Parent:  &graph.DriveItemParent{ID: dir.ParentID()},
+			Deleted: &graph.Deleted{State: "softdeleted"},
+		},
+		mode: 0755 | fuse.S_IFDIR,
+	}
+	err := cache.applyDelta(delta)
+	if cache.GetID(delta.ID()) == nil {
+		t.Fatal("Folder should still be present")
+	}
+	if err == nil {
+		t.Fatal("A delta deletion of a non-empty folder was not an error")
+	}
+
+	cache.DeletePath("/folder/file")
+	cache.applyDelta(delta)
+	if cache.GetID(delta.ID()) != nil {
+		t.Fatal("Still found folder after emptying it first (the correct way).")
 	}
 }
