@@ -258,6 +258,7 @@ func (c *Cache) DeleteID(id string) {
 		parent.mutex.Unlock()
 	}
 	c.metadata.Delete(id)
+	c.uploads.CancelUpload(id)
 }
 
 // only used for parsing
