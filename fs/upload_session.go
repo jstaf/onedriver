@@ -243,13 +243,15 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				"id":      u.ID,
 				"chunk":   i,
 				"nchunks": nchunks,
+				"status":  status,
 			}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
 			time.Sleep(time.Duration(backoff) * time.Second)
 			_, status, err = u.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil { // a serious, non 4xx/5xx error
 				log.WithFields(log.Fields{
-					"id":  u.ID,
-					"err": err,
+					"id":     u.ID,
+					"err":    err,
+					"status": status,
 				}).Error("Failed while retrying chunk upload after server-side error.")
 				u.setState(errored, err)
 				return err
