@@ -134,7 +134,10 @@ func (u *UploadManager) finishUpload(id string) {
 		session.cancel(u.auth)
 	}
 	u.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(UPLOADS).Delete([]byte(id))
+		if b := tx.Bucket(UPLOADS); b != nil {
+			b.Delete([]byte(id))
+		}
+		return nil
 	})
 	delete(u.sessions, id)
 }
