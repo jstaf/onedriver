@@ -36,6 +36,10 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, auth *graph.Auth) *Up
 		// finished. The most likely cause of this is that the user shut off
 		// their computer or closed the program after starting the upload.
 		b := tx.Bucket(UPLOADS)
+		if b == nil {
+			// bucket does not exist yet, bail out early
+			return nil
+		}
 		return b.ForEach(func(key []byte, val []byte) error {
 			session := &UploadSession{}
 			err := json.Unmarshal(val, session)
@@ -78,6 +82,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 				switch session.getState() {
 				case notStarted:
 					go session.Upload(u.auth)
+
 				case errored:
 					session.retries++
 					if session.retries > 5 {
@@ -98,6 +103,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 					}).Warning("Upload session failed, will retry from beginning.")
 					session.cancel(u.auth) // cancel large sessions
 					session.setState(notStarted, nil)
+
 				case complete:
 					u.finishUpload(session.ID)
 				}
