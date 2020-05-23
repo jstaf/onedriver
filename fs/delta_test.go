@@ -30,8 +30,11 @@ func TestDeltaMkdir(t *testing.T) {
 	for i := 0; i < retrySeconds; i++ {
 		time.Sleep(time.Second)
 		st, err := os.Stat(filepath.Join(DeltaDir, "first"))
-		if err != nil && st.Mode().IsDir() {
-			return // yay
+		if err == nil {
+			if st.Mode().IsDir() {
+				return // yay
+			}
+			t.Fatalf("%s was not a directory", filepath.Join(DeltaDir, "first"))
 		}
 	}
 	t.Fatalf("%s not found.", filepath.Join(DeltaDir, "first"))
