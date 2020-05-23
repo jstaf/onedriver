@@ -75,7 +75,8 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 }
 
 // AsJSON converts a DriveItem to JSON for use with local storage. Not used with
-// the API.
+// the API. FIXME: If implemented as MarshalJSON, this will break delta syncs
+// for business accounts. Don't ask me why.
 func (i *Inode) AsJSON() []byte {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
@@ -89,7 +90,8 @@ func (i *Inode) AsJSON() []byte {
 }
 
 // NewInodeJSON converts JSON to a *DriveItem when loading from local storage. Not
-// used with the API.
+// used with the API. FIXME: If implemented as UnmarshalJSON, this will break
+// delta syncs for business accounts. Don't ask me why.
 func NewInodeJSON(data []byte) (*Inode, error) {
 	var raw SerializeableInode
 	if err := json.Unmarshal(data, &raw); err != nil {
