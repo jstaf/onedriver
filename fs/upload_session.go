@@ -47,6 +47,15 @@ type UploadSession struct {
 	error // embedded error tracks errors that killed an upload
 }
 
+// MarshalJSON implements a custom JSON marshaler to avoid race conditions
+func (u *UploadSession) MarshalJSON() ([]byte, error) {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+
+	type SerializeableUploadSession UploadSession
+	return json.Marshal((*SerializeableUploadSession)(u))
+}
+
 // UploadSessionPost is the initial post used to create an upload session
 type UploadSessionPost struct {
 	Name             string `json:"name,omitempty"`

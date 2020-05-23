@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 
 	// create paging test files before the delta thread is created
 	os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
-	createPagingTestFiles()
+	//createPagingTestFiles()
 	go fsCache.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business
