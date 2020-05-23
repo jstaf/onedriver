@@ -27,12 +27,14 @@ func TestDeltaMkdir(t *testing.T) {
 	failOnErr(t, err)
 
 	// give the delta thread time to fetch the item
-	time.Sleep(10 * time.Second)
-	st, err := os.Stat(filepath.Join(DeltaDir, "first"))
-	failOnErr(t, err)
-	if !st.Mode().IsDir() {
-		t.Fatalf("%s was not a directory!", filepath.Join(DeltaDir, "first"))
+	for i := 0; i < retrySeconds; i++ {
+		time.Sleep(time.Second)
+		st, err := os.Stat(filepath.Join(DeltaDir, "first"))
+		if err != nil && st.Mode().IsDir() {
+			return // yay
+		}
 	}
+	t.Fatalf("%s not found.", filepath.Join(DeltaDir, "first"))
 }
 
 // We create a directory through the cache, then delete through the API and see
@@ -141,7 +143,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 10)
 	body, _ := graph.GetItemContent(inode.ID(), auth)
 	if bytes.Compare(body, newContent) != 0 {
 		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
