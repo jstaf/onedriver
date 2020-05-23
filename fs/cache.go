@@ -173,7 +173,8 @@ func (c *Cache) GetID(id string) *Inode {
 			data := tx.Bucket(METADATA).Get([]byte(id))
 			var err error
 			if data != nil {
-				found, err = NewInodeJSON(data)
+				found = &Inode{}
+				err = json.Unmarshal(data, found)
 			}
 			return err
 		})
@@ -560,7 +561,7 @@ func (c *Cache) SerializeAll() {
 	c.metadata.Range(func(key interface{}, value interface{}) bool {
 		c.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)
-			contents := value.(*Inode).AsJSON()
+			contents, _ := json.Marshal(value.(*Inode))
 			b := tx.Bucket(METADATA)
 			b.Put([]byte(id), contents)
 			if id == c.root {
