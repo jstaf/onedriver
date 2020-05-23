@@ -74,33 +74,33 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	}
 }
 
-// MarshalJSON converts a DriveItem to JSON for use with local storage. Not used
-// with the API.
-func (i *Inode) MarshalJSON() ([]byte, error) {
+// AsJSON converts a DriveItem to JSON for use with local storage. Not used with
+// the API.
+func (i *Inode) AsJSON() []byte {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return json.Marshal(SerializeableInode{
+	data, _ := json.Marshal(SerializeableInode{
 		DriveItem: i.DriveItem,
 		Children:  i.children,
 		Subdir:    i.subdir,
 		Mode:      i.mode,
 	})
+	return data
 }
 
-// UnmarshalJSON converts JSON to an Inode when loading from local storage.
-// Not used with the API.
-func (i *Inode) UnmarshalJSON(data []byte) error {
+// NewInodeJSON converts JSON to a *DriveItem when loading from local storage. Not
+// used with the API.
+func NewInodeJSON(data []byte) (*Inode, error) {
 	var raw SerializeableInode
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return nil, err
 	}
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
-	i.DriveItem = raw.DriveItem
-	i.children = raw.Children
-	i.mode = raw.Mode
-	i.subdir = raw.Subdir
-	return nil
+	return &Inode{
+		DriveItem: raw.DriveItem,
+		children:  raw.Children,
+		mode:      raw.Mode,
+		subdir:    raw.Subdir,
+	}, nil
 }
 
 // NewInodeDriveItem creates a new DriveItem from an Inode
