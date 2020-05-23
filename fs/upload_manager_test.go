@@ -59,14 +59,13 @@ func TestUploadDiskSerialization(t *testing.T) {
 		return b.Put([]byte(session.ID), payload)
 	})
 
-	manager := NewUploadManager(time.Second, db, auth)
-	if _, exists := manager.sessions[session.ID]; !exists {
-		t.Fatal("Could not find session after unmarshaling from disk.")
-	}
-
-	time.Sleep(5 * time.Second)
+	NewUploadManager(time.Second, db, auth)
+	time.Sleep(10 * time.Second)
 	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.txt", auth)
 	if err != nil || driveItem == nil {
 		t.Fatal("Could not find uploaded file after unserializing from disk and resuming upload.")
+	}
+	if driveItem.Size == 0 {
+		t.Fatal("Size was 0 - the upload was never completed.")
 	}
 }
