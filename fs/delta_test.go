@@ -189,7 +189,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("local"), 0644))
 
 	// file has been changed both remotely and locally
-	time.Sleep(time.Second * retrySeconds)
+	time.Sleep(time.Second * 15)
 	content, err := ioutil.ReadFile(fpath)
 	failOnErr(t, err)
 
