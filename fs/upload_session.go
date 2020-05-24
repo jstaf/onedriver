@@ -30,19 +30,30 @@ const (
 
 // UploadSession contains a snapshot of the file we're uploading. We have to
 // take the snapshot or the file may have changed on disk during upload (which
-// would break the upload).
+// would break the upload). It is not recommended to directly deserialize into
+// this structure from API responses in case Microsoft ever adds a size, data,
+// or modTime field to the response.
 type UploadSession struct {
 	ID                 string    `json:"id"`
 	UploadURL          string    `json:"uploadUrl"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
-	Size               uint64    `json:"-"`
-	data               []byte
-	modtime            time.Time
+	Size               uint64    `json:"size,omitempty"`
+	Data               []byte    `json:"data,omitempty"`
+	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
 	mutex sync.Mutex
 	state int
 	error // embedded error tracks errors that killed an upload
+}
+
+// MarshalJSON implements a custom JSON marshaler to avoid race conditions
+func (u *UploadSession) MarshalJSON() ([]byte, error) {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+
+	type SerializeableUploadSession UploadSession
+	return json.Marshal((*SerializeableUploadSession)(u))
 }
 
 // UploadSessionPost is the initial post used to create an upload session
@@ -95,8 +106,8 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	session := UploadSession{
 		ID:      inode.DriveItem.ID,
 		Size:    inode.DriveItem.Size,
-		data:    make([]byte, inode.DriveItem.Size),
-		modtime: *inode.DriveItem.ModTime,
+		Data:    make([]byte, inode.DriveItem.Size),
+		ModTime: *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
 		log.WithFields(log.Fields{
@@ -106,7 +117,7 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 		defer inode.mutex.RUnlock()
 		return nil, errors.New("inode data was nil")
 	}
-	copy(session.data, *inode.data)
+	copy(session.Data, *inode.data)
 	inode.mutex.RUnlock()
 	return &session, nil
 }
@@ -150,7 +161,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	request, _ := http.NewRequest(
 		"PUT",
 		u.UploadURL,
-		bytes.NewReader((u.data)[offset:end]),
+		bytes.NewReader((u.Data)[offset:end]),
 	)
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
@@ -179,7 +190,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		_, err := graph.Put(
 			fmt.Sprintf("/me/drive/items/%s/content", u.ID),
 			auth,
-			bytes.NewReader(u.data),
+			bytes.NewReader(u.Data),
 		)
 		if err != nil && strings.Contains(err.Error(), "resourceModified") {
 			// retry the request after a second, likely the server is having issues
@@ -187,7 +198,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			_, err = graph.Put(
 				fmt.Sprintf("/me/drive/items/%s/content", u.ID),
 				auth,
-				bytes.NewReader(u.data),
+				bytes.NewReader(u.Data),
 			)
 		}
 
@@ -203,7 +214,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	sessionPostData, _ := json.Marshal(UploadSessionPost{
 		ConflictBehavior: "replace",
 		FileSystemInfo: FileSystemInfo{
-			LastModifiedDateTime: u.modtime,
+			LastModifiedDateTime: u.ModTime,
 		},
 	})
 	resp, err := graph.Post(
@@ -215,11 +226,16 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		u.setState(errored, err)
 		return err
 	}
-	// populates UploadURL/expiration
-	if err = json.Unmarshal(resp, &u); err != nil {
+	// populate UploadURL/expiration - we unmarshal into a fresh session here
+	// just in case the API does something silly at a later date and overwrites
+	// a field it shouldn't.
+	tmp := UploadSession{}
+	if err = json.Unmarshal(resp, &tmp); err != nil {
 		u.setState(errored, err)
 		return err
 	}
+	u.UploadURL = tmp.UploadURL
+	u.ExpirationDateTime = tmp.ExpirationDateTime
 
 	// api upload session created successfully, now do actual content upload
 	nchunks := int(math.Ceil(float64(u.Size) / float64(chunkSize)))
@@ -243,13 +259,15 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				"id":      u.ID,
 				"chunk":   i,
 				"nchunks": nchunks,
+				"status":  status,
 			}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
 			time.Sleep(time.Duration(backoff) * time.Second)
 			_, status, err = u.uploadChunk(auth, uint64(i)*chunkSize)
 			if err != nil { // a serious, non 4xx/5xx error
 				log.WithFields(log.Fields{
-					"id":  u.ID,
-					"err": err,
+					"id":     u.ID,
+					"err":    err,
+					"status": status,
 				}).Error("Failed while retrying chunk upload after server-side error.")
 				u.setState(errored, err)
 				return err

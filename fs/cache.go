@@ -90,7 +90,7 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
-	cache.uploads = NewUploadManager(2*time.Second, auth)
+	cache.uploads = NewUploadManager(2*time.Second, db, auth)
 
 	if !cache.IsOffline() {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
