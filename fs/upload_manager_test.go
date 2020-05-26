@@ -72,7 +72,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 
 // There are apparently some edge cases where an upload can remain 0 bytes, even
 // after a successful upload. We need to monitor for these cases and mark these
-// as failed.
+// as failed so they can be retried.
 func TestUploadZeroSizeRetry(t *testing.T) {
 	t.Parallel()
 

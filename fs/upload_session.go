@@ -39,6 +39,8 @@ type UploadSession struct {
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
 	Data               []byte    `json:"data,omitempty"`
+	Checksum           string    `json:"checksum,omitempty"`
+	ChecksumType       string    `json:"checksumType,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
@@ -102,6 +104,8 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	}
 
 	inode.mutex.RLock()
+	defer inode.mutex.RUnlock()
+
 	// create a generic session for all files
 	session := UploadSession{
 		ID:      inode.DriveItem.ID,
@@ -114,11 +118,23 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 			"id":   inode.DriveItem.ID,
 			"name": inode.DriveItem.Name,
 		}).Error("Tried to dereference a nil pointer.")
-		defer inode.mutex.RUnlock()
-		return nil, errors.New("inode data was nil")
+		return nil, errors.New("Inode data was nil")
 	}
 	copy(session.Data, *inode.data)
-	inode.mutex.RUnlock()
+
+	if inode.DriveItem.File.Hashes.SHA1Hash != "" {
+		session.Checksum = inode.DriveItem.File.Hashes.SHA1Hash
+		session.ChecksumType = "SHA1Hash"
+	} else if inode.DriveItem.File.Hashes.QuickXorHash != "" {
+		session.Checksum = inode.DriveItem.File.Hashes.QuickXorHash
+		session.ChecksumType = "QuickXorHash"
+	} else {
+		log.WithFields(log.Fields{
+			"id":   inode.DriveItem.ID,
+			"name": inode.DriveItem.Name,
+		}).Error("Both inode checksums were nil!")
+		return nil, errors.New("Both inode checksums were nil")
+	}
 	return &session, nil
 }
 
@@ -179,6 +195,21 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	return response, resp.StatusCode, nil
 }
 
+// verifyRemoteChecksum confirms that the newly-uploaded remote file matches the
+// local checksum. Returns false if there is a mismatch. TODO: remove in favor
+// of simply checking the response from the server after upload of the final
+// chunk (or only chunk)
+func (u *UploadSession) verifyRemoteChecksum(auth *graph.Auth) bool {
+	remote, err := graph.GetItem(u.ID, auth)
+	if err != nil {
+		return false
+	}
+	if u.ChecksumType == "SHA1Hash" {
+		return remote.File.Hashes.SHA1Hash == u.Checksum
+	}
+	return remote.File.Hashes.QuickXorHash == u.Checksum
+}
+
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time. The uploadSession.error
 // field contains errors to be handled if called as a goroutine.
@@ -202,10 +233,11 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			)
 		}
 
-		u.setState(complete, nil)
-		if err != nil {
+		if err != nil || !u.verifyRemoteChecksum(auth) {
 			// upload has failed
 			u.setState(errored, err)
+		} else {
+			u.setState(complete, nil)
 		}
 		return err
 	}
@@ -280,6 +312,12 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			u.setState(errored, err)
 			return err
 		}
+	}
+
+	if !u.verifyRemoteChecksum(auth) {
+		err = errors.New("checksums did not match")
+		u.setState(errored, err)
+		return err
 	}
 	u.setState(complete, nil)
 	log.WithField("id", u.ID).Debug("Upload completed!")
