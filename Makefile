@@ -5,8 +5,9 @@ COMMIT = $(shell git rev-parse HEAD)
 COMMIT_SHORT = $(shell git rev-parse HEAD | head -c 8)
 COMMIT_DATE = $(shell git log -1 --format=%cs | sed 's/-//g')
 RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
-RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g').$(COMMIT_DATE)git$(COMMIT_SHORT)
+RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
 RPM_DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
+RPM_FULL_VERSION = $(RPM_VERSION)-$(RPM_RELEASE).$(COMMIT_DATE)git$(COMMIT_SHORT)$(RPM_DIST)
 
 # test-specific variables
 TEST_UID = $(shell id -u)
@@ -30,7 +31,7 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
 
 # run all tests, build all artifacts, compute checksums for release
 all: test checksums.txt
-checksums.txt: onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
+checksums.txt: onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
 	sha256sum $^ > checksums.txt
 
 
@@ -66,16 +67,16 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 
 
 # build srpm package used for rpm build with mock
-srpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm 
-onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm: onedriver-$(RPM_VERSION).tar.gz
+srpm: onedriver-$(RPM_FULL_VERSION).src.rpm 
+onedriver-$(RPM_FULL_VERSION).src.rpm: onedriver-$(RPM_VERSION).tar.gz
 	rpmbuild -ts $<
 	cp $$(rpm --eval '%{_topdir}')/SRPMS/$@ .
 
 
 # build the rpm for the default mock target
 MOCK_CONFIG=$(shell readlink -f /etc/mock/default.cfg | grep -oP '[a-z0-9-]+x86_64')
-rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm
-onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).x86_64.rpm: onedriver-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm
+rpm: onedriver-$(RPM_FULL_VERSION).x86_64.rpm
+onedriver-$(RPM_FULL_VERSION).x86_64.rpm: onedriver-$(RPM_FULL_VERSION).src.rpm
 	mock -r /etc/mock/$(MOCK_CONFIG).cfg $<
 	cp /var/lib/mock/$(MOCK_CONFIG)/result/$@ .
 
