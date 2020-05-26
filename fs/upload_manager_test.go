@@ -69,3 +69,50 @@ func TestUploadDiskSerialization(t *testing.T) {
 		t.Fatal("Size was 0 - the upload was never completed.")
 	}
 }
+
+// There are apparently some edge cases where an upload can remain 0 bytes, even
+// after a successful upload. We need to monitor for these cases and mark these
+// as failed.
+func TestUploadZeroSizeRetry(t *testing.T) {
+	t.Parallel()
+
+	// write a file and get its id
+	contents := []byte("fudge")
+	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "upload_fail_empty.txt"), contents, 0644))
+	inode, err := fsCache.GetPath("/onedriver_tests/upload_fail_empty.txt", nil)
+	failOnErr(t, err)
+
+	// kill the session before it gets uploaded
+	fsCache.uploads.CancelUpload(inode.ID())
+
+	// verify its size is still 0 server-side
+	remote, err := graph.GetItem(inode.ID(), auth)
+	failOnErr(t, err)
+	if remote == nil {
+		t.Fatal("A placeholder file was never uploaded for upload_fail_empty.txt." +
+			"This is a bug in this test.")
+	}
+	if remote.Size > 0 {
+		t.Fatal("The file finished its upload before it could be canceled. " +
+			"This is a bug in this test.")
+	}
+
+	// create a new session, mark it as completed, then inject it into the
+	// uploads queue before the UploadManager can get its hands on it.
+	inode.data = &contents
+	session, err := NewUploadSession(inode, auth)
+	if err != nil || session == nil {
+		t.Fatalf("Could not create upload session: %s", err)
+	}
+	session.setState(complete, nil)
+	fsCache.uploads.queue <- session
+
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		remote, _ = graph.GetItem(inode.ID(), auth)
+		if remote.Size == inode.Size() {
+			return
+		}
+	}
+	t.Fatal("The incomplete upload for \"upload_fail_empty.txt\" was not detected and restarted.")
+}

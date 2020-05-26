@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	mountLoc = "mount"
-	TestDir  = mountLoc + "/onedriver_tests"
-	DeltaDir = TestDir + "/delta"
+	mountLoc     = "mount"
+	TestDir      = mountLoc + "/onedriver_tests"
+	DeltaDir     = TestDir + "/delta"
+	retrySeconds = 60
 )
 
 var auth *graph.Auth

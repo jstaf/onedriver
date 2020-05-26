@@ -13,8 +13,6 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
-const retrySeconds = 60
-
 // In this test, we create a directory through the API, and wait to see if
 // the cache picks it up post-creation.
 func TestDeltaMkdir(t *testing.T) {
