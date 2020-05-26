@@ -72,7 +72,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 
 // There are apparently some edge cases where an upload can remain 0 bytes, even
 // after a successful upload. We need to monitor for these cases and mark these
-// as failed so they can be retried.
+// as failed so they can be retried. TODO: this test sucks and should be rewritten
 func TestUploadZeroSizeRetry(t *testing.T) {
 	t.Parallel()
 
@@ -97,22 +97,16 @@ func TestUploadZeroSizeRetry(t *testing.T) {
 			"This is a bug in this test.")
 	}
 
-	// create a new session, mark it as completed, then inject it into the
-	// uploads queue before the UploadManager can get its hands on it.
+	// create a new session, check the remote checksums the way the app would, then
+	// upload manually and re-check
 	inode.data = &contents
 	session, err := NewUploadSession(inode, auth)
-	if err != nil || session == nil {
-		t.Fatalf("Could not create upload session: %s", err)
+	if session.verifyRemoteChecksum(auth) {
+		t.Fatal("Checksums should not match before reupload.")
 	}
-	session.setState(complete, nil)
-	fsCache.uploads.queue <- session
 
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		remote, _ = graph.GetItem(inode.ID(), auth)
-		if remote.Size == inode.Size() {
-			return
-		}
+	failOnErr(t, session.Upload(auth))
+	if !session.verifyRemoteChecksum(auth) {
+		t.Fatal("Checksums must match post upload.")
 	}
-	t.Fatal("The incomplete upload for \"upload_fail_empty.txt\" was not detected and restarted.")
 }
