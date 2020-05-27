@@ -9,9 +9,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// UPLOADS is just a constant to avoid typos in bucket names when referenced
-// elsewhere
-var UPLOADS = []byte("uploads")
+var bucketUploads = []byte("uploads")
 
 // UploadManager is used to manage and retry uploads.
 type UploadManager struct {
@@ -35,7 +33,7 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, auth *graph.Auth) *Up
 		// Add any incomplete sessions from disk - any sessions here were never
 		// finished. The most likely cause of this is that the user shut off
 		// their computer or closed the program after starting the upload.
-		b := tx.Bucket(UPLOADS)
+		b := tx.Bucket(bucketUploads)
 		if b == nil {
 			// bucket does not exist yet, bail out early
 			return nil
@@ -44,6 +42,9 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, auth *graph.Auth) *Up
 			session := &UploadSession{}
 			err := json.Unmarshal(val, session)
 			if err != nil {
+				log.WithField(
+					"err", err,
+				).Error("Error while restoring upload sessions from disk.")
 				return err
 			}
 			session.cancel(auth) // uploads are currently non-resumable
@@ -69,7 +70,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 				// persist to disk in case the user shuts off their computer or
 				// kills onedriver prematurely
 				contents, _ := json.Marshal(session)
-				b, _ := tx.CreateBucketIfNotExists(UPLOADS)
+				b, _ := tx.CreateBucketIfNotExists(bucketUploads)
 				return b.Put([]byte(session.ID), contents)
 			})
 			u.sessions[session.ID] = session
@@ -80,10 +81,10 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 		case <-ticker.C: // periodically start uploads, or remove them if done/failed
 			for _, session := range u.sessions {
 				switch session.getState() {
-				case notStarted:
+				case uploadNotStarted:
 					go session.Upload(u.auth)
 
-				case errored:
+				case uploadErrored:
 					session.retries++
 					if session.retries > 5 {
 						log.WithFields(log.Fields{
@@ -102,9 +103,10 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 						"err": session.Error(),
 					}).Warning("Upload session failed, will retry from beginning.")
 					session.cancel(u.auth) // cancel large sessions
-					session.setState(notStarted, nil)
+					session.setState(uploadNotStarted, nil)
 
-				case complete:
+				case uploadComplete:
+					log.WithField("id", session.ID).Debug("Upload completed!")
 					u.finishUpload(session.ID)
 				}
 			}
@@ -134,7 +136,7 @@ func (u *UploadManager) finishUpload(id string) {
 		session.cancel(u.auth)
 	}
 	u.db.Update(func(tx *bolt.Tx) error {
-		if b := tx.Bucket(UPLOADS); b != nil {
+		if b := tx.Bucket(bucketUploads); b != nil {
 			b.Delete([]byte(id))
 		}
 		return nil
