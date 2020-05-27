@@ -74,7 +74,7 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 			c.Unlock()
 
 			c.db.Update(func(tx *bolt.Tx) error {
-				return tx.Bucket(DELTA).Put([]byte("deltaLink"), []byte(c.deltaLink))
+				return tx.Bucket(bucketDelta).Put([]byte("deltaLink"), []byte(c.deltaLink))
 			})
 
 			// wait until next interval

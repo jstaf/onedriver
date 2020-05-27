@@ -33,9 +33,9 @@ type Cache struct {
 
 // boltdb buckets
 var (
-	CONTENT  = []byte("content")
-	METADATA = []byte("metadata")
-	DELTA    = []byte("delta")
+	bucketContent  = []byte("content")
+	bucketMetadata = []byte("metadata")
+	bucketDelta    = []byte("delta")
 )
 
 // NewCache creates a new Cache
@@ -45,9 +45,9 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
 	}
 	db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(CONTENT)
-		tx.CreateBucketIfNotExists(METADATA)
-		tx.CreateBucketIfNotExists(DELTA)
+		tx.CreateBucketIfNotExists(bucketContent)
+		tx.CreateBucketIfNotExists(bucketMetadata)
+		tx.CreateBucketIfNotExists(bucketDelta)
 		return nil
 	})
 	cache := &Cache{
@@ -68,7 +68,7 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 			}
 			// when offline, we load the cache deltaLink from disk
 			cache.db.View(func(tx *bolt.Tx) error {
-				if link := tx.Bucket(DELTA).Get([]byte("deltaLink")); link != nil {
+				if link := tx.Bucket(bucketDelta).Get([]byte("deltaLink")); link != nil {
 					cache.deltaLink = string(link)
 				} else {
 					// Only reached if a previous online session never survived
@@ -170,7 +170,7 @@ func (c *Cache) GetID(id string) *Inode {
 		// necessary while transitioning from offline->online)
 		var found *Inode
 		c.db.View(func(tx *bolt.Tx) error {
-			data := tx.Bucket(METADATA).Get([]byte(id))
+			data := tx.Bucket(bucketMetadata).Get([]byte(id))
 			var err error
 			if data != nil {
 				found, err = NewInodeJSON(data)
@@ -511,7 +511,7 @@ func (c *Cache) MovePath(oldPath string, newPath string, auth *graph.Auth) error
 func (c *Cache) GetContent(id string) []byte {
 	var content []byte // nil
 	c.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(CONTENT)
+		b := tx.Bucket(bucketContent)
 		if tmp := b.Get([]byte(id)); tmp != nil {
 			content = make([]byte, len(tmp))
 			copy(content, tmp)
@@ -524,7 +524,7 @@ func (c *Cache) GetContent(id string) []byte {
 // InsertContent writes file content to disk.
 func (c *Cache) InsertContent(id string, content []byte) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(CONTENT)
+		b := tx.Bucket(bucketContent)
 		return b.Put([]byte(id), content)
 	})
 }
@@ -532,7 +532,7 @@ func (c *Cache) InsertContent(id string, content []byte) error {
 // DeleteContent deletes content from disk.
 func (c *Cache) DeleteContent(id string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(CONTENT)
+		b := tx.Bucket(bucketContent)
 		return b.Delete([]byte(id))
 	})
 }
@@ -540,7 +540,7 @@ func (c *Cache) DeleteContent(id string) error {
 // MoveContent moves content from one ID to another
 func (c *Cache) MoveContent(oldID string, newID string) error {
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(CONTENT)
+		b := tx.Bucket(bucketContent)
 		content := b.Get([]byte(oldID))
 		if content == nil {
 			return errors.New("Content not found for ID: " + oldID)
@@ -561,7 +561,7 @@ func (c *Cache) SerializeAll() {
 		c.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)
 			contents := value.(*Inode).AsJSON()
-			b := tx.Bucket(METADATA)
+			b := tx.Bucket(bucketMetadata)
 			b.Put([]byte(id), contents)
 			if id == c.root {
 				// root item must be updated manually (since there's actually
