@@ -1,8 +1,10 @@
 package fs
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -67,5 +69,25 @@ func TestUploadDiskSerialization(t *testing.T) {
 	}
 	if driveItem.Size == 0 {
 		t.Fatal("Size was 0 - the upload was never completed.")
+	}
+}
+
+// Make sure that uploading the same file multiple times works exactly as it should.
+func TestRepeatedUploads(t *testing.T) {
+	t.Parallel()
+	fname := filepath.Join(TestDir, "repeated_upload.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte("initial content"), 0644))
+	inode, _ := fsCache.GetPath("/onedriver_tests/repeated_upload.txt", auth)
+
+	for i := 0; i < 5; i++ {
+		uploadme := []byte(fmt.Sprintf("iteration: %d\n", i))
+		failOnErr(t, ioutil.WriteFile(fname, uploadme, 0644))
+		time.Sleep(5 * time.Second)
+		content, err := graph.GetItemContent(inode.ID(), auth)
+		failOnErr(t, err)
+
+		if !bytes.Equal(content, uploadme) {
+			t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)
+		}
 	}
 }
