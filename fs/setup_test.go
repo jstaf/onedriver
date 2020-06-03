@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	mountLoc = "mount"
-	TestDir  = mountLoc + "/onedriver_tests"
-	DeltaDir = TestDir + "/delta"
+	mountLoc     = "mount"
+	TestDir      = mountLoc + "/onedriver_tests"
+	DeltaDir     = TestDir + "/delta"
+	retrySeconds = 60
 )
 
 var auth *graph.Auth
@@ -34,6 +35,14 @@ var fsCache *Cache // used to inject bad content into the fs for some tests
 // avoid having to repeatedly recreate auth_tokens.json and juggle multiple auth
 // sessions.
 func TestMain(m *testing.M) {
+	// determine if we're running a single test in vscode or something
+	var singleTest bool
+	for _, arg := range os.Args {
+		if strings.Contains(arg, "-test.run") {
+			singleTest = true
+		}
+	}
+
 	os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
@@ -79,8 +88,10 @@ func TestMain(m *testing.M) {
 	os.Mkdir(DeltaDir, 0755)
 
 	// create paging test files before the delta thread is created
-	os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
-	createPagingTestFiles()
+	if !singleTest {
+		os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
+		createPagingTestFiles()
+	}
 	go fsCache.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business

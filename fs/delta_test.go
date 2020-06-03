@@ -13,8 +13,6 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
-const retrySeconds = 60
-
 // In this test, we create a directory through the API, and wait to see if
 // the cache picks it up post-creation.
 func TestDeltaMkdir(t *testing.T) {
@@ -142,6 +140,11 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	newContent := []byte("because it has been changed remotely!")
 	inode.DriveItem.Size = uint64(len(newContent))
 	inode.data = &newContent
+	if fsCache.DriveType() == "personal" {
+		inode.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(&newContent)
+	} else {
+		inode.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(&newContent)
+	}
 	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
@@ -181,6 +184,12 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("remote")
 	inode.data = &newContent
+	inode.DriveItem.Size = uint64(len(newContent))
+	if fsCache.DriveType() == "personal" {
+		inode.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(&newContent)
+	} else {
+		inode.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(&newContent)
+	}
 	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
