@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	// determine if we're running a single test in vscode or something
 	var singleTest bool
 	for _, arg := range os.Args {
-		if strings.Contains(arg, "-test.run=^(") {
+		if strings.Contains(arg, "-test.run") {
 			singleTest = true
 		}
 	}

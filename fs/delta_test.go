@@ -184,6 +184,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("remote")
 	inode.data = &newContent
+	inode.DriveItem.Size = uint64(len(newContent))
 	if fsCache.DriveType() == "personal" {
 		inode.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(&newContent)
 	} else {
@@ -191,7 +192,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	}
 	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
-	session.Upload(auth) //FIXME fails test if error is checked
+	failOnErr(t, session.Upload(auth))
 
 	// now change it locally
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("local"), 0644))
