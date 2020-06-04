@@ -29,6 +29,14 @@ jobs:
           sudo apt update
           sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli
 
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            unshare
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Compile newer unshare version
         run: make unshare
 
@@ -36,6 +44,9 @@ jobs:
         run: |
           go get golang.org/x/tools/cmd/goimports
           [ -z "$(goimports -l .)" ]
+
+      - name: Check that the app compiles successfully
+        run: make
 
       - name: Copy auth tokens from S3
         run: |
