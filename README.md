@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/jstaf/onedriver.svg?branch=master)](https://travis-ci.org/jstaf/onedriver)
+![Run tests](https://github.com/jstaf/onedriver/workflows/Run%20tests/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/jstaf/onedriver/badge.svg?branch=master)](https://coveralls.io/github/jstaf/onedriver?branch=master)
 [![Copr build status](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/)
 
