@@ -1,0 +1,83 @@
+name: Run tests
+on: push
+jobs:
+  turnstyle:
+    name: Limit concurrent runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/turnstyle@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    needs: turnstyle
+    strategy:
+      matrix:
+        account_type:
+          - personal
+          - business
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "1.14"
+
+      - name: Install apt dependencies
+        run: |
+          sudo apt update
+          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            unshare
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Compile newer unshare version
+        run: make unshare
+
+      - name: Check go formatting
+        run: |
+          go get golang.org/x/tools/cmd/goimports
+          [ -z "$(goimports -l .)" ]
+
+      - name: Check that the app compiles successfully
+        run: make
+
+      - name: Copy auth tokens from S3
+        run: |
+          aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
+          aws s3 cp s3://fusefs-travis/dmel.fa.gz .
+          gunzip dmel.fa.gz
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ACCOUNT_TYPE: ${{ matrix.account_type }}
+
+      - name: Run tests
+        run: |
+          go test -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
+          go test -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
+          go test -c -covermode=count -coverpkg=./fs/... ./fs/offline
+          sudo ./unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
+
+      - name: Copy new auth tokens to S3
+        run: aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ACCOUNT_TYPE: ${{ matrix.account_type }}
+        if: always()
+
+      - name: Send coverage to Coveralls
+        run: |
+          go get github.com/mattn/goveralls
+          go get github.com/wadey/gocovmerge
+          gocovmerge *.coverage > coverage.out
+          goveralls -coverprofile=coverage.out -service=github
+        env:
+          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
