@@ -4,7 +4,7 @@
 %define commit_date COMMIT_DATE
 
 Name:          onedriver
-Version:       0.8.0
+Version:       0.9.0
 Release:       1.%{commit_date}git%{commit_short}%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -57,6 +57,13 @@ cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service
 
 %changelog
+* Wed Jun 3 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.0
+- Multiple OneDrive drives can now be mounted simultaneously via systemd.
+- Uploads are now retried, with failed uploads retried automatically.
+- In-progress uploads are now cached on disk and resumed the next time onedriver starts
+  if the upload is terminated prematurely (for instance, if a user shuts down their computer)
+- All uploads are now verified against checksums of their local content.
+
 * Thu Apr 2 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.8.0
 - Add a desktop launcher for single drive scenarios (better multi-drive support coming soon!).
 - Fix for directories containing more than 200 items.
