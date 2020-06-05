@@ -55,8 +55,12 @@ type SerializeableInode struct {
 func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	itemParent := &graph.DriveItemParent{ID: "", Path: ""}
 	if parent != nil {
-		itemParent.ID = parent.ID()
 		itemParent.Path = parent.Path()
+		parent.mutex.RLock()
+		itemParent.ID = parent.DriveItem.ID
+		itemParent.DriveID = parent.DriveItem.Parent.DriveID
+		itemParent.DriveType = parent.DriveItem.Parent.DriveType
+		parent.mutex.RUnlock()
 	}
 
 	var empty []byte
