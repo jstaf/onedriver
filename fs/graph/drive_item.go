@@ -7,13 +7,22 @@ import (
 	"time"
 )
 
-// DriveItemParent describes a DriveItem's parent in the Graph API (just another
-// DriveItem's ID and its path)
+// DriveTypePersonal and friends represent the possible different values for a
+// drive's type when fetched from the API.
+const (
+	DriveTypePersonal   = "personal"
+	DriveTypeBusiness   = "business"
+	DriveTypeSharepoint = "documentLibrary"
+)
+
+// DriveItemParent describes a DriveItem's parent in the Graph API
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/itemreference
 type DriveItemParent struct {
 	//TODO Path is technically available, but we shouldn't use it
-	Path string `json:"path,omitempty"`
-	ID   string `json:"id,omitempty"`
+	Path      string `json:"path,omitempty"`
+	ID        string `json:"id,omitempty"`
+	DriveID   string `json:"driveId,omitempty"`
+	DriveType string `json:"driveType,omitempty"` // personal | business | documentLibrary
 }
 
 // Folder is used for parsing only

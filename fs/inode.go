@@ -185,7 +185,7 @@ func (i *Inode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 		return syscall.EREMOTEIO
 	}
 
-	if drive.DriveType == "personal" {
+	if drive.DriveType == graph.DriveTypePersonal {
 		log.Warn("Personal OneDrive accounts do not show number of files, " +
 			"inode counts reported by onedriver will be bogus.")
 	} else if drive.Quota.Total == 0 { // <-- check for if microsoft ever fixes their API
@@ -441,7 +441,7 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 
 		// recompute hashes when saving new content
 		i.DriveItem.File = &graph.File{}
-		if i.cache.DriveType() == "personal" {
+		if i.cache.DriveType() == graph.DriveTypePersonal {
 			i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(i.data)
 		} else {
 			i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(i.data)
@@ -808,15 +808,16 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just accept the cached content.
 			hashMatch = true
-		} else if driveType == "personal" {
+		} else if driveType == graph.DriveTypePersonal {
 			hashMatch = i.VerifyChecksum(graph.SHA1Hash(&content))
-		} else if driveType == "business" {
+		} else if driveType == graph.DriveTypeBusiness || driveType == graph.DriveTypeSharepoint {
 			hashMatch = i.VerifyChecksum(graph.QuickXORHash(&content))
 		} else {
 			hashMatch = true
 			log.WithFields(log.Fields{
-				"path": path,
-				"id":   id,
+				"path":      path,
+				"driveType": driveType,
+				"id":        id,
 			}).Warn("Could not determine drive type, not checking hashes.")
 		}
 		i.mutex.RUnlock()

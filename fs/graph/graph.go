@@ -176,7 +176,7 @@ type DriveQuota struct {
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
 type Drive struct {
 	ID        string     `json:"id"`
-	DriveType string     `json:"driveType"` // personal or business
+	DriveType string     `json:"driveType"` // personal | business | documentLibrary
 	Quota     DriveQuota `json:"quota,omitempty"`
 }
 
