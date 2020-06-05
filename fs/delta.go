@@ -218,15 +218,17 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	//
 	// Do not sync if the file size is 0, as this is likely a file in the
 	// progress of being uploaded (also, no need to sync empty files).
-	if delta.ModTime() > local.ModTime() && !delta.IsDir() && delta.Size() > 0 {
+	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
 		sameContent := false
-		local.mutex.RLock()
-		if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-			sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
-		} else {
-			sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
+		if !delta.IsDir() {
+			local.mutex.RLock()
+			if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
+			} else {
+				sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
+			}
+			local.mutex.RUnlock()
 		}
-		local.mutex.RUnlock()
 
 		if !sameContent {
 			//TODO check if local has changes and rename the server copy if so
@@ -239,6 +241,8 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			local.mutex.Lock()
 			defer local.mutex.Unlock()
 			local.DriveItem.ModTime = delta.DriveItem.ModTime
+			// the rest of these are harmless when this is a directory
+			// as they will be null anyways
 			local.DriveItem.File = delta.DriveItem.File
 			local.hasChanges = false
 			local.data = nil
