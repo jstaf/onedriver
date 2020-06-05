@@ -303,3 +303,26 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 		t.Fatal("Still found folder after emptying it first (the correct way).")
 	}
 }
+
+// Some programs like LibreOffice and WPS Office will have a fit if the
+// modification times on their lockfiles is updated after they are written. This
+// test verifies that the delta thread does not modify modification times if the
+// content is unchanged.
+func TestDeltaNoModTimeUpdate(t *testing.T) {
+	fname := filepath.Join(DeltaDir, "mod_time_update.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte("a pretend lockfile"), 0644))
+	finfo, err := os.Stat(fname)
+	failOnErr(t, err)
+	mtimeOriginal := finfo.ModTime()
+
+	time.Sleep(15 * time.Second)
+	finfo, err = os.Stat(fname)
+	failOnErr(t, err)
+	mtimeNew := finfo.ModTime()
+	if !mtimeNew.Equal(mtimeOriginal) {
+		t.Fatalf(
+			"Modification time was updated even though the file did not change.\n"+
+				"Old mtime: %d, New mtime: %d \n", mtimeOriginal.Unix(), mtimeNew.Unix(),
+		)
+	}
+}
