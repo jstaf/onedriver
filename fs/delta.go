@@ -218,9 +218,9 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	//
 	// Do not sync if the file size is 0, as this is likely a file in the
 	// progress of being uploaded (also, no need to sync empty files).
-	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
+	if delta.ModTime() > local.ModTime() && !delta.IsDir() && delta.Size() > 0 {
+		sameContent := false
 		local.mutex.RLock()
-		var sameContent bool
 		if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 			sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
 		} else {
