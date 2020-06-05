@@ -442,9 +442,9 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 		// recompute hashes when saving new content
 		i.DriveItem.File = &graph.File{}
 		if i.cache.DriveType() == "personal" {
-			i.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(i.data)
+			i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(i.data)
 		} else {
-			i.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(i.data)
+			i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(i.data)
 		}
 		i.mutex.Unlock()
 
@@ -802,31 +802,26 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 	driveType := cache.DriveType()
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
-		var hashWanted, hashActual, hashType string
+		var hashMatch bool
+		i.mutex.RLock()
 		if isLocalID(id) && i.DriveItem.File == nil {
 			// only check hashes if the file has been uploaded before, otherwise
-			// we just use the zero values and accept the cached content.
-			hashType = "none"
+			// we just accept the cached content.
+			hashMatch = true
 		} else if driveType == "personal" {
-			i.mutex.RLock()
-			hashWanted = strings.ToLower(i.DriveItem.File.Hashes.SHA1Hash)
-			i.mutex.RUnlock()
-			hashActual = strings.ToLower(SHA1Hash(&content))
-			hashType = "SHA1"
+			hashMatch = i.VerifyChecksum(graph.SHA1Hash(&content))
 		} else if driveType == "business" {
-			i.mutex.RLock()
-			hashWanted = strings.ToLower(i.DriveItem.File.Hashes.QuickXorHash)
-			i.mutex.RUnlock()
-			hashActual = strings.ToLower(QuickXORHash(&content))
-			hashType = "QuickXORHash"
+			hashMatch = i.VerifyChecksum(graph.QuickXORHash(&content))
 		} else {
+			hashMatch = true
 			log.WithFields(log.Fields{
 				"path": path,
 				"id":   id,
 			}).Warn("Could not determine drive type, not checking hashes.")
 		}
+		i.mutex.RUnlock()
 
-		if hashActual == hashWanted {
+		if hashMatch {
 			// disk content is only used if the checksums match
 			log.WithFields(log.Fields{
 				"path": path,
@@ -841,12 +836,9 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 			return nil, uint32(0), 0
 		}
 		log.WithFields(log.Fields{
-			"id":          id,
-			"path":        path,
-			"drivetype":   driveType,
-			"hash_wanted": hashWanted,
-			"hash_actual": hashActual,
-			"hash_type":   hashType,
+			"id":        id,
+			"path":      path,
+			"drivetype": driveType,
 		}).Info("Not using cached item due to file hash mismatch.")
 	}
 

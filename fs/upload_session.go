@@ -202,7 +202,7 @@ func (u *UploadSession) verifyRemoteChecksum(response []byte) error {
 	if err := json.Unmarshal(response, &remote); err != nil {
 		return u.setState(uploadErrored, err)
 	}
-	if remote.File.Hashes.SHA1Hash != u.Checksum && remote.File.Hashes.QuickXorHash != u.Checksum {
+	if !remote.VerifyChecksum(u.Checksum) {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	return u.setState(uploadComplete, nil)
