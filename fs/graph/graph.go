@@ -132,7 +132,7 @@ func ResourcePath(path string) string {
 }
 
 // ChildrenPath returns the path to an item's children
-func ChildrenPath(path string) string {
+func childrenPath(path string) string {
 	if path == "/" {
 		return ResourcePath(path) + "/children"
 	}
@@ -140,7 +140,7 @@ func ChildrenPath(path string) string {
 }
 
 // ChildrenPathID returns the API resource path of an item's children
-func ChildrenPathID(id string) string {
+func childrenPathID(id string) string {
 	return "/me/drive/items/" + id + "/children"
 }
 
@@ -176,7 +176,7 @@ type DriveQuota struct {
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/drive
 type Drive struct {
 	ID        string     `json:"id"`
-	DriveType string     `json:"driveType"` // personal or business
+	DriveType string     `json:"driveType"` // personal | business | documentLibrary
 	Quota     DriveQuota `json:"quota,omitempty"`
 }
 

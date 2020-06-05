@@ -7,13 +7,22 @@ import (
 	"time"
 )
 
-// DriveItemParent describes a DriveItem's parent in the Graph API (just another
-// DriveItem's ID and its path)
+// DriveTypePersonal and friends represent the possible different values for a
+// drive's type when fetched from the API.
+const (
+	DriveTypePersonal   = "personal"
+	DriveTypeBusiness   = "business"
+	DriveTypeSharepoint = "documentLibrary"
+)
+
+// DriveItemParent describes a DriveItem's parent in the Graph API
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/itemreference
 type DriveItemParent struct {
 	//TODO Path is technically available, but we shouldn't use it
-	Path string `json:"path,omitempty"`
-	ID   string `json:"id,omitempty"`
+	Path      string `json:"path,omitempty"`
+	ID        string `json:"id,omitempty"`
+	DriveID   string `json:"driveId,omitempty"`
+	DriveType string `json:"driveType,omitempty"` // personal | business | documentLibrary
 }
 
 // Folder is used for parsing only
@@ -111,7 +120,7 @@ func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
 		Folder: &Folder{},
 	}
 	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(ChildrenPathID(parentID), auth, bytes.NewReader(bytePayload))
+	resp, err := Post(childrenPathID(parentID), auth, bytes.NewReader(bytePayload))
 	if err != nil {
 		return nil, err
 	}
@@ -144,4 +153,39 @@ func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
 		_, err = Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
 	}
 	return err
+}
+
+// only used for parsing
+type driveChildren struct {
+	Children []*DriveItem `json:"value"`
+	NextLink string       `json:"@odata.nextLink"`
+}
+
+// this is the internal method that actually fetches an item's children
+func getItemChildren(pollURL string, auth *Auth) ([]*DriveItem, error) {
+	fetched := make([]*DriveItem, 0)
+	for pollURL != "" {
+		body, err := Get(pollURL, auth)
+		if err != nil {
+			return fetched, err
+		}
+		var pollResult driveChildren
+		json.Unmarshal(body, &pollResult)
+
+		// there can be multiple pages of 200 items each (default).
+		// continue to next interation if we have an @odata.nextLink value
+		fetched = append(fetched, pollResult.Children...)
+		pollURL = strings.TrimPrefix(pollResult.NextLink, GraphURL)
+	}
+	return fetched, nil
+}
+
+// GetItemChildren fetches all children of an item denoted by ID.
+func GetItemChildren(id string, auth *Auth) ([]*DriveItem, error) {
+	return getItemChildren(childrenPathID(id), auth)
+}
+
+// GetItemChildrenPath fetches all children of an item denoted by path.
+func GetItemChildrenPath(path string, auth *Auth) ([]*DriveItem, error) {
+	return getItemChildren(childrenPath(path), auth)
 }

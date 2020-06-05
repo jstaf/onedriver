@@ -2,7 +2,9 @@ package fs
 
 import (
 	"io/ioutil"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
@@ -55,4 +57,23 @@ func TestIsDir(t *testing.T) {
 	if inode.IsDir() {
 		t.Fatal("file created with mode 644 not detected as a file")
 	}
+}
+
+// A filename like .~lock.libreoffice-test.docx# will fail to upload unless the
+// filename is escaped.
+func TestFilenameEscape(t *testing.T) {
+	fname := `.~lock.libreoffice-test.docx#`
+	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
+
+	time.Sleep(5 * time.Second)
+
+	// make sure it made it to the server
+	children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
+	failOnErr(t, err)
+	for _, child := range children {
+		if child.Name == fname {
+			return
+		}
+	}
+	t.Fatalf("Could not find file: \"%s\"", fname)
 }

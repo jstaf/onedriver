@@ -13,6 +13,17 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
+// a helper function for use with tests
+func (i *Inode) setContent(newContent []byte) {
+	i.DriveItem.Size = uint64(len(newContent))
+	i.data = &newContent
+	if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+		i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(&newContent)
+	} else {
+		i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(&newContent)
+	}
+}
+
 // In this test, we create a directory through the API, and wait to see if
 // the cache picks it up post-creation.
 func TestDeltaMkdir(t *testing.T) {
@@ -138,13 +149,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	inode := NewInodeDriveItem(item)
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
-	inode.DriveItem.Size = uint64(len(newContent))
-	inode.data = &newContent
-	if fsCache.DriveType() == "personal" {
-		inode.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(&newContent)
-	} else {
-		inode.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(&newContent)
-	}
+	inode.setContent(newContent)
 	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
@@ -183,13 +188,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	inode := NewInodeDriveItem(item)
 	failOnErr(t, err)
 	newContent := []byte("remote")
-	inode.data = &newContent
-	inode.DriveItem.Size = uint64(len(newContent))
-	if fsCache.DriveType() == "personal" {
-		inode.DriveItem.File.Hashes.SHA1Hash = SHA1Hash(&newContent)
-	} else {
-		inode.DriveItem.File.Hashes.QuickXorHash = QuickXORHash(&newContent)
-	}
+	inode.setContent(newContent)
 	session, err := NewUploadSession(inode, auth)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
@@ -302,5 +301,29 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 	cache.applyDelta(delta)
 	if cache.GetID(delta.ID()) != nil {
 		t.Fatal("Still found folder after emptying it first (the correct way).")
+	}
+}
+
+// Some programs like LibreOffice and WPS Office will have a fit if the
+// modification times on their lockfiles is updated after they are written. This
+// test verifies that the delta thread does not modify modification times if the
+// content is unchanged.
+func TestDeltaNoModTimeUpdate(t *testing.T) {
+	fname := filepath.Join(DeltaDir, "mod_time_update.txt")
+	failOnErr(t, ioutil.WriteFile(fname, []byte("a pretend lockfile"), 0644))
+	finfo, err := os.Stat(fname)
+	failOnErr(t, err)
+	mtimeOriginal := finfo.ModTime()
+
+	time.Sleep(15 * time.Second)
+
+	finfo, err = os.Stat(fname)
+	failOnErr(t, err)
+	mtimeNew := finfo.ModTime()
+	if !mtimeNew.Equal(mtimeOriginal) {
+		t.Fatalf(
+			"Modification time was updated even though the file did not change.\n"+
+				"Old mtime: %d, New mtime: %d\n", mtimeOriginal.Unix(), mtimeNew.Unix(),
+		)
 	}
 }

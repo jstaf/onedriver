@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -129,25 +128,6 @@ func (c *Cache) IsOffline() bool {
 	return c.offline
 }
 
-// DriveType lazily fetches the OneDrive drivetype
-func (c *Cache) DriveType() string {
-	c.RLock()
-	driveType := c.driveType
-	c.RUnlock()
-
-	if driveType == "" {
-		drive, err := graph.GetDrive(c.GetAuth())
-		if err == nil {
-			c.Lock()
-			c.driveType = drive.DriveType
-			c.Unlock()
-			return drive.DriveType
-		}
-		log.Error("Drivetype was empty and could not be fetched!")
-	}
-	return driveType
-}
-
 func leadingSlash(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
@@ -261,12 +241,6 @@ func (c *Cache) DeleteID(id string) {
 	c.uploads.CancelUpload(id)
 }
 
-// only used for parsing
-type driveChildren struct {
-	Children []*Inode `json:"value"`
-	NextLink string   `json:"@odata.nextLink"`
-}
-
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
 func (c *Cache) GetChild(id string, name string, auth *graph.Auth) (*Inode, error) {
 	children, err := c.GetChildrenID(id, auth)
@@ -323,35 +297,26 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 	inode.mutex.RUnlock()
 
 	// We haven't fetched the children for this item yet, get them from the server.
-	fetched := make([]*Inode, 0)
-	for pollURL := graph.ChildrenPathID(id); pollURL != ""; {
-		body, err := graph.Get(pollURL, auth)
-		if err != nil {
-			if graph.IsOffline(err) {
-				log.WithFields(log.Fields{
-					"id": id,
-				}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
-				return children, nil
-			}
-			// something else happened besides being offline
+	fetched, err := graph.GetItemChildren(id, auth)
+	if err != nil {
+		if graph.IsOffline(err) {
 			log.WithFields(log.Fields{
-				"err": err,
-			}).Error("Error while fetching children.")
-			return nil, err
+				"id": id,
+			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
+			return children, nil
 		}
-		var pollResult driveChildren
-		json.Unmarshal(body, &pollResult)
-
-		// there can be multiple pages of 200 items each (default).
-		// continue to next interation if we have an @odata.nextLink value
-		fetched = append(fetched, pollResult.Children...)
-		pollURL = strings.TrimPrefix(pollResult.NextLink, graph.GraphURL)
+		// something else happened besides being offline
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("Error while fetching children.")
+		return nil, err
 	}
 
 	inode.mutex.Lock()
 	inode.children = make([]string, 0)
-	for _, child := range fetched {
+	for _, item := range fetched {
 		// we will always have an id after fetching from the server
+		child := NewInodeDriveItem(item)
 		child.cache = c
 		c.metadata.Store(child.DriveItem.ID, child)
 
