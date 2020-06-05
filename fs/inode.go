@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -274,7 +275,11 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
-		uploadPath := fmt.Sprintf("/me/drive/items/%s:/%s:/content", i.ParentID(), i.Name())
+		uploadPath := fmt.Sprintf(
+			"/me/drive/items/%s:/%s:/content",
+			i.ParentID(),
+			url.PathEscape(i.Name()),
+		)
 		resp, err := graph.Put(uploadPath, auth, strings.NewReader(""))
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
