@@ -219,20 +219,31 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// Do not sync if the file size is 0, as this is likely a file in the
 	// progress of being uploaded (also, no need to sync empty files).
 	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
-		//TODO check if local has changes and rename the server copy if so
-		log.WithFields(log.Fields{
-			"id":    id,
-			"name":  name,
-			"delta": "overwrite",
-		}).Info("Overwriting local item, no local changes to preserve.")
-		// update modtime, hashes, purge any local content in memory
-		local.mutex.Lock()
-		defer local.mutex.Unlock()
-		local.DriveItem.ModTime = delta.DriveItem.ModTime
-		local.DriveItem.File = delta.DriveItem.File
-		local.hasChanges = false
-		local.data = nil
-		return nil
+		local.mutex.RLock()
+		var sameContent bool
+		if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+			sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
+		} else {
+			sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
+		}
+		local.mutex.RUnlock()
+
+		if !sameContent {
+			//TODO check if local has changes and rename the server copy if so
+			log.WithFields(log.Fields{
+				"id":    id,
+				"name":  name,
+				"delta": "overwrite",
+			}).Info("Overwriting local item, no local changes to preserve.")
+			// update modtime, hashes, purge any local content in memory
+			local.mutex.Lock()
+			defer local.mutex.Unlock()
+			local.DriveItem.ModTime = delta.DriveItem.ModTime
+			local.DriveItem.File = delta.DriveItem.File
+			local.hasChanges = false
+			local.data = nil
+			return nil
+		}
 	}
 
 	log.WithFields(log.Fields{

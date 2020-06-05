@@ -316,13 +316,14 @@ func TestDeltaNoModTimeUpdate(t *testing.T) {
 	mtimeOriginal := finfo.ModTime()
 
 	time.Sleep(15 * time.Second)
+
 	finfo, err = os.Stat(fname)
 	failOnErr(t, err)
 	mtimeNew := finfo.ModTime()
 	if !mtimeNew.Equal(mtimeOriginal) {
 		t.Fatalf(
 			"Modification time was updated even though the file did not change.\n"+
-				"Old mtime: %d, New mtime: %d \n", mtimeOriginal.Unix(), mtimeNew.Unix(),
+				"Old mtime: %d, New mtime: %d\n", mtimeOriginal.Unix(), mtimeNew.Unix(),
 		)
 	}
 }
