@@ -17,7 +17,7 @@ import (
 func (i *Inode) setContent(newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
 	i.data = &newContent
-	if fsCache.DriveType() == graph.DriveTypePersonal {
+	if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 		i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(&newContent)
 	} else {
 		i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(&newContent)

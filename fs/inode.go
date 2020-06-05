@@ -441,7 +441,7 @@ func (i *Inode) Fsync(ctx context.Context, f fs.FileHandle, flags uint32) syscal
 
 		// recompute hashes when saving new content
 		i.DriveItem.File = &graph.File{}
-		if i.cache.DriveType() == graph.DriveTypePersonal {
+		if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 			i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(i.data)
 		} else {
 			i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(i.data)
@@ -799,11 +799,11 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 
 	// try grabbing from disk
 	cache := i.GetCache()
-	driveType := cache.DriveType()
 	if content := cache.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashMatch bool
 		i.mutex.RLock()
+		driveType := i.DriveItem.Parent.DriveType
 		if isLocalID(id) && i.DriveItem.File == nil {
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just accept the cached content.

@@ -129,25 +129,6 @@ func (c *Cache) IsOffline() bool {
 	return c.offline
 }
 
-// DriveType lazily fetches the OneDrive drivetype
-func (c *Cache) DriveType() string {
-	c.RLock()
-	driveType := c.driveType
-	c.RUnlock()
-
-	if driveType == "" {
-		drive, err := graph.GetDrive(c.GetAuth())
-		if err == nil {
-			c.Lock()
-			c.driveType = drive.DriveType
-			c.Unlock()
-			return drive.DriveType
-		}
-		log.Error("Drivetype was empty and could not be fetched!")
-	}
-	return driveType
-}
-
 func leadingSlash(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
