@@ -1,13 +1,10 @@
 .PHONY: all, test, srpm, rpm, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
 
 # autocalculate software/package versions
-COMMIT = $(shell git rev-parse HEAD)
-COMMIT_SHORT = $(shell git rev-parse HEAD | head -c 8)
-COMMIT_DATE = $(shell git log -1 --format=%cs | sed 's/-//g')
 RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
 RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
 RPM_DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
-RPM_FULL_VERSION = $(RPM_VERSION)-$(RPM_RELEASE).$(COMMIT_DATE)git$(COMMIT_SHORT)$(RPM_DIST)
+RPM_FULL_VERSION = $(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST)
 
 # test-specific variables
 TEST_UID = $(shell id -u)
@@ -58,9 +55,6 @@ onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
-	sed -i "s/COMMIT_LONG/$(COMMIT)/g" onedriver-$(RPM_VERSION)/onedriver.spec
-	sed -i "s/COMMIT_SHORT/$(COMMIT_SHORT)/g" onedriver-$(RPM_VERSION)/onedriver.spec
-	sed -i "s/COMMIT_DATE/$(COMMIT_DATE)/g" onedriver-$(RPM_VERSION)/onedriver.spec
 	go mod vendor
 	cp -R vendor/ onedriver-$(RPM_VERSION)
 	tar -czf $@ onedriver-$(RPM_VERSION)

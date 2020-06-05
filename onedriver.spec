@@ -1,11 +1,6 @@
-# for templating out the version string
-%define commit COMMIT_LONG
-%define commit_short COMMIT_SHORT
-%define commit_date COMMIT_DATE
-
 Name:          onedriver
 Version:       0.9.0
-Release:       1.%{commit_date}git%{commit_short}%{?dist}
+Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
