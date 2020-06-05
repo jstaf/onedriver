@@ -132,7 +132,7 @@ func ResourcePath(path string) string {
 }
 
 // ChildrenPath returns the path to an item's children
-func ChildrenPath(path string) string {
+func childrenPath(path string) string {
 	if path == "/" {
 		return ResourcePath(path) + "/children"
 	}
@@ -140,7 +140,7 @@ func ChildrenPath(path string) string {
 }
 
 // ChildrenPathID returns the API resource path of an item's children
-func ChildrenPathID(id string) string {
+func childrenPathID(id string) string {
 	return "/me/drive/items/" + id + "/children"
 }
 
