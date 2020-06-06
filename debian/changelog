@@ -1,4 +1,4 @@
-onedriver (0.9.1-1) unstable; urgency=low
+onedriver (0.9.1-1) focal; urgency=low
 
   * Filenames are now sanitized when uploading new files.
   * onedriver now only syncs metadata changes for a file from server to client if its
