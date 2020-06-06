@@ -87,6 +87,7 @@ deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 	sudo mkdir -p /var/cache/pbuilder/aptcache
 	sudo pbuilder --build $<
+	cp /var/cache/pbuilder/result/onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.changes .
 	cp /var/cache/pbuilder/result/$@ .
 
 
