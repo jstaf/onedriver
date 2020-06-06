@@ -19,7 +19,7 @@ endif
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
-	go build -ldflags="-X main.commit=$(COMMIT)" ./cmd/onedriver
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
 onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
@@ -136,5 +136,5 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.changes *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
 	rm -rf util-linux-*/ onedriver-*/ vendor/
