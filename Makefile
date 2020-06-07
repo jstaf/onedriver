@@ -76,18 +76,19 @@ onedriver-$(RPM_FULL_VERSION).x86_64.rpm: onedriver-$(RPM_FULL_VERSION).src.rpm
 
 
 # create the debian source package for the current version
-dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
-onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
+changes: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_source.changes
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_source.changes: onedriver-$(RPM_VERSION).tar.gz
 	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
-	dpkg-source --build onedriver-$(RPM_VERSION)
+	cd onedriver-$(RPM_VERSION) && debuild -S -sa -d
 
+# just a helper target to use while building debs
+onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc:  onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_source.changes
 
 # create the debian package in a chroot via pbuilder
 deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
 onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
 	sudo mkdir -p /var/cache/pbuilder/aptcache
 	sudo pbuilder --build $<
-	cp /var/cache/pbuilder/result/onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.changes .
 	cp /var/cache/pbuilder/result/$@ .
 
 
@@ -136,5 +137,6 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.dsc *.changes *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
 	rm -rf util-linux-*/ onedriver-*/ vendor/
+
