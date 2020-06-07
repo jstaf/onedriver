@@ -48,9 +48,19 @@ sudo dnf copr enable jstaf/onedriver
 sudo dnf install onedriver
 ```
 
-Ubuntu/Pop!_OS/Debian users should install the latest .deb from the 
-[Releases](https://github.com/jstaf/onedriver/releases) page
-(a PPA repo will be provided soon!).
+Ubuntu/Pop!_OS/Debian users can install onedriver from using this
+[PPA](https://launchpad.net/~jstaf/+archive/ubuntu/onedriver).
+Like the COPR install, this will enable you to install onedriver through your
+package manager and install updates as they become available.
+
+```bash
+sudo add-apt-repository ppa:jstaf/onedriver
+sudo apt update
+sudo apt install onedriver
+```
+
+Other installation options are available below if you would prefer to manually
+install things or build the latest version from source.
 
 Post-installation, you can start onedriver either via the app launcher 
 (will authenticate and mount OneDrive at `~/OneDrive`, 
