@@ -1,13 +1,10 @@
-.PHONY: all, test, srpm, rpm, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
+.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
 
 # autocalculate software/package versions
-COMMIT = $(shell git rev-parse HEAD)
-COMMIT_SHORT = $(shell git rev-parse HEAD | head -c 8)
-COMMIT_DATE = $(shell git log -1 --format=%cs | sed 's/-//g')
-RPM_VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
-RPM_RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
-RPM_DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
-RPM_FULL_VERSION = $(RPM_VERSION)-$(RPM_RELEASE).$(COMMIT_DATE)git$(COMMIT_SHORT)$(RPM_DIST)
+VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
+DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
+RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 
 # test-specific variables
 TEST_UID = $(shell id -u)
@@ -22,7 +19,7 @@ endif
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
-	go build -ldflags="-X main.commit=$(COMMIT)" ./cmd/onedriver
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
 onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
@@ -31,7 +28,7 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
 
 # run all tests, build all artifacts, compute checksums for release
 all: test checksums.txt
-checksums.txt: onedriver-headless onedriver-$(RPM_VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
+checksums.txt: onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
 	sha256sum $^ > checksums.txt
 
 
@@ -50,25 +47,22 @@ localinstall: onedriver
 
 
 # used to create release tarball for rpmbuild
-onedriver-$(RPM_VERSION).tar.gz: $(shell git ls-files)
-	rm -rf onedriver-$(RPM_VERSION)
-	mkdir -p onedriver-$(RPM_VERSION)
+onedriver-$(VERSION).tar.gz: $(shell git ls-files)
+	rm -rf onedriver-$(VERSION)
+	mkdir -p onedriver-$(VERSION)
 	git ls-files > filelist.txt
 	# needed for debian build
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
-	rsync -a --files-from=filelist.txt . onedriver-$(RPM_VERSION)
-	sed -i "s/COMMIT_LONG/$(COMMIT)/g" onedriver-$(RPM_VERSION)/onedriver.spec
-	sed -i "s/COMMIT_SHORT/$(COMMIT_SHORT)/g" onedriver-$(RPM_VERSION)/onedriver.spec
-	sed -i "s/COMMIT_DATE/$(COMMIT_DATE)/g" onedriver-$(RPM_VERSION)/onedriver.spec
+	rsync -a --files-from=filelist.txt . onedriver-$(VERSION)
 	go mod vendor
-	cp -R vendor/ onedriver-$(RPM_VERSION)
-	tar -czf $@ onedriver-$(RPM_VERSION)
+	cp -R vendor/ onedriver-$(VERSION)
+	tar -czf $@ onedriver-$(VERSION)
 
 
 # build srpm package used for rpm build with mock
 srpm: onedriver-$(RPM_FULL_VERSION).src.rpm 
-onedriver-$(RPM_FULL_VERSION).src.rpm: onedriver-$(RPM_VERSION).tar.gz
+onedriver-$(RPM_FULL_VERSION).src.rpm: onedriver-$(VERSION).tar.gz
 	rpmbuild -ts $<
 	cp $$(rpm --eval '%{_topdir}')/SRPMS/$@ .
 
@@ -81,16 +75,25 @@ onedriver-$(RPM_FULL_VERSION).x86_64.rpm: onedriver-$(RPM_FULL_VERSION).src.rpm
 	cp /var/lib/mock/$(MOCK_CONFIG)/result/$@ .
 
 
+# create a release tarball for debian builds
+onedriver_$(VERSION).orig.tar.gz: onedriver-$(VERSION).tar.gz
+	cp $< $@
+
+
 # create the debian source package for the current version
-dsc: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
-onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc: onedriver-$(RPM_VERSION).tar.gz
-	cp $< onedriver_$(RPM_VERSION).orig.tar.gz
-	dpkg-source --build onedriver-$(RPM_VERSION)
+changes: onedriver_$(VERSION)-$(RELEASE)_source.changes
+onedriver_$(VERSION)-$(RELEASE)_source.changes: onedriver_$(VERSION).orig.tar.gz
+	cd onedriver-$(VERSION) && debuild -S -sa -d
+
+
+# just a helper target to use while building debs
+onedriver_$(VERSION)-$(RELEASE).dsc: onedriver_$(VERSION).orig.tar.gz
+	dpkg-source --build onedriver-$(VERSION)
 
 
 # create the debian package in a chroot via pbuilder
-deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb
-onedriver_$(RPM_VERSION)-$(RPM_RELEASE)_amd64.deb: onedriver_$(RPM_VERSION)-$(RPM_RELEASE).dsc
+deb: onedriver_$(VERSION)-$(RELEASE)_amd64.deb
+onedriver_$(VERSION)-$(RELEASE)_amd64.deb: onedriver_$(VERSION)-$(RELEASE).dsc
 	sudo mkdir -p /var/cache/pbuilder/aptcache
 	sudo pbuilder --build $<
 	cp /var/cache/pbuilder/result/$@ .
@@ -141,5 +144,6 @@ compile_flags.txt:
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
 	fusermount -uz mount/ || true
-	rm -f *.db *.rpm *.deb *.dsc *.log *.fa *.xz *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json filelist.txt
+	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
+	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/

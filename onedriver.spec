@@ -1,11 +1,6 @@
-# for templating out the version string
-%define commit COMMIT_LONG
-%define commit_short COMMIT_SHORT
-%define commit_date COMMIT_DATE
-
 Name:          onedriver
-Version:       0.9.0
-Release:       1.%{commit_date}git%{commit_short}%{?dist}
+Version:       0.9.1
+Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
@@ -57,6 +52,12 @@ cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service
 
 %changelog
+* Sat Jun 6 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.1
+- Filenames are now sanitized when uploading new files.
+- onedriver now only syncs metadata changes for a file from server to client if its
+  contents have changed as well. This means that programs like LibreOffice will no longer
+  complain about their lockfiles being updated while saving.
+
 * Wed Jun 3 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.0
 - Multiple OneDrive drives can now be mounted simultaneously via systemd.
 - Uploads are now retried, with failed uploads retried automatically.

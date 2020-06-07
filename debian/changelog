@@ -1,3 +1,12 @@
+onedriver (0.9.1-1) focal; urgency=low
+
+  * Filenames are now sanitized when uploading new files.
+  * onedriver now only syncs metadata changes for a file from server to client if its
+    contents have changed as well. This means that programs like LibreOffice will no longer
+    complain about their lockfiles being updated while saving.
+
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Sat, 6 Jun 2020 12:18:00 -0400
+
 onedriver (0.9.0-1) unstable; urgency=low
 
   * Multiple OneDrive drives can now be mounted simultaneously via systemd.

@@ -35,7 +35,10 @@ debian/debhelper-build-stamp
 debian/*.substvars
 debian/*.debhelper
 debian/files
-build/
 *.dsc
 *.deb
+*.changes
+*.build*
+*.upload
 *.tar.xz
+
