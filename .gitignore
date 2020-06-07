@@ -39,5 +39,6 @@ debian/files
 *.deb
 *.changes
 *.build*
+*.upload
 *.tar.xz
 
