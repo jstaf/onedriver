@@ -52,6 +52,13 @@ type Deleted struct {
 	State string `json:"state,omitempty"`
 }
 
+// RemoteItem is a facet that appears for shared items only.
+// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_sharedwithme
+type RemoteItem struct {
+	ID     string           `json:"id,omitempty"`
+	Parent *DriveItemParent `json:"parentReference,omitempty"`
+}
+
 // DriveItem contains the data fields from the Graph API
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/driveitem
 type DriveItem struct {
@@ -63,6 +70,7 @@ type DriveItem struct {
 	Folder           *Folder          `json:"folder,omitempty"`
 	File             *File            `json:"file,omitempty"`
 	Deleted          *Deleted         `json:"deleted,omitempty"`
+	RemoteItem       *RemoteItem      `json:"remoteItem,omitempty"`
 	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
 	ETag             string           `json:"eTag,omitempty"`
 }
@@ -70,6 +78,11 @@ type DriveItem struct {
 // IsDir returns if the DriveItem represents a directory or not
 func (d *DriveItem) IsDir() bool {
 	return d.Folder != nil
+}
+
+// IsShared returns whether an item is shared from another drive
+func (d *DriveItem) IsShared() bool {
+	return d.RemoteItem != nil
 }
 
 // ModTimeUnix returns the modification time as a unix uint64 time
