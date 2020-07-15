@@ -61,7 +61,7 @@ func (a *Auth) Refresh() {
 
 		var reauth bool
 		if err != nil {
-			if IsOffline(err) {
+			if IsOffline(err) || resp == nil {
 				log.WithFields(log.Fields{
 					"err": err,
 				}).Trace("Network unreachable during token renewal, ignoring.")

@@ -196,5 +196,6 @@ func IsOffline(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "network is unreachable") ||
-		strings.Contains(err.Error(), "connection refused")
+		strings.Contains(err.Error(), "connection refused") ||
+		strings.Contains(err.Error(), "failure in name resolution")
 }
