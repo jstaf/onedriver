@@ -1,14 +1,14 @@
 .PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
 
 # autocalculate software/package versions
-VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
-RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
-DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
+VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RELEASE := $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
+DIST := $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
 RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 
 # test-specific variables
-TEST_UID = $(shell id -u)
-TEST_GID = $(shell id -g)
+TEST_UID := $(shell id -u)
+TEST_GID := $(shell id -g)
 UNSHARE_VERSION = 2.34
 ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
 	UNSHARE = unshare
@@ -16,6 +16,15 @@ else
 	UNSHARE = ./unshare
 	EXTRA_TEST_DEPS = unshare
 endif
+
+# c build variables
+DEPS = gtk+-3.0
+SRCS := $(shell find launcher/ -name *.c)
+OBJS := $(SRCS:%.c=build/%.o)
+INC_DIRS := $(shell find launcher/ -type d)
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+CFLAGS := $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
+LDFLAGS := $(shell pkg-config --libs $(DEPS))
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go main.go
@@ -46,6 +55,15 @@ localinstall: onedriver
 	cp resources/onedriver@.service ~/.config/systemd/user/
 	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
 	systemctl --user daemon-reload
+
+
+onedriver-launcher: $(OBJS)
+	gcc $(LDFLAGS) -o $@ $^
+
+
+build/%.o: %.c
+	mkdir -p $(shell dirname $@)
+	gcc $(CFLAGS) -o $@ -c $^
 
 
 # used to create release tarball for rpmbuild
@@ -147,5 +165,5 @@ compile_flags.txt:
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
-	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json
+	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/
