@@ -1,6 +1,13 @@
 #include <gtk/gtk.h>
+#include <stdlib.h>
 
-static void mountpoint_cb(GtkWidget *widget, gpointer data) { g_print("clicked!\n"); }
+#include "dir_picker.h"
+
+static void mountpoint_cb(GtkWidget *widget, gpointer data) {
+    char *mount = dir_chooser("Select a mountpoint");
+    g_print("clicked! directory: %s\n", mount);
+    free(mount);
+}
 
 static void activate(GtkApplication *app, gpointer data) {
     GtkWidget *window = gtk_application_window_new(app);
