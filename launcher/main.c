@@ -1,7 +1,7 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
 
-#include "dir_picker.h"
+#include "dir_chooser.h"
 
 static void mountpoint_cb(GtkWidget *widget, gpointer data) {
     char *mount = dir_chooser("Select a mountpoint");
