@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -35,27 +34,28 @@ char *unit_name_escape(const char *str) {
     if (!repl) {
         return NULL;
     }
-    // we use new pointers here to avoid modifying the address of the original ones
-    char *r = repl;
-    char *s = str;
 
     // do_escape
-    // strip leading '.' character if present
+    // we use new pointers here to avoid modifying the address of the original ones
+    char *r = repl;
+    const char *s = str;
+
+    // escape leading '.'
     if (*s == '.') {
-        repl = escape_char(*s, repl);
+        r = escape_char(*s, r);
         s++;
     }
 
     for (; *s; s++) {
         if (*s == '/') {
-            *(repl++) = '-';
+            *(r++) = '-';
         } else if (*s == '-' || *s == '\\' || !strchr(VALID_CHARS, *s)) {
-            repl = escape_char(*s, repl);
+            r = escape_char(*s, r);
         } else {
-            *(repl++) = *s;
+            *(r++) = *s;
         }
     }
-    return r;
+    return repl;
 }
 
 /**
