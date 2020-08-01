@@ -58,12 +58,12 @@ localinstall: onedriver
 
 
 onedriver-launcher: $(OBJS)
-	gcc $(LDFLAGS) -o $@ $^
+	gcc -o $@ $^ $(LDFLAGS)
 
 
 build/%.o: %.c
 	mkdir -p $(shell dirname $@)
-	gcc $(CFLAGS) -o $@ -c $^
+	gcc -o $@ -c $^ $(CFLAGS)
 
 
 # used to create release tarball for rpmbuild
@@ -166,4 +166,4 @@ clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
 	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
-	rm -rf util-linux-*/ onedriver-*/ vendor/
+	rm -rf util-linux-*/ onedriver-*/ vendor/ build/

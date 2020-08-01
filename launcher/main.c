@@ -13,6 +13,8 @@ static void mountpoint_cb(GtkWidget *widget, gpointer data) {
     unit_name_replace_instance("onedriver@.service", escaped_mountpoint, &unit_name);
     printf("unit name: %s\n", unit_name);
     free(mount);
+    free(unit_name);
+    free(escaped_mountpoint);
 }
 
 static void activate(GtkApplication *app, gpointer data) {
