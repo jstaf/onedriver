@@ -9,7 +9,7 @@
 
 #include "systemd.h"
 
-char hexchar(int x) {
+char systemd_hexchar(int x) {
     static const char table[16] = "0123456789abcdef";
     return table[x & 15];
 }
@@ -18,8 +18,8 @@ static char *escape_char(char c, char *t) {
     assert(t);
     *(t++) = '\\';
     *(t++) = 'x';
-    *(t++) = hexchar(c >> 4);
-    *(t++) = hexchar(c);
+    *(t++) = systemd_hexchar(c >> 4);
+    *(t++) = systemd_hexchar(c);
     return t;
 }
 
@@ -27,7 +27,7 @@ static char *escape_char(char c, char *t) {
  * This is the function that actually does the escaping. Based on:
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
  */
-char *unit_name_escape(const char *str) {
+char *systemd_escape(const char *str) {
     assert(str);
 
     char *repl = malloc(strlen(str) * 4 + 1);
@@ -62,7 +62,7 @@ char *unit_name_escape(const char *str) {
  * Escape a systemd unit path. Most logic is borrowed from:
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
  */
-int unit_name_path_escape(const char *path, char **ret) {
+int systemd_path_escape(const char *path, char **ret) {
     assert(path);
     assert(ret);
 
@@ -83,7 +83,7 @@ int unit_name_path_escape(const char *path, char **ret) {
         if (p[0] == '/') {
             p++;
         }
-        replaced = unit_name_escape(p);
+        replaced = systemd_escape(p);
     }
     if (!replaced) {
         return -ENOMEM;
@@ -98,7 +98,7 @@ int unit_name_path_escape(const char *path, char **ret) {
  * Logic based on unit_name_replace_instance fromq
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
  */
-int unit_name_replace_instance(const char *template, const char *instance, char **ret) {
+int systemd_template_unit(const char *template, const char *instance, char **ret) {
     assert(template);
     assert(instance);
     assert(ret);

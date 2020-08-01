@@ -6,11 +6,12 @@
 #include "systemd.h"
 
 static void mountpoint_cb(GtkWidget *widget, gpointer data) {
-    char *mount = dir_chooser("Select a mountpoint");
+    char *unit_name, *mount, *escaped_mountpoint;
 
-    char *unit_name, *escaped_mountpoint;
-    unit_name_path_escape(mount, &escaped_mountpoint);
-    unit_name_replace_instance("onedriver@.service", escaped_mountpoint, &unit_name);
+    mount = dir_chooser("Select a mountpoint");
+    systemd_path_escape(mount, &escaped_mountpoint);
+    systemd_template_unit("onedriver@.service", escaped_mountpoint, &unit_name);
+
     printf("unit name: %s\n", unit_name);
     free(mount);
     free(unit_name);
