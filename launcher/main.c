@@ -13,6 +13,9 @@ static void mountpoint_cb(GtkWidget *widget, gpointer data) {
     systemd_template_unit("onedriver@.service", escaped_mountpoint, &unit_name);
 
     printf("unit name: %s\n", unit_name);
+
+    systemd_unit_status(unit_name);
+
     free(mount);
     free(unit_name);
     free(escaped_mountpoint);

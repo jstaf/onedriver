@@ -3,16 +3,10 @@ Description=onedriver
 
 [Service]
 ExecStart=/usr/bin/onedriver -c "%C/onedriver/%i" %f
-<<<<<<< HEAD
 ExecStopPost=/usr/bin/fusermount -uz /%I
 Restart=on-abnormal
 RestartSec=3
 RestartForceExitStatus=2
-=======
-ExecStop=/usr/bin/fusermount -uz %I
-ExecStopPost=/usr/bin/sleep 1
-Restart=no
->>>>>>> 14d7d07 (add systemd escape functionality)
 
 [Install]
 WantedBy=default.target

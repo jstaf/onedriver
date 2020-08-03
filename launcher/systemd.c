@@ -3,6 +3,9 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <gio/gio.h>
+#include <glib.h>
+#include <glib/gi18n.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -116,5 +119,25 @@ int systemd_template_unit(const char *template, const char *instance, char **ret
 
     strcpy(mempcpy(mempcpy(replaced, template, a + 1), instance, b), dot_pos);
     *ret = replaced;
+    return 0;
+}
+
+int systemd_unit_status(const char *unit_name) {
+    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+    GDBusProxy *proxy = g_dbus_proxy_new_sync(
+        bus, G_DBUS_PROXY_FLAGS_NONE, NULL, "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", NULL, NULL);
+
+    GVariant *call_params = g_variant_new_string(unit_name);
+    GVariant *response =
+        g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnit",
+                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL);
+
+    g_print("variant: %s\n", g_variant_get_string(response, NULL));
+
+    g_variant_unref(call_params);
+    g_variant_unref(response);
+    g_object_unref(proxy);
+    g_object_unref(bus);
     return 0;
 }
