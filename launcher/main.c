@@ -14,7 +14,14 @@ static void mountpoint_cb(GtkWidget *widget, gpointer data) {
 
     printf("unit name: %s\n", unit_name);
 
-    systemd_unit_status(unit_name);
+    switch (systemd_unit_status(unit_name)) {
+    case SYSTEMD_UNIT_ACTIVE:
+        g_print("active\n");
+        break;
+    default:
+        g_print("off\n");
+        break;
+    }
 
     free(mount);
     free(unit_name);

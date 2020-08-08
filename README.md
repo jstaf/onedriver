@@ -151,7 +151,7 @@ sudo make install
 make localinstall
 
 # create an RPM for system-wide installation on RHEL/CentOS/Fedora using mock
-sudo dnf install golang gcc webkit2gtk-devel pkg-config git rsync \
+sudo dnf install golang gcc webkit2gtk3-devel pkg-config git rsync \
     rpmdevtools rpm-build mock
 sudo usermod -aG mock $USER
 make rpm

@@ -123,21 +123,63 @@ int systemd_template_unit(const char *template, const char *instance, char **ret
 }
 
 int systemd_unit_status(const char *unit_name) {
-    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
-    GDBusProxy *proxy = g_dbus_proxy_new_sync(
-        bus, G_DBUS_PROXY_FLAGS_NONE, NULL, "org.freedesktop.systemd1",
-        "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", NULL, NULL);
+    int r = -1;
+    GError *err = NULL;
+    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &err);
+    if (err) {
+        g_error("Could not connect to session bus: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
 
-    GVariant *call_params = g_variant_new_string(unit_name);
+    GDBusProxy *proxy = g_dbus_proxy_new_sync(
+        bus, G_DBUS_PROXY_FLAGS_NONE, NULL, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
+        "org.freedesktop.systemd1.Manager", NULL, &err);
+    if (err) {
+        g_error("Could not create systemd dbus proxy: %s\n", err->message);
+        g_error_free(err);
+        g_object_unref(bus);
+        return r;
+    }
+
+    GVariant *call_params = g_variant_new("(s)", unit_name);
     GVariant *response =
         g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnit",
-                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL);
-
-    g_print("variant: %s\n", g_variant_get_string(response, NULL));
-
-    g_variant_unref(call_params);
-    g_variant_unref(response);
+                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
     g_object_unref(proxy);
+    if (err) {
+        if (strstr(err->message, "not loaded")) {
+            r = SYSTEMD_UNIT_NOT_LOADED;
+        }
+        g_error("dbus error: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+
+    const gchar *unit_path;
+    g_variant_get(response, "(o)", &unit_path);
+    GDBusProxy *unit_proxy =
+        g_dbus_proxy_new_sync(bus, G_DBUS_PROXY_FLAGS_NONE, NULL, SYSTEMD_BUS_NAME,
+                              unit_path, "org.freedesktop.systemd1.Unit", NULL, &err);
+    g_variant_unref(response);
     g_object_unref(bus);
-    return 0;
+    if (err) {
+        g_error("Could not create systemd dbus proxy: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+    GVariant *state_var = g_dbus_proxy_get_cached_property(unit_proxy, "ActiveState");
+    g_object_unref(unit_proxy);
+
+    const gchar *state = g_variant_get_string(state_var, NULL);
+    if (strcmp(state, "active") == 0) {
+        r = SYSTEMD_UNIT_ACTIVE;
+    } else if (strcmp(state, "failed") == 0) {
+        r = SYSTEMD_UNIT_FAILED;
+    } else {
+        g_warning("unit \"%s\" unhandled state: \"%s\"\n", unit_name, state);
+        r = SYSTEMD_UNIT_OTHER;
+    }
+    g_variant_unref(state_var);
+    return r;
 }

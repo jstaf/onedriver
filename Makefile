@@ -36,8 +36,7 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go main.go
 
 
 # run all tests, build all artifacts, compute checksums for release
-all: test checksums.txt
-checksums.txt: onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
+checksums.txt: test onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
 	sha256sum $^ > checksums.txt
 
 

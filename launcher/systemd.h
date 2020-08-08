@@ -6,6 +6,16 @@
 #define LETTERS LOWERCASE_LETTERS UPPERCASE_LETTERS
 #define VALID_CHARS DIGITS LETTERS ":-_.\\"
 
+#define SYSTEMD_BUS_NAME "org.freedesktop.systemd1"
+#define SYSTEMD_OBJECT_PATH "/org/freedesktop/systemd1"
+
+enum systemd_service_states {
+    SYSTEMD_UNIT_NOT_LOADED,
+    SYSTEMD_UNIT_FAILED,
+    SYSTEMD_UNIT_ACTIVE,
+    SYSTEMD_UNIT_OTHER,
+};
+
 char systemd_hexchar(int x);
 char *systemd_escape(const char *str);
 int systemd_path_escape(const char *path, char **ret);
