@@ -38,7 +38,7 @@ char *systemd_escape(const char *str) {
         return NULL;
     }
 
-    // do_escape
+    // from systemd's do_escape
     // we use new pointers here to avoid modifying the address of the original ones
     char *r = repl;
     const char *s = str;
@@ -51,10 +51,13 @@ char *systemd_escape(const char *str) {
 
     for (; *s; s++) {
         if (*s == '/') {
+            // '/' becomes '-'
             *(r++) = '-';
         } else if (*s == '-' || *s == '\\' || !strchr(VALID_CHARS, *s)) {
+            // escape symbols
             r = escape_char(*s, r);
         } else {
+            // leave characters in VALID_CHARS untouched
             *(r++) = *s;
         }
     }
@@ -122,64 +125,104 @@ int systemd_template_unit(const char *template, const char *instance, char **ret
     return 0;
 }
 
-int systemd_unit_status(const char *unit_name) {
-    int r = -1;
+/**
+ * Connect to DBus and create a new proxy object.
+ */
+static GDBusProxy *dbus_proxy_new(GBusType type, const char *bus_name,
+                                  const char *object_path, const char *interface,
+                                  GError **err) {
+    GDBusProxy *proxy = NULL;
+    GDBusConnection *bus = g_bus_get_sync(type, NULL, err);
+    if (!*err) {
+        proxy = g_dbus_proxy_new_sync(bus, G_DBUS_PROXY_FLAGS_NONE, NULL, bus_name,
+                                      object_path, interface, NULL, err);
+    }
+    g_object_unref(bus);
+    return proxy;
+}
+
+/**
+ * systemd_unit_is_active will return true if a systemd unit is currently running
+ */
+bool systemd_unit_is_active(const char *unit_name) {
+    bool r = false;
     GError *err = NULL;
-    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &err);
+
+    // get the service unit path from systemd
+    GDBusProxy *proxy =
+        dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
+                       "org.freedesktop.systemd1.Manager", &err);
     if (err) {
-        g_error("Could not connect to session bus: %s\n", err->message);
+        g_error("Could not create dbus proxy: %s\n", err->message);
         g_error_free(err);
         return r;
     }
-
-    GDBusProxy *proxy = g_dbus_proxy_new_sync(
-        bus, G_DBUS_PROXY_FLAGS_NONE, NULL, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
-        "org.freedesktop.systemd1.Manager", NULL, &err);
-    if (err) {
-        g_error("Could not create systemd dbus proxy: %s\n", err->message);
-        g_error_free(err);
-        g_object_unref(bus);
-        return r;
-    }
-
     GVariant *call_params = g_variant_new("(s)", unit_name);
     GVariant *response =
         g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnit",
                                call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
     g_object_unref(proxy);
     if (err) {
-        if (strstr(err->message, "not loaded")) {
-            r = SYSTEMD_UNIT_NOT_LOADED;
+        if (strstr(err->message, "org.freedesktop.systemd1.NoSuchUnit")) {
+            return r;
         }
         g_error("dbus error: %s\n", err->message);
         g_error_free(err);
         return r;
     }
 
+    // get systemd unit's ActiveState property
     const gchar *unit_path;
     g_variant_get(response, "(o)", &unit_path);
     GDBusProxy *unit_proxy =
-        g_dbus_proxy_new_sync(bus, G_DBUS_PROXY_FLAGS_NONE, NULL, SYSTEMD_BUS_NAME,
-                              unit_path, "org.freedesktop.systemd1.Unit", NULL, &err);
+        dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, unit_path,
+                       "org.freedesktop.systemd1.Unit", &err);
     g_variant_unref(response);
-    g_object_unref(bus);
     if (err) {
         g_error("Could not create systemd dbus proxy: %s\n", err->message);
         g_error_free(err);
         return r;
     }
     GVariant *state_var = g_dbus_proxy_get_cached_property(unit_proxy, "ActiveState");
-    g_object_unref(unit_proxy);
-
     const gchar *state = g_variant_get_string(state_var, NULL);
-    if (strcmp(state, "active") == 0) {
-        r = SYSTEMD_UNIT_ACTIVE;
-    } else if (strcmp(state, "failed") == 0) {
-        r = SYSTEMD_UNIT_FAILED;
-    } else {
-        g_warning("unit \"%s\" unhandled state: \"%s\"\n", unit_name, state);
-        r = SYSTEMD_UNIT_OTHER;
-    }
+    r = strcmp(state, "active") == 0;
+
+    g_object_unref(unit_proxy);
     g_variant_unref(state_var);
+    return r;
+}
+
+/**
+ * systemd_unit_is_enabled returns if a systemd unit is enabled
+ */
+bool systemd_unit_is_enabled(const char *unit_name) {
+    bool r = false;
+    GError *err = NULL;
+
+    GDBusProxy *proxy =
+        dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
+                       "org.freedesktop.systemd1.Manager", &err);
+    if (err) {
+        g_error("Could not create systemd dbus proxy: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+
+    GVariant *call_params = g_variant_new("(s)", unit_name);
+    GVariant *response =
+        g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnitFileState",
+                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    if (err) {
+        g_error("Could not determine unit file state: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+
+    const gchar *enabled_state;
+    g_variant_get(response, "(s)", &enabled_state);
+    r = strcmp(enabled_state, "enabled") == 0;
+
+    g_variant_unref(response);
+    g_object_unref(proxy);
     return r;
 }
