@@ -61,6 +61,7 @@ char *systemd_escape(const char *str) {
             *(r++) = *s;
         }
     }
+    *r = '\0';
     return repl;
 }
 

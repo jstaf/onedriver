@@ -18,13 +18,21 @@ else
 endif
 
 # c build variables
-DEPS = gtk+-3.0
-SRCS := $(shell find launcher/ -name *.c)
+DEPS = gtk+-3.0 gio-2.0 glib-2.0
+SRCS := $(shell find launcher/ -name *.c | grep -v tests)
 OBJS := $(SRCS:%.c=build/%.o)
-INC_DIRS := $(shell find launcher/ -type d)
+INC_DIRS := $(shell find launcher/ -type d | grep -v tests)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 CFLAGS := $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
 LDFLAGS := $(shell pkg-config --libs $(DEPS))
+
+# for c tests
+TEST_SRCS := $(shell find launcher/ -name *.c | grep -v launcher/main.c)
+TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
+TEST_INC_DIRS := $(shell find launcher/ -type d)
+TEST_INC_FLAGS := $(addprefix -I,$(TEST_INC_DIRS))
+TEST_CFLAGS := $(TEST_INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
+TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go main.go
@@ -63,6 +71,10 @@ onedriver-launcher: $(OBJS)
 build/%.o: %.c
 	mkdir -p $(shell dirname $@)
 	gcc -o $@ -c $^ $(CFLAGS)
+
+
+c-tests: $(TEST_OBJS)
+	gcc -o $@ $^ $(TEST_LDFLAGS)
 
 
 # used to create release tarball for rpmbuild
@@ -133,6 +145,9 @@ test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
+
+
+
 
 
 # used by travis CI since the version of unshare is too old on ubuntu 18.04
