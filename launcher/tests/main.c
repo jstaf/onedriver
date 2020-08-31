@@ -5,7 +5,7 @@
 #include "../systemd.h"
 #include "minunit.h"
 
-MU_TEST(systemd_test_path_escape) {
+MU_TEST(test_systemd_path_escape) {
     char *escaped;
     systemd_path_escape("/home/test/yesYes", &escaped);
     mu_check(strcmp(escaped, "home-test-yesYes") == 0);
@@ -16,7 +16,17 @@ MU_TEST(systemd_test_path_escape) {
     free(escaped);
 }
 
-MU_TEST_SUITE(systemd_tests) { MU_RUN_TEST(systemd_test_path_escape); }
+MU_TEST(test_systemd_template_unit) {
+    char *escaped;
+    systemd_template_unit("onedriver@.service", "this-is-a-test", &escaped);
+    mu_check(strcmp(escaped, "onedriver@this-is-a-test.service") == 0);
+    free(escaped);
+}
+
+MU_TEST_SUITE(systemd_tests) {
+    MU_RUN_TEST(test_systemd_path_escape);
+    MU_RUN_TEST(test_systemd_template_unit);
+}
 
 int main(int argc, char **argv) {
     MU_RUN_SUITE(systemd_tests);

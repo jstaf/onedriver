@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
+.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -73,8 +73,12 @@ build/%.o: %.c
 	gcc -o $@ -c $^ $(CFLAGS)
 
 
-c-tests: $(TEST_OBJS)
+build/c-test: $(TEST_OBJS)
 	gcc -o $@ $^ $(TEST_LDFLAGS)
+
+
+c-test: build/c-test
+	$<
 
 
 # used to create release tarball for rpmbuild
