@@ -1,4 +1,5 @@
-.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
+.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, \
+	auth_expire_now, auth_invalidate, install, localinstall
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -19,19 +20,16 @@ endif
 
 # c build variables
 DEPS = gtk+-3.0 gio-2.0 glib-2.0
-SRCS := $(shell find launcher/ -name *.c | grep -v tests)
+SRCS := $(shell find launcher/ -name *.c -o -name *.h | grep -v tests)
 OBJS := $(SRCS:%.c=build/%.o)
 INC_DIRS := $(shell find launcher/ -type d | grep -v tests)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 CFLAGS := $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
 LDFLAGS := $(shell pkg-config --libs $(DEPS))
 
-# for c tests
+# c test variables
 TEST_SRCS := $(shell find launcher/ -name *.c | grep -v launcher/main.c)
 TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
-TEST_INC_DIRS := $(shell find launcher/ -type d)
-TEST_INC_FLAGS := $(addprefix -I,$(TEST_INC_DIRS))
-TEST_CFLAGS := $(TEST_INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
 TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
 
 
@@ -86,7 +84,6 @@ v$(VERSION).tar.gz: $(shell git ls-files)
 	rm -rf onedriver-$(VERSION)
 	mkdir -p onedriver-$(VERSION)
 	git ls-files > filelist.txt
-	# needed for debian build
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(VERSION)
@@ -151,9 +148,6 @@ test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
 	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
-
-
-
 # used by travis CI since the version of unshare is too old on ubuntu 18.04
 unshare:
 	rm -rf util-linux-$(UNSHARE_VERSION)*
@@ -171,11 +165,6 @@ auth_expire_now:
 
 auth_invalidate:
 	sed -i 's/"access_token":.\{5\}/"access_token":"/g' ~/.cache/onedriver/auth_tokens.json
-
-
-# for autocompletion by ide-clangd
-compile_flags.txt:
-	pkg-config --cflags gtk+-3.0 webkit2gtk-4.0 | sed 's/ /\n/g' > $@
 
 
 # will literally purge everything: all built artifacts, all logs, all tests,

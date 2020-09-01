@@ -1,9 +1,8 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../systemd.h"
 #include "minunit.h"
+#include "systemd.h"
 
 MU_TEST(test_systemd_path_escape) {
     char *escaped;
