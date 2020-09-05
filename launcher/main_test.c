@@ -35,8 +35,12 @@ MU_TEST(test_systemd_unit_enabled) {
     char cwd[1024];
     getcwd(cwd, 1024);
     strcat(cwd, "/mount");
-    char *unit_name;
-    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd, &unit_name);
+
+    char *cwd_escaped, *unit_name;
+    systemd_path_escape(cwd, &cwd_escaped);
+    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd_escaped, &unit_name);
+    free(cwd_escaped);
+
     // make sure things are disabled before test start
     mu_check(systemd_unit_set_enabled(unit_name, false));
     mu_check(!systemd_unit_is_enabled(unit_name));
@@ -58,8 +62,12 @@ MU_TEST(test_systemd_unit_active) {
     char cwd[1024];
     getcwd(cwd, 1024);
     strcat(cwd, "/mount");
-    char *unit_name;
-    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd, &unit_name);
+
+    char *cwd_escaped, *unit_name;
+    systemd_path_escape(cwd, &cwd_escaped);
+    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd_escaped, &unit_name);
+    free(cwd_escaped);
+
     // make sure things are off before we start
     mu_check(systemd_unit_set_active(unit_name, false));
     mu_check(!systemd_unit_is_active(unit_name));

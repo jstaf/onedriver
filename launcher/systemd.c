@@ -239,9 +239,48 @@ bool systemd_unit_is_enabled(const char *unit_name) {
     return r;
 }
 
+/**
+ * Enable or disable a user systemd unit. Returns true on success.
+ */
 bool systemd_unit_set_enabled(const char *unit_name, bool enabled) {
     bool r = false;
     GError *err = NULL;
 
+    GDBusProxy *proxy =
+        dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
+                       "org.freedesktop.systemd1.Manager", &err);
+    if (err) {
+        g_error("Could not create systemd dbus proxy: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+
+    GVariantBuilder *unit_name_builder = g_variant_builder_new(G_VARIANT_TYPE("as"));
+    g_variant_builder_add(unit_name_builder, "s", unit_name);
+    GVariant *response, *call_params;
+    if (enabled) { // different method calls depending on enable/disable
+        // ref: https://www.freedesktop.org/wiki/Software/systemd/dbus/
+        // params: unit files, persistent (/etc vs /run), replace links
+        call_params = g_variant_new("(asbb)", unit_name_builder, false, true);
+        response = g_dbus_proxy_call_sync(
+            proxy, "org.freedesktop.systemd1.Manager.EnableUnitFiles", call_params,
+            G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    } else {
+        // params: unit files, persistent
+        call_params = g_variant_new("(asb)", unit_name_builder, false);
+        response = g_dbus_proxy_call_sync(
+            proxy, "org.freedesktop.systemd1.Manager.DisableUnitFiles", call_params,
+            G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    }
+    // cant unref call params for some reason
+    g_variant_builder_unref(unit_name_builder);
+    g_variant_unref(response);
+    if (err) {
+        g_error("Could not change systemd unit enabled state to %d: %s\n", (int)enabled,
+                err->message);
+        g_error_free(err);
+    } else {
+        r = true;
+    }
     return r;
 }
