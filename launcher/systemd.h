@@ -16,4 +16,6 @@ char *systemd_escape(const char *str);
 int systemd_path_escape(const char *path, char **ret);
 int systemd_template_unit(const char *template, const char *instance, char **ret);
 bool systemd_unit_is_active(const char *unit_name);
+bool systemd_unit_set_active(const char *unit_name, bool active);
 bool systemd_unit_is_enabled(const char *unit_name);
+bool systemd_unit_set_enabled(const char *unit_name, bool enabled);

@@ -29,6 +29,7 @@ static char *escape_char(char c, char *t) {
 /**
  * This is the function that actually does the escaping. Based on:
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
+ * The returned string should be freed.
  */
 char *systemd_escape(const char *str) {
     assert(str);
@@ -68,6 +69,7 @@ char *systemd_escape(const char *str) {
 /**
  * Escape a systemd unit path. Most logic is borrowed from:
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
+ * ret should be freed by the caller.
  */
 int systemd_path_escape(const char *path, char **ret) {
     assert(path);
@@ -104,6 +106,7 @@ int systemd_path_escape(const char *path, char **ret) {
  * Perform the function of the CLI utility systemd-escape.
  * Logic based on unit_name_replace_instance fromq
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
+ * ret should be freed by the caller.
  */
 int systemd_template_unit(const char *template, const char *instance, char **ret) {
     assert(template);
@@ -128,6 +131,7 @@ int systemd_template_unit(const char *template, const char *instance, char **ret
 
 /**
  * Connect to DBus and create a new proxy object.
+ * The resulting GDBusProxy object should be freed via g_object_unref.
  */
 static GDBusProxy *dbus_proxy_new(GBusType type, const char *bus_name,
                                   const char *object_path, const char *interface,
@@ -193,6 +197,13 @@ bool systemd_unit_is_active(const char *unit_name) {
     return r;
 }
 
+bool systemd_unit_set_active(const char *unit_name, bool active) {
+    bool r = false;
+    GError *err = NULL;
+
+    return r;
+}
+
 /**
  * systemd_unit_is_enabled returns if a systemd unit is enabled
  */
@@ -225,5 +236,12 @@ bool systemd_unit_is_enabled(const char *unit_name) {
 
     g_variant_unref(response);
     g_object_unref(proxy);
+    return r;
+}
+
+bool systemd_unit_set_enabled(const char *unit_name, bool enabled) {
+    bool r = false;
+    GError *err = NULL;
+
     return r;
 }

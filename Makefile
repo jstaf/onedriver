@@ -20,9 +20,9 @@ endif
 
 # c build variables
 DEPS = gtk+-3.0 gio-2.0 glib-2.0
-SRCS := $(shell find launcher/ -name *.c -o -name *.h | grep -v tests)
+SRCS := $(shell find launcher/ -name *.c | grep -v _test)
 OBJS := $(SRCS:%.c=build/%.o)
-INC_DIRS := $(shell find launcher/ -type d | grep -v tests)
+INC_DIRS := $(shell find launcher/ -type d | grep -v _test)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 CFLAGS := $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
 LDFLAGS := $(shell pkg-config --libs $(DEPS))
