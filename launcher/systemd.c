@@ -162,10 +162,9 @@ bool systemd_unit_is_active(const char *unit_name) {
         g_error_free(err);
         return r;
     }
-    GVariant *call_params = g_variant_new("(s)", unit_name);
-    GVariant *response =
-        g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnit",
-                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    GVariant *response = g_dbus_proxy_call_sync(
+        proxy, "org.freedesktop.systemd1.Manager.GetUnit",
+        g_variant_new("(s)", unit_name), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
     g_object_unref(proxy);
     if (err) {
         if (strstr(err->message, "org.freedesktop.systemd1.NoSuchUnit")) {
@@ -220,10 +219,9 @@ bool systemd_unit_is_enabled(const char *unit_name) {
         return r;
     }
 
-    GVariant *call_params = g_variant_new("(s)", unit_name);
-    GVariant *response =
-        g_dbus_proxy_call_sync(proxy, "org.freedesktop.systemd1.Manager.GetUnitFileState",
-                               call_params, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    GVariant *response = g_dbus_proxy_call_sync(
+        proxy, "org.freedesktop.systemd1.Manager.GetUnitFileState",
+        g_variant_new("(s)", unit_name), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
     if (err) {
         g_error("Could not determine unit file state: %s\n", err->message);
         g_error_free(err);
@@ -257,20 +255,20 @@ bool systemd_unit_set_enabled(const char *unit_name, bool enabled) {
 
     GVariantBuilder *unit_name_builder = g_variant_builder_new(G_VARIANT_TYPE("as"));
     g_variant_builder_add(unit_name_builder, "s", unit_name);
-    GVariant *response, *call_params;
+    GVariant *response;
     if (enabled) { // different method calls depending on enable/disable
         // ref: https://www.freedesktop.org/wiki/Software/systemd/dbus/
-        // params: unit files, persistent (/etc vs /run), replace links
-        call_params = g_variant_new("(asbb)", unit_name_builder, false, true);
+        // call_params: unit files, persistent (/etc vs /run), replace links
         response = g_dbus_proxy_call_sync(
-            proxy, "org.freedesktop.systemd1.Manager.EnableUnitFiles", call_params,
+            proxy, "org.freedesktop.systemd1.Manager.EnableUnitFiles",
+            g_variant_new("(asbb)", unit_name_builder, false, true),
             G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
     } else {
-        // params: unit files, persistent
-        call_params = g_variant_new("(asb)", unit_name_builder, false);
+        // call_params: unit files, persistent
         response = g_dbus_proxy_call_sync(
-            proxy, "org.freedesktop.systemd1.Manager.DisableUnitFiles", call_params,
-            G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+            proxy, "org.freedesktop.systemd1.Manager.DisableUnitFiles",
+            g_variant_new("(asb)", unit_name_builder, false), G_DBUS_CALL_FLAGS_NONE, -1,
+            NULL, &err);
     }
     // cant unref call params for some reason
     g_variant_builder_unref(unit_name_builder);
