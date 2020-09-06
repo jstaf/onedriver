@@ -188,18 +188,49 @@ bool systemd_unit_is_active(const char *unit_name) {
         return r;
     }
     GVariant *state_var = g_dbus_proxy_get_cached_property(unit_proxy, "ActiveState");
-    const gchar *state = g_variant_get_string(state_var, NULL);
-    r = strcmp(state, "active") == 0;
+    r = strcmp(g_variant_get_string(state_var, NULL), "active") == 0;
 
     g_object_unref(unit_proxy);
     g_variant_unref(state_var);
     return r;
 }
 
+/**
+ * Turn a systemd unit off or on. Returns true on success.
+ */
 bool systemd_unit_set_active(const char *unit_name, bool active) {
     bool r = false;
     GError *err = NULL;
 
+    GDBusProxy *proxy =
+        dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
+                       "org.freedesktop.systemd1.Manager", &err);
+    if (err) {
+        g_error("Could not create systemd dbus proxy: %s\n", err->message);
+        g_error_free(err);
+        return r;
+    }
+
+    char *method_name;
+    if (active) {
+        method_name = "org.freedesktop.systemd1.Manager.StartUnit";
+    } else {
+        method_name = "org.freedesktop.systemd1.Manager.StopUnit";
+    }
+    // call params ref: https://www.freedesktop.org/wiki/Software/systemd/dbus/
+    GVariant *response = g_dbus_proxy_call_sync(
+        proxy, method_name, g_variant_new("(ss)", unit_name, "replace"),
+        G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    if (err) {
+        g_error("Failed while changing unit state to %d: %s\n", (int)active,
+                err->message);
+        g_error_free(err);
+    } else {
+        r = true;
+    }
+
+    g_variant_unref(response);
+    g_object_unref(proxy);
     return r;
 }
 

@@ -68,11 +68,10 @@ MU_TEST(test_systemd_unit_active) {
     systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd_escaped, &unit_name);
     free(cwd_escaped);
 
-    // make sure things are off before we start
-    mu_check(systemd_unit_set_active(unit_name, false));
+    // make extra sure things are off before we start
     mu_check(!systemd_unit_is_active(unit_name));
-
     mu_assert(systemd_unit_set_active(unit_name, true), "Could not start unit.");
+    sleep(5); // have a method to poll if the filesystem is active at a later date
     mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
 
     // is the actual service started? we should be able to find .xdg-volume-info if so...
@@ -89,7 +88,7 @@ MU_TEST(test_systemd_unit_active) {
     mu_assert(found, "Could not find .xdg-volume-info in mounted directory");
 
     mu_assert(systemd_unit_set_active(unit_name, false), "Could not stop unit.");
-    mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as stopped");
+    mu_assert(!systemd_unit_is_active(unit_name), "Did not detect unit as stopped");
 
     free(unit_name);
 }
