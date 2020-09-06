@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "dir_chooser.h"
+#include "onedriver.h"
 #include "systemd.h"
 
 static void mountpoint_cb(GtkWidget *widget, gpointer data) {
@@ -33,7 +34,17 @@ static void mountpoint_cb(GtkWidget *widget, gpointer data) {
 
 static void activate(GtkApplication *app, gpointer data) {
     GtkWidget *window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), "onedriver");
+    gtk_window_set_default_size(GTK_WINDOW(window), 550, 400);
+
+    GtkWidget *header = gtk_header_bar_new();
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+    gtk_header_bar_set_title(GTK_HEADER_BAR(header), "onedriver");
+    gtk_window_set_titlebar(GTK_WINDOW(window), header);
+
+    GtkWidget *mountpoint_btn =
+        gtk_button_new_from_icon_name("list-add-symbolic", GTK_ICON_SIZE_BUTTON);
+    g_signal_connect(mountpoint_btn, "clicked", G_CALLBACK(mountpoint_cb), NULL);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(header), mountpoint_btn);
 
     GtkWidget *listbox = gtk_list_box_new();
     gtk_container_add(GTK_CONTAINER(window), listbox);
@@ -41,7 +52,6 @@ static void activate(GtkApplication *app, gpointer data) {
     GtkWidget *row = gtk_list_box_row_new();
     gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
     GtkWidget *button = gtk_button_new_with_label("New mountpoint");
-    g_signal_connect(button, "clicked", G_CALLBACK(mountpoint_cb), NULL);
     gtk_container_add(GTK_CONTAINER(row), button);
     gtk_list_box_insert(GTK_LIST_BOX(listbox), row, -1);
 
