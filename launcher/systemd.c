@@ -199,16 +199,14 @@ bool systemd_unit_is_active(const char *unit_name) {
  * Turn a systemd unit off or on. Returns true on success.
  */
 bool systemd_unit_set_active(const char *unit_name, bool active) {
-    bool r = false;
     GError *err = NULL;
-
     GDBusProxy *proxy =
         dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
                        "org.freedesktop.systemd1.Manager", &err);
     if (err) {
         g_error("Could not create systemd dbus proxy: %s\n", err->message);
         g_error_free(err);
-        return r;
+        return false;
     }
 
     char *method_name;
@@ -221,50 +219,46 @@ bool systemd_unit_set_active(const char *unit_name, bool active) {
     GVariant *response = g_dbus_proxy_call_sync(
         proxy, method_name, g_variant_new("(ss)", unit_name, "replace"),
         G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    g_object_unref(proxy);
     if (err) {
         g_error("Failed while changing unit state to %d: %s\n", (int)active,
                 err->message);
         g_error_free(err);
-    } else {
-        r = true;
+        return false;
     }
-
     g_variant_unref(response);
-    g_object_unref(proxy);
-    return r;
+    return true;
 }
 
 /**
  * systemd_unit_is_enabled returns if a systemd unit is enabled
  */
 bool systemd_unit_is_enabled(const char *unit_name) {
-    bool r = false;
     GError *err = NULL;
-
     GDBusProxy *proxy =
         dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
                        "org.freedesktop.systemd1.Manager", &err);
     if (err) {
         g_error("Could not create systemd dbus proxy: %s\n", err->message);
         g_error_free(err);
-        return r;
+        return false;
     }
 
     GVariant *response = g_dbus_proxy_call_sync(
         proxy, "org.freedesktop.systemd1.Manager.GetUnitFileState",
         g_variant_new("(s)", unit_name), G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
+    g_object_unref(proxy);
     if (err) {
         g_error("Could not determine unit file state: %s\n", err->message);
         g_error_free(err);
-        return r;
+        return false;
     }
 
     const gchar *enabled_state;
     g_variant_get(response, "(s)", &enabled_state);
-    r = strcmp(enabled_state, "enabled") == 0;
+    bool r = strcmp(enabled_state, "enabled") == 0;
 
     g_variant_unref(response);
-    g_object_unref(proxy);
     return r;
 }
 
@@ -272,16 +266,14 @@ bool systemd_unit_is_enabled(const char *unit_name) {
  * Enable or disable a user systemd unit. Returns true on success.
  */
 bool systemd_unit_set_enabled(const char *unit_name, bool enabled) {
-    bool r = false;
     GError *err = NULL;
-
     GDBusProxy *proxy =
         dbus_proxy_new(G_BUS_TYPE_SESSION, SYSTEMD_BUS_NAME, SYSTEMD_OBJECT_PATH,
                        "org.freedesktop.systemd1.Manager", &err);
     if (err) {
         g_error("Could not create systemd dbus proxy: %s\n", err->message);
         g_error_free(err);
-        return r;
+        return false;
     }
 
     GVariantBuilder *unit_name_builder = g_variant_builder_new(G_VARIANT_TYPE("as"));
@@ -301,15 +293,14 @@ bool systemd_unit_set_enabled(const char *unit_name, bool enabled) {
             g_variant_new("(asb)", unit_name_builder, false), G_DBUS_CALL_FLAGS_NONE, -1,
             NULL, &err);
     }
-    // cant unref call params for some reason
     g_variant_builder_unref(unit_name_builder);
-    g_variant_unref(response);
+    g_object_unref(proxy);
     if (err) {
         g_error("Could not change systemd unit enabled state to %d: %s\n", (int)enabled,
                 err->message);
         g_error_free(err);
-    } else {
-        r = true;
+        return false;
     }
-    return r;
+    g_variant_unref(response);
+    return true;
 }
