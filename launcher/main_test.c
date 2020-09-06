@@ -1,13 +1,10 @@
-#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "minunit.h"
+#include "onedriver.h"
 #include "systemd.h"
-
-#define ONEDRIVER_SERVICE_NAME "onedriver@.service"
 
 // does systemd path escaping work correctly?
 MU_TEST(test_systemd_path_escape) {
@@ -24,7 +21,7 @@ MU_TEST(test_systemd_path_escape) {
 // does systemd unit name templating work correctly?
 MU_TEST(test_systemd_template_unit) {
     char *escaped;
-    systemd_template_unit(ONEDRIVER_SERVICE_NAME, "this-is-a-test", &escaped);
+    systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, "this-is-a-test", &escaped);
     mu_check(strcmp(escaped, "onedriver@this-is-a-test.service") == 0);
     free(escaped);
 }
@@ -38,7 +35,7 @@ MU_TEST(test_systemd_unit_enabled) {
 
     char *cwd_escaped, *unit_name;
     systemd_path_escape(cwd, &cwd_escaped);
-    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd_escaped, &unit_name);
+    systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, cwd_escaped, &unit_name);
     free(cwd_escaped);
 
     // make sure things are disabled before test start
@@ -65,27 +62,16 @@ MU_TEST(test_systemd_unit_active) {
 
     char *cwd_escaped, *unit_name;
     systemd_path_escape(cwd, &cwd_escaped);
-    systemd_template_unit(ONEDRIVER_SERVICE_NAME, cwd_escaped, &unit_name);
+    systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, cwd_escaped, &unit_name);
     free(cwd_escaped);
 
     // make extra sure things are off before we start
+    mu_check(systemd_unit_set_active(unit_name, false));
     mu_check(!systemd_unit_is_active(unit_name));
-    mu_assert(systemd_unit_set_active(unit_name, true), "Could not start unit.");
-    sleep(5); // have a method to poll if the filesystem is active at a later date
-    mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
 
-    // is the actual service started? we should be able to find .xdg-volume-info if so...
-    DIR *dir = opendir(cwd);
-    struct dirent *entry;
-    bool found = false;
-    while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, ".xdg-volume-info") == 0) {
-            found = true;
-            break;
-        }
-    }
-    closedir(dir);
-    mu_assert(found, "Could not find .xdg-volume-info in mounted directory");
+    mu_assert(systemd_unit_set_active(unit_name, true), "Could not start unit.");
+    poll_fs_availability((const char *)&cwd);
+    mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
 
     mu_assert(systemd_unit_set_active(unit_name, false), "Could not stop unit.");
     mu_assert(!systemd_unit_is_active(unit_name), "Did not detect unit as stopped");
