@@ -48,11 +48,15 @@ static void activate(GtkApplication *app, gpointer data) {
 
     GtkWidget *listbox = gtk_list_box_new();
     gtk_container_add(GTK_CONTAINER(window), listbox);
+    gtk_list_box_set_activate_on_single_click(GTK_LIST_BOX(listbox), FALSE);
+    gtk_list_box_drag_unhighlight_row(GTK_LIST_BOX(listbox));
 
     GtkWidget *row = gtk_list_box_row_new();
     gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
-    GtkWidget *button = gtk_button_new_with_label("New mountpoint");
-    gtk_container_add(GTK_CONTAINER(row), button);
+    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row),
+                                     FALSE); // only for initial label
+    GtkWidget *howto = gtk_label_new("Create a new mountpoint with \"+\".");
+    gtk_container_add(GTK_CONTAINER(row), howto);
     gtk_list_box_insert(GTK_LIST_BOX(listbox), row, -1);
 
     gtk_widget_show_all(window);

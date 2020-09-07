@@ -1,8 +1,14 @@
 #pragma once
 
 #define ONEDRIVER_SERVICE_TEMPLATE "onedriver@.service"
+#define XDG_VOLUME_INFO ".xdg-volume-info"
 
-/*
- * Block until the filesystem becomes available.
- */
-void poll_fs_availability(const char *mountpoint);
+// represents a mountpoint
+typedef struct {
+    char account_name[1024];
+    char mountpoint[1024];
+    char systemd_unit[1024];
+} mount;
+
+void fs_poll_until_avail(const char *mountpoint);
+char *fs_account_name(const char *mountpoint);

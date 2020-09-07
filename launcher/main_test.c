@@ -53,8 +53,8 @@ MU_TEST(test_systemd_unit_enabled) {
     free(unit_name);
 }
 
-// can we enable and disable the onedriver service (and correctly check if the unit is
-// active/stopped?)
+// Can we enable and disable the onedriver service (and correctly check if the unit is
+// active/stopped?). Do a few checks on the fs functions while things are mounted as well.
 MU_TEST(test_systemd_unit_active) {
     char cwd[1024];
     getcwd(cwd, 1024);
@@ -70,8 +70,14 @@ MU_TEST(test_systemd_unit_active) {
     mu_check(!systemd_unit_is_active(unit_name));
 
     mu_assert(systemd_unit_set_active(unit_name, true), "Could not start unit.");
-    poll_fs_availability((const char *)&cwd);
+    fs_poll_until_avail((const char *)&cwd);
     mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
+
+    // test this function while we're at it
+    char *account_name = fs_account_name((const char *)&cwd);
+    mu_assert(account_name, "Could not determine account name.");
+    // TODO actually check email is valid later
+    free(account_name);
 
     mu_assert(systemd_unit_set_active(unit_name, false), "Could not stop unit.");
     mu_assert(!systemd_unit_is_active(unit_name), "Did not detect unit as stopped");
