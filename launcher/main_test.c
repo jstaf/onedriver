@@ -70,7 +70,7 @@ MU_TEST(test_systemd_unit_active) {
     mu_check(!systemd_unit_is_active(unit_name));
 
     mu_assert(systemd_unit_set_active(unit_name, true), "Could not start unit.");
-    fs_poll_until_avail((const char *)&cwd);
+    fs_poll_until_avail((const char *)&cwd, -1);
     mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
 
     // test this function while we're at it

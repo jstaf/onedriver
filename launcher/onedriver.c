@@ -9,11 +9,15 @@
 #include "onedriver.h"
 
 /**
- * Block until the fs is available
+ * Block until the fs is available, or a timeout is reached. If the timeout is
+ * -1, will wait until a default of 120 seconds.
  */
-void fs_poll_until_avail(const char *mountpoint) {
+void fs_poll_until_avail(const char *mountpoint, int timeout) {
     bool found = false;
-    for (int i = 0; i < 100; i++) {
+    if (timeout == -1) {
+        timeout = 120;
+    }
+    for (int i = 0; i < timeout * 10; i++) {
         DIR *dir = opendir(mountpoint);
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL) {

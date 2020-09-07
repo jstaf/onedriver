@@ -10,5 +10,5 @@ typedef struct {
     char systemd_unit[1024];
 } fsmount;
 
-void fs_poll_until_avail(const char *mountpoint);
+void fs_poll_until_avail(const char *mountpoint, int timeout);
 char *fs_account_name(const char *mountpoint);
