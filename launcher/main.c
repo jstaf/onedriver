@@ -11,7 +11,7 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     char *unit_name, *mount, *escaped_mountpoint;
 
     mount = dir_chooser("Select a mountpoint");
-    if (!strlen(mount)) { // user cancelled selection
+    if (!fs_mountpoint_is_valid(mount)) {
         free(mount);
         return;
     }

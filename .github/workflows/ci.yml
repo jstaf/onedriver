@@ -3,7 +3,11 @@ on: push
 jobs:
   test:
     name: Run tests
+<<<<<<< HEAD
     runs-on: ubuntu-latest
+=======
+    runs-on: ubuntu-20.04
+>>>>>>> 23bba13 (add c test suite to github actions)
     strategy:
       fail-fast: false
       matrix:
@@ -20,18 +24,19 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
+<<<<<<< HEAD
           sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli libreoffice
+=======
+          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev dbus dbus-x11 make wget rpm awscli gdb systemd-coredump
+          sudo rm /usr/local/bin/aws  # whyyy
+>>>>>>> 23bba13 (add c test suite to github actions)
 
       - uses: actions/cache@v2
         with:
           path: |
             ~/go/pkg/mod
-            unshare
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
-
-      - name: Compile newer unshare version
-        run: make unshare
 
       - name: Check go formatting
         run: |
@@ -40,7 +45,13 @@ jobs:
 
       - name: Check that the app compiles successfully
         run: make
+<<<<<<< HEAD
       
+=======
+        env:
+          CFLAGS: -g
+
+>>>>>>> 23bba13 (add c test suite to github actions)
       - name: Limit concurrent runs
         uses: softprops/turnstyle@v1
         env:
@@ -48,13 +59,41 @@ jobs:
 
       - name: Copy auth tokens from S3
         run: |
+<<<<<<< HEAD
           /usr/bin/aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
           /usr/bin/aws s3 cp s3://fusefs-travis/dmel.fa.gz .
+=======
+          which aws
+          aws --version
+          aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
+          aws s3 cp s3://fusefs-travis/dmel.fa.gz .
+>>>>>>> 23bba13 (add c test suite to github actions)
           gunzip dmel.fa.gz
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           ACCOUNT_TYPE: ${{ matrix.account_type }}
+
+      - name: Run c tests
+        run: |
+          sudo cp resources/onedriver@.service /etc/systemd/user
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+          sudo mkdir -p -m 0700 $XDG_RUNTIME_DIR
+          sudo chown $(whoami). $XDG_RUNTIME_DIR
+          sudo systemctl start user@$(id -u).service
+          systemctl --user daemon-reload
+          dbus-launch make c-test
+        env:
+          CFLAGS: -g
+
+      - name: Run coredumpctl on failure
+        run: |
+          sleep 5
+          coredumpctl dump > c-test.core
+          printf 'bt\nq\n' > backtrace.gdb
+          gdb -batch -x backtrace.gdb build/c-test c-test.core
+        if: failure()
 
       - name: Run tests
         run: |

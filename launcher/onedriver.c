@@ -64,3 +64,26 @@ char *fs_account_name(const char *mount_name) {
     fclose(file);
     return account_name;
 }
+
+/**
+ * Check that the mountpoint is actually valid: mounpoint exists and nothing is in it.
+ */
+bool fs_mountpoint_is_valid(const char *mountpoint) {
+    if (!mountpoint || !strlen(mountpoint)) {
+        return false;
+    }
+
+    bool valid = true;
+    DIR *dir = opendir(mountpoint);
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        valid = false;
+        break;
+    }
+    closedir(dir);
+
+    return valid;
+}

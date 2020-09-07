@@ -1,10 +1,28 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "minunit.h"
 #include "onedriver.h"
 #include "systemd.h"
+
+// can we detect a mountpoint as valid appropriately?
+MU_TEST(test_fs_mountpoint_is_valid) {
+    mu_check(!fs_mountpoint_is_valid(""));
+    mu_check(!fs_mountpoint_is_valid("fs"));
+    mu_check(fs_mountpoint_is_valid("mount"));
+
+    mkdir("_test", 0755);
+    FILE *f = fopen("_test/.example", "w");
+    fprintf(f, "ooga booga\n");
+    fclose(f);
+    mu_check(!fs_mountpoint_is_valid("_test"));
+    unlink("_test/.example");
+    rmdir("_test");
+}
 
 // does systemd path escaping work correctly?
 MU_TEST(test_systemd_path_escape) {
@@ -86,6 +104,7 @@ MU_TEST(test_systemd_unit_active) {
 }
 
 MU_TEST_SUITE(systemd_tests) {
+    MU_RUN_TEST(test_fs_mountpoint_is_valid);
     MU_RUN_TEST(test_systemd_path_escape);
     MU_RUN_TEST(test_systemd_template_unit);
     MU_RUN_TEST(test_systemd_unit_enabled);

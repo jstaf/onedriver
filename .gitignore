@@ -17,6 +17,8 @@ build/
 *.out
 *.txt
 *.coverage
+*.core
+*.gdb
 
 # do not include binaries, but do include sources
 onedriver
