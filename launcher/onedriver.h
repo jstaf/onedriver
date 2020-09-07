@@ -8,7 +8,7 @@ typedef struct {
     char account_name[1024];
     char mountpoint[1024];
     char systemd_unit[1024];
-} mount;
+} fsmount;
 
 void fs_poll_until_avail(const char *mountpoint);
 char *fs_account_name(const char *mountpoint);
