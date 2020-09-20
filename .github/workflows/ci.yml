@@ -77,12 +77,12 @@ jobs:
       - name: Run c tests
         run: |
           sudo cp resources/onedriver@.service /etc/systemd/user
+          sudo cp onedriver /usr/bin
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
           sudo mkdir -p -m 0700 $XDG_RUNTIME_DIR
           sudo chown $(whoami). $XDG_RUNTIME_DIR
           sudo systemctl start user@$(id -u).service
-          systemctl --user daemon-reload
           dbus-launch make c-test
         env:
           CFLAGS: -g
