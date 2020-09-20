@@ -13,6 +13,7 @@
 MU_TEST(test_fs_mountpoint_is_valid) {
     mu_check(!fs_mountpoint_is_valid(""));
     mu_check(!fs_mountpoint_is_valid("fs"));
+    mu_check(!fs_mountpoint_is_valid("does_not_exist"));
     mu_check(fs_mountpoint_is_valid("mount"));
 
     mkdir("_test", 0755);
@@ -104,6 +105,8 @@ MU_TEST(test_systemd_unit_active) {
 }
 
 MU_TEST_SUITE(systemd_tests) {
+    mkdir("mount", 0700); // needs to exist for several tests
+
     MU_RUN_TEST(test_fs_mountpoint_is_valid);
     MU_RUN_TEST(test_systemd_path_escape);
     MU_RUN_TEST(test_systemd_template_unit);

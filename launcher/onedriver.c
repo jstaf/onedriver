@@ -19,6 +19,9 @@ void fs_poll_until_avail(const char *mountpoint, int timeout) {
     }
     for (int i = 0; i < timeout * 10; i++) {
         DIR *dir = opendir(mountpoint);
+        if (!dir) {
+            return;
+        }
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL) {
             if (strcmp(entry->d_name, XDG_VOLUME_INFO) == 0) {
@@ -75,6 +78,9 @@ bool fs_mountpoint_is_valid(const char *mountpoint) {
 
     bool valid = true;
     DIR *dir = opendir(mountpoint);
+    if (!dir) {
+        return false;
+    }
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
