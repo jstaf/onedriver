@@ -86,6 +86,7 @@ jobs:
           dbus-launch make c-test
         env:
           CFLAGS: -g
+        continue-on-error: true
 
       - name: Run coredumpctl on failure
         run: |
