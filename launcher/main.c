@@ -6,6 +6,14 @@
 #include "onedriver.h"
 #include "systemd.h"
 
+static GtkWidget *new_mount_row(char *mount) {
+    GtkWidget *row = gtk_list_box_row_new();
+    gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
+    GtkWidget *name = gtk_label_new(mount);
+    gtk_container_add(GTK_CONTAINER(row), name);
+    return row;
+}
+
 static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     static bool has_mount = false;
     char *unit_name, *mount, *escaped_mountpoint;
@@ -19,10 +27,7 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     systemd_path_escape(mount, &escaped_mountpoint);
     systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, escaped_mountpoint, &unit_name);
 
-    GtkWidget *row = gtk_list_box_row_new();
-    gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
-    GtkWidget *name = gtk_label_new(unit_name);
-    gtk_container_add(GTK_CONTAINER(row), name);
+    GtkWidget *row = new_mount_row(mount);
     gtk_list_box_insert(box, row, -1);
     gtk_widget_show_all(row);
 
@@ -56,13 +61,13 @@ static void activate(GtkApplication *app, gpointer data) {
     g_signal_connect(mountpoint_btn, "clicked", G_CALLBACK(mountpoint_cb), listbox);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), mountpoint_btn);
 
-    GtkWidget *row = gtk_list_box_row_new();
-    gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
-    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row),
-                                     FALSE); // only for initial label
-    GtkWidget *howto = gtk_label_new("Create a new mountpoint with \"+\".");
-    gtk_container_add(GTK_CONTAINER(row), howto);
-    gtk_list_box_insert(GTK_LIST_BOX(listbox), row, -1);
+    char **existing_mounts = fs_known_mounts();
+    for (char **mounts = existing_mounts; *mounts; mounts++) {
+        GtkWidget *row = new_mount_row(*mounts);
+        gtk_list_box_insert(GTK_LIST_BOX(listbox), row, -1);
+        free(*mounts);
+    }
+    free(existing_mounts);
 
     gtk_widget_show_all(window);
 }

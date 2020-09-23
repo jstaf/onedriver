@@ -83,8 +83,6 @@ jobs:
           sudo mkdir -p -m 0700 $XDG_RUNTIME_DIR
           sudo chown $(whoami). $XDG_RUNTIME_DIR
           sudo systemctl start user@$(id -u).service
-          sudo systemctl status user@$(id -u).service
-          systemctl status --user
           dbus-launch make c-test
         env:
           CFLAGS: -g

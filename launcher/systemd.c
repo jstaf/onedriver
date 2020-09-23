@@ -7,6 +7,7 @@
 #include <glib.h>
 #include <glib/gi18n.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -15,6 +16,19 @@
 char systemd_hexchar(int x) {
     static const char table[16] = "0123456789abcdef";
     return table[x & 15];
+}
+
+int systemd_unhexchar(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -EINVAL;
 }
 
 static char *escape_char(char c, char *t) {
@@ -64,6 +78,44 @@ char *systemd_escape(const char *str) {
     }
     *r = '\0';
     return repl;
+}
+
+char *systemd_unescape(const char *f) {
+    char *r = strdup(f);
+    if (!r) {
+        return NULL;
+    }
+
+    char *t;
+    for (t = r; *f; f++) {
+        if (*f == '-') {
+            *(t++) = '/';
+        } else if (*f == '\\') {
+            if (f[1] != 'x') {
+                free(r);
+                return NULL;
+            }
+
+            int a = systemd_unhexchar(f[2]);
+            if (a < 0) {
+                free(r);
+                return NULL;
+            }
+
+            int b = systemd_unhexchar(f[3]);
+            if (b < 0) {
+                free(r);
+                return NULL;
+            }
+
+            *(t++) = (char)(((uint8_t)a << 4U) | (uint8_t)b);
+            f += 3;
+        } else {
+            *(t++) = *f;
+        }
+    }
+    *t = 0;
+    return r;
 }
 
 /**
