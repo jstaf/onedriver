@@ -20,6 +20,9 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
 
     mount = dir_chooser("Select a mountpoint");
     if (!fs_mountpoint_is_valid(mount)) {
+        g_print(
+            "Mountpoint \"%s\" was not valid. Mountpoint must be an empty directory.\n",
+            mount);
         free(mount);
         return;
     }
