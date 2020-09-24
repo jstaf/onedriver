@@ -9,10 +9,10 @@
 
 // some useful icon constants (from gtk3-icon-browser)
 #define PLUS_ICON "list-add-symbolic"
-#define MINUS_ICON "list-remove-symbolic"
+#define MINUS_ICON "user-trash-symbolic"
 #define MOUNT_ICON "folder-remote-symbolic"
 #define UNMOUNT_ICON "media-eject-symbolic"
-#define ENABLED_ICON "system-reboot-symbolic"
+#define ENABLED_ICON "object-select-symbolic"
 
 /**
  * Enable or disable a mountpoint when button is clicked.
@@ -34,11 +34,10 @@ static void activate_mount_cb(GtkWidget *widget, char *unit_name) {
 }
 
 static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
-    // TODO
-    // * present user with "are you sure? dialog
-    // * disable mount
-    // * stop mount
-    // * rmtree cache folder
+    // TODO present user with "are you sure? dialog
+    systemd_unit_set_enabled(unit_name, false);
+    systemd_unit_set_active(unit_name, false);
+    // TODO rmtree cache folder
     gtk_widget_destroy(gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW));
 }
 
@@ -89,7 +88,6 @@ static GtkWidget *new_mount_row(char *mount) {
 }
 
 static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
-    static bool has_mount = false;
     char *unit_name, *mount, *escaped_mountpoint;
 
     mount = dir_chooser("Select a mountpoint");
@@ -111,12 +109,6 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     free(mount);
     free(unit_name);
     free(escaped_mountpoint);
-
-    if (!has_mount) {
-        // remove how-to message now that the user has a mount
-        gtk_widget_destroy(GTK_WIDGET(gtk_list_box_get_row_at_index(box, 0)));
-        has_mount = true;
-    }
 }
 
 static void activate(GtkApplication *app, gpointer data) {
@@ -147,6 +139,7 @@ static void activate(GtkApplication *app, gpointer data) {
     }
     free(existing_mounts);
 
+    gtk_list_box_unselect_all(GTK_LIST_BOX(listbox));
     gtk_widget_show_all(window);
 }
 
