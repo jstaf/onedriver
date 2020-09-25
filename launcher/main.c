@@ -47,7 +47,9 @@ static GtkWidget *new_mount_row(char *mount) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_container_add(GTK_CONTAINER(row), box);
 
-    GtkWidget *name = gtk_label_new(mount);
+    char *tilde_path = escape_home(mount);
+    GtkWidget *name = gtk_label_new(tilde_path);
+    free(tilde_path);
     gtk_box_pack_start(GTK_BOX(box), name, FALSE, FALSE, 5);
 
     char *escaped_path, *unit_name;

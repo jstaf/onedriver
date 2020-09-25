@@ -139,3 +139,31 @@ char **fs_known_mounts() {
     r[idx] = NULL;
     return r;
 }
+
+/**
+ * Strip the /home/username part from a path and replace it with "~". Result should be
+ * freed by caller.
+ */
+char *escape_home(const char *path) {
+    const char *homedir = g_get_home_dir();
+    int len = strlen(homedir);
+    if (strncmp(path, homedir, len) == 0) {
+        char *replaced = strdup(path + len - 1);
+        replaced[0] = '~';
+        return replaced;
+    }
+    return strdup(path);
+}
+
+/**
+ * Replace the tilde in a path with the absolute path
+ */
+char *unescape_home(const char *path) {
+    if (path[0] == '/') {
+        return strdup(path);
+    }
+    const char *homedir = g_get_home_dir();
+    int len = strlen(homedir);
+    char *new_path = malloc(strlen(path) - 1 + len);
+    return strcat(strcpy(new_path, homedir), path + 1);
+}

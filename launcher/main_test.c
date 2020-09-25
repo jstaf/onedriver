@@ -1,3 +1,4 @@
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +24,23 @@ MU_TEST(test_fs_mountpoint_is_valid) {
     mu_check(!fs_mountpoint_is_valid("_test"));
     unlink("_test/.example");
     rmdir("_test");
+}
+
+// Can we convert paths from ~/some_path to /home/username/some_path and back?
+MU_TEST(test_home_escape) {
+    const char *homedir = g_get_home_dir();
+    char *test_path = malloc(strlen(homedir) + strlen("/test"));
+    strcat(strcpy(test_path, homedir), "/test");
+
+    char *to_tilde = escape_home(test_path);
+    mu_assert(strcmp(to_tilde, "~/test") == 0, to_tilde);
+
+    char *and_back = unescape_home("~/test");
+    mu_assert(strcmp(and_back, test_path) == 0, and_back);
+
+    free(to_tilde);
+    free(test_path);
+    free(and_back);
 }
 
 // does systemd path escaping work correctly?
@@ -108,6 +126,7 @@ MU_TEST_SUITE(systemd_tests) {
     mkdir("mount", 0700); // needs to exist for several tests
 
     MU_RUN_TEST(test_fs_mountpoint_is_valid);
+    MU_RUN_TEST(test_home_escape);
     MU_RUN_TEST(test_systemd_path_escape);
     MU_RUN_TEST(test_systemd_template_unit);
     MU_RUN_TEST(test_systemd_unit_enabled);
