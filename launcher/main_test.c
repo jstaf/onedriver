@@ -34,13 +34,20 @@ MU_TEST(test_home_escape) {
 
     char *to_tilde = escape_home(test_path);
     mu_assert(strcmp(to_tilde, "~/test") == 0, to_tilde);
+    free(to_tilde);
+
+    char *dont_escape = escape_home("/opt/test");
+    mu_assert(strcmp(dont_escape, "/opt/test") == 0, dont_escape);
+    free(dont_escape);
 
     char *and_back = unescape_home("~/test");
     mu_assert(strcmp(and_back, test_path) == 0, and_back);
-
-    free(to_tilde);
     free(test_path);
     free(and_back);
+
+    char *dont_unescape = unescape_home("/opt/test");
+    mu_assert(strcmp(dont_unescape, "/opt/test") == 0, dont_unescape);
+    free(dont_unescape);
 }
 
 // does systemd path escaping work correctly?
