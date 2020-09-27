@@ -25,12 +25,28 @@ static void enable_mountpoint_cb(GtkWidget *widget, char *unit_name) {
     }
 }
 
+/**
+ * Mount or unmount an acccount.
+ * * start/stop mountpoint
+ * * set busy signal + make icon unclickable
+ * * (if active) poll for filesystem availability
+ * * set correct icon + make icon clickable
+ */
 static void activate_mount_cb(GtkWidget *widget, char *unit_name) {
-    // TODO
-    // * start/stop mountpoint
-    // * set busy signal + make icon unclickable
-    // * (if active) poll for filesystem availability
-    // * set correct icon + make icon clickable
+    // invert mountpoint state
+    bool mounted = systemd_unit_is_active(unit_name);
+    if (systemd_unit_set_active(unit_name, !mounted)) {
+        // change icon state
+        GtkWidget *image = gtk_button_get_image(GTK_BUTTON(widget));
+        if (mounted) {
+            // just unmounted
+            gtk_image_set_from_icon_name(GTK_IMAGE(image), MOUNT_ICON,
+                                         GTK_ICON_SIZE_BUTTON);
+        } else {
+            gtk_image_set_from_icon_name(GTK_IMAGE(image), UNMOUNT_ICON,
+                                         GTK_ICON_SIZE_BUTTON);
+        }
+    }
 }
 
 static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
