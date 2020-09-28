@@ -3,11 +3,7 @@ on: push
 jobs:
   test:
     name: Run tests
-<<<<<<< HEAD
-    runs-on: ubuntu-latest
-=======
     runs-on: ubuntu-20.04
->>>>>>> 23bba13 (add c test suite to github actions)
     strategy:
       fail-fast: false
       matrix:
@@ -24,12 +20,8 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
-<<<<<<< HEAD
-          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli libreoffice
-=======
           sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev dbus dbus-x11 make wget rpm awscli gdb systemd-coredump
           sudo rm /usr/local/bin/aws  # whyyy
->>>>>>> 23bba13 (add c test suite to github actions)
 
       - uses: actions/cache@v2
         with:
@@ -45,13 +37,9 @@ jobs:
 
       - name: Check that the app compiles successfully
         run: make
-<<<<<<< HEAD
-      
-=======
         env:
           CFLAGS: -g
 
->>>>>>> 23bba13 (add c test suite to github actions)
       - name: Limit concurrent runs
         uses: softprops/turnstyle@v1
         env:
@@ -59,15 +47,10 @@ jobs:
 
       - name: Copy auth tokens from S3
         run: |
-<<<<<<< HEAD
-          /usr/bin/aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
-          /usr/bin/aws s3 cp s3://fusefs-travis/dmel.fa.gz .
-=======
           which aws
           aws --version
           aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
           aws s3 cp s3://fusefs-travis/dmel.fa.gz .
->>>>>>> 23bba13 (add c test suite to github actions)
           gunzip dmel.fa.gz
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

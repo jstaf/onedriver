@@ -25,8 +25,13 @@ break.
 %autosetup
 
 %build
+<<<<<<< HEAD
 GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
 gzip resources/onedriver.1
+=======
+GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)" ./cmd/%{name}
+make onedriver-launcher
+>>>>>>> 20e69c4 (replace bash launcher with gui)
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -36,7 +41,7 @@ mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
-cp resources/%{name}-launcher.sh %{buildroot}/%{_bindir}
+cp %{name}-launcher %{buildroot}/%{_bindir}
 cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.desktop %{buildroot}/usr/share/applications
@@ -48,7 +53,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/%{name}
-%attr(755, root, root) %{_bindir}/%{name}-launcher.sh
+%attr(755, root, root) %{_bindir}/%{name}-launcher
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
 %attr(644, root, root) /usr/share/applications/%{name}.desktop
@@ -57,6 +62,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+<<<<<<< HEAD
 * Mon May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.1
 - Fix the onedriver .desktop launcher so it uses the new systemd unit name.
 
@@ -76,6 +82,12 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 * Tue Sep 29 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.2
 - Adds fix for server-side update to Microsoft's authentication APIs.
 - Fix a crash on auth renewal after computer suspend or other network interruption.
+=======
+* Sun Sep 27 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
+- Add GUI for managing multiple mountpoints. You don't have to use the terminal anymore if
+  you don't want to.
+- Fixed a crash during auth renewal after computer sleep.
+>>>>>>> 20e69c4 (replace bash launcher with gui)
 
 * Sat Jun 6 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.1
 - Filenames are now sanitized when uploading new files.
