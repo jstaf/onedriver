@@ -14,6 +14,9 @@
 #define UNMOUNT_ICON "media-eject-symbolic"
 #define ENABLED_ICON "object-select-symbolic"
 
+#define MOUNT_MESSAGE "Mount selected OneDrive account"
+#define UNMOUNT_MESSAGE "Unmount selected OneDrive account"
+
 /**
  * Enable or disable a mountpoint when button is clicked.
  */
@@ -42,9 +45,11 @@ static void activate_mount_cb(GtkWidget *widget, char *unit_name) {
             // just unmounted
             gtk_image_set_from_icon_name(GTK_IMAGE(image), MOUNT_ICON,
                                          GTK_ICON_SIZE_BUTTON);
+            gtk_widget_set_tooltip_text(widget, MOUNT_MESSAGE);
         } else {
             gtk_image_set_from_icon_name(GTK_IMAGE(image), UNMOUNT_ICON,
                                          GTK_ICON_SIZE_BUTTON);
+            gtk_widget_set_tooltip_text(widget, UNMOUNT_MESSAGE);
         }
     }
 }
@@ -95,10 +100,14 @@ static GtkWidget *new_mount_row(char *mount) {
     gtk_box_pack_end(GTK_BOX(box), unit_enabled_btn, FALSE, FALSE, 0);
 
     // and a button to actually start/stop the mountpoint
-    char *icon_name = systemd_unit_is_active(unit_name) ? UNMOUNT_ICON : MOUNT_ICON;
-    GtkWidget *mount_toggle =
-        gtk_button_new_from_icon_name(icon_name, GTK_ICON_SIZE_BUTTON);
-    gtk_widget_set_tooltip_text(mount_toggle, "Mount selected OneDrive account");
+    GtkWidget *mount_toggle;
+    if (systemd_unit_is_active(unit_name)) {
+        mount_toggle = gtk_button_new_from_icon_name(UNMOUNT_ICON, GTK_ICON_SIZE_BUTTON);
+        gtk_widget_set_tooltip_text(mount_toggle, UNMOUNT_MESSAGE);
+    } else {
+        mount_toggle = gtk_button_new_from_icon_name(MOUNT_ICON, GTK_ICON_SIZE_BUTTON);
+        gtk_widget_set_tooltip_text(mount_toggle, MOUNT_MESSAGE);
+    }
     g_signal_connect(mount_toggle, "clicked", G_CALLBACK(activate_mount_cb), unit_name);
     gtk_box_pack_end(GTK_BOX(box), mount_toggle, FALSE, FALSE, 0);
 
