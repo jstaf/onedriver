@@ -25,7 +25,7 @@ func getAuthCode() string {
 	C.free(unsafe.Pointer(cAuthURL))
 	C.free(unsafe.Pointer(cResponse))
 
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_])+")
+	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_.])+")
 	code := rexp.FindString(response)
 	if len(code) == 0 {
 		log.Fatal("No validation code returned, or code was invalid. " +
