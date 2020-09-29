@@ -2,7 +2,6 @@ package graph
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -28,6 +27,19 @@ type Auth struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	path         string // auth tokens remember their path for use by Refresh()
+}
+
+// AuthError is an authentication error from the Microsoft API. Generally we don't see
+// these unless something goes catastrophically wrong with Microsoft's authentication
+// services.
+type AuthError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+	ErrorCodes       []int  `json:"error_codes"`
+	ErrorURI         string `json:"error_uri"`
+	Timestamp        string `json:"timestamp"` // json.Unmarshal doesn't like this timestamp format
+	TraceID          string `json:"trace_id"`
+	CorrelationID    string `json:"correlation_id"`
 }
 
 // ToFile writes auth tokens to a file
@@ -62,14 +74,12 @@ func (a *Auth) Refresh() {
 		var reauth bool
 		if err != nil {
 			if IsOffline(err) || resp == nil {
-				log.WithFields(log.Fields{
-					"err": err,
-				}).Trace("Network unreachable during token renewal, ignoring.")
+				log.WithField("err", err).Trace(
+					"Network unreachable during token renewal, ignoring.")
 				return
 			}
-			log.WithFields(log.Fields{
-				"err": err,
-			}).Error("Could not POST to renew tokens, forcing reauth.")
+			log.WithField("err", err).Error(
+				"Could not POST to renew tokens, forcing reauth.")
 			reauth = true
 		} else {
 			// put here so as to avoid spamming the log when offline
@@ -84,9 +94,10 @@ func (a *Auth) Refresh() {
 		}
 
 		if reauth || a.AccessToken == "" || a.RefreshToken == "" {
-			log.WithField("response", string(body)).Error(
-				"Failed to renew access tokens. Attempting to reauthenticate.",
-			)
+			log.WithFields(log.Fields{
+				"response":  string(body),
+				"http_code": resp.StatusCode,
+			}).Error("Failed to renew access tokens. Attempting to reauthenticate.")
 			a = newAuth(a.path)
 		} else {
 			a.ToFile(a.path)
@@ -113,8 +124,7 @@ func getAuthTokens(authCode string) *Auth {
 		"application/x-www-form-urlencoded",
 		postData)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.WithField("error", err).Fatalf("Could not POST to obtain auth tokens.")
 	}
 	defer resp.Body.Close()
 
@@ -125,7 +135,29 @@ func getAuthTokens(authCode string) *Auth {
 		auth.ExpiresAt = time.Now().Unix() + auth.ExpiresIn
 	}
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
-		log.Fatalf("Failed to retrieve access tokens. Response from server:\n%s\n", string(body))
+		var authErr AuthError
+		var fields log.Fields
+		if err := json.Unmarshal(body, &authErr); err == nil {
+			// we got a parseable error message out of microsoft's servers
+			fields = log.Fields{
+				"http_code":         resp.StatusCode,
+				"error":             authErr.Error,
+				"error_description": authErr.ErrorDescription,
+				"help_url":          authErr.ErrorURI,
+			}
+		} else {
+			// things are extra broken and this is an error type we haven't seen before
+			fields = log.Fields{
+				"http_code":          resp.StatusCode,
+				"response":           string(body),
+				"response_parse_err": err,
+			}
+		}
+		log.WithFields(fields).Fatalf(
+			"Failed to retrieve access tokens. Authentication cannot continue. " +
+				"This can be either a client-side error " +
+				"(onedriver isn't authenticating properly) " +
+				"or a server-side outage with Microsoft's authentication services.")
 	}
 	return &auth
 }
