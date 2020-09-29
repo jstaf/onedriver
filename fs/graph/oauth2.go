@@ -154,10 +154,7 @@ func getAuthTokens(authCode string) *Auth {
 			}
 		}
 		log.WithFields(fields).Fatalf(
-			"Failed to retrieve access tokens. Authentication cannot continue. " +
-				"This can be either a client-side error " +
-				"(onedriver isn't authenticating properly) " +
-				"or a server-side outage with Microsoft's authentication services.")
+			"Failed to retrieve access tokens. Authentication cannot continue.")
 	}
 	return &auth
 }
