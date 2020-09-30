@@ -1,6 +1,6 @@
 Name:          onedriver
 Version:       0.9.2
-Release:       2%{?dist}
+Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
