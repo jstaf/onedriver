@@ -4,7 +4,6 @@ package graph
 
 import (
 	"fmt"
-	"regexp"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -15,12 +14,10 @@ func getAuthCode() string {
 		"blank page (after \"Let this app access your info?\"):")
 	var response string
 	fmt.Scanln(&response)
-
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_])+")
-	code := rexp.FindString(response)
-	if len(code) == 0 {
+	code, err := parseAuthCode(response)
+	if err != nil {
 		log.Fatal("No validation code returned, or code was invalid. " +
 			"Please restart the application and try again.")
 	}
-	return code[5:]
+	return code
 }

@@ -418,7 +418,7 @@ func TestStat(t *testing.T) {
 	}
 
 	if !stat.IsDir() {
-		t.Fatal("Mode of /Documents wrong, not detected as directory, got: " + string(stat.Mode()))
+		t.Fatalf("Mode of /Documents wrong, not detected as directory, got: %s", stat.Mode())
 	}
 }
 
