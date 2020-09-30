@@ -1,3 +1,10 @@
+onedriver (0.9.2-1) focal; urgency=low
+
+  * Adds fix for server-side update to Microsoft's authentication APIs.
+  * Fix a crash on auth renewal after computer suspend or other network interruption.
+
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Tue, 29 Sep 2020 20:50:00 -0400
+
 onedriver (0.9.1-1) focal; urgency=low
 
   * Filenames are now sanitized when uploading new files.
