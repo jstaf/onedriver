@@ -2,10 +2,12 @@ package graph
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -112,6 +114,17 @@ func getAuthURL() string {
 		"&scope=" + url.PathEscape("user.read files.readwrite.all offline_access") +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
+}
+
+// parseAuthCode is used to parse the auth code out of the redirect the server gives us
+// after successful authentication
+func parseAuthCode(url string) (string, error) {
+	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_.])+")
+	code := rexp.FindString(url)
+	if len(code) == 0 {
+		return "", errors.New("invalid auth code")
+	}
+	return code[5:], nil
 }
 
 // Exchange an auth code for a set of access tokens

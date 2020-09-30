@@ -10,7 +10,6 @@ package graph
 import "C"
 
 import (
-	"regexp"
 	"unsafe"
 
 	log "github.com/sirupsen/logrus"
@@ -25,11 +24,11 @@ func getAuthCode() string {
 	C.free(unsafe.Pointer(cAuthURL))
 	C.free(unsafe.Pointer(cResponse))
 
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_.])+")
-	code := rexp.FindString(response)
-	if len(code) == 0 {
+	code, err := parseAuthCode(response)
+	if err != nil {
+		//TODO create a popup with the auth failure message here instead of a log message
 		log.Fatal("No validation code returned, or code was invalid. " +
 			"Please restart the application and try again.")
 	}
-	return code[5:]
+	return code
 }
