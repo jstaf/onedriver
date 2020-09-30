@@ -1,6 +1,6 @@
 Name:          onedriver
 Version:       0.9.2
-Release:       1%{?dist}
+Release:       2%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
@@ -25,7 +25,7 @@ break.
 %autosetup
 
 %build
-GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(shell cat .commit)" ./cmd/%{name}
+GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)" ./cmd/%{name}
 
 %install
 rm -rf $RPM_BUILD_ROOT
