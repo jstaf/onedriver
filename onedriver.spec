@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.9.1
+Version:       0.9.2
 Release:       2%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -52,6 +52,10 @@ cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service
 
 %changelog
+* Tue Sep 29 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.2
+- Adds fix for server-side update to Microsoft's authentication APIs.
+- Fix a crash on auth renewal after computer suspend or other network interruption.
+
 * Sat Jun 6 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.1
 - Filenames are now sanitized when uploading new files.
 - onedriver now only syncs metadata changes for a file from server to client if its
