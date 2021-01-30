@@ -9,6 +9,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const maxUploadsInFlight = 5
+
 var bucketUploads = []byte("uploads")
 
 // UploadManager is used to manage and retry uploads.
@@ -16,6 +18,7 @@ type UploadManager struct {
 	queue         chan *UploadSession
 	deletionQueue chan string
 	sessions      map[string]*UploadSession
+	inFlight      uint8 // number of sessions in flight
 	auth          *graph.Auth
 	db            *bolt.DB
 }
@@ -46,6 +49,9 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, auth *graph.Auth) *Up
 					"err", err,
 				).Error("Error while restoring upload sessions from disk.")
 				return err
+			}
+			if session.getState() != uploadNotStarted {
+				manager.inFlight++
 			}
 			session.cancel(auth) // uploads are currently non-resumable
 			manager.sessions[session.ID] = session
@@ -82,7 +88,13 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 			for _, session := range u.sessions {
 				switch session.getState() {
 				case uploadNotStarted:
-					go session.Upload(u.auth)
+					// max active upload sessions are capped at this limit for faster
+					// uploads of individual files and also to prevent possible server-
+					// side throttling that can cause errors
+					if u.inFlight < maxUploadsInFlight {
+						u.inFlight++
+						go session.Upload(u.auth)
+					}
 
 				case uploadErrored:
 					session.retries++
@@ -141,5 +153,13 @@ func (u *UploadManager) finishUpload(id string) {
 		}
 		return nil
 	})
+	if u.inFlight == 0 {
+		log.WithFields(log.Fields{
+			"id":       id,
+			"inFlight": u.inFlight,
+		}).Warn("Files in flight cannot be less than 0")
+	} else {
+		u.inFlight--
+	}
 	delete(u.sessions, id)
 }
