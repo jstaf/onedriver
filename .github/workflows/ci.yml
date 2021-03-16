@@ -4,7 +4,6 @@ jobs:
   test:
     name: Run tests
     runs-on: ubuntu-latest
-    needs: turnstyle
     strategy:
       fail-fast: false
       matrix:
