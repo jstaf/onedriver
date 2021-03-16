@@ -327,3 +327,25 @@ func TestDeltaNoModTimeUpdate(t *testing.T) {
 		)
 	}
 }
+
+// deltas can come back missing from the server
+// https://github.com/jstaf/onedriver/issues/111
+func TestDeltaMissingHash(t *testing.T) {
+	t.Parallel()
+	cache := NewCache(auth, "test_delta_missing_hash.db")
+	file := NewInode("file", 0644|fuse.S_IFREG, nil)
+	cache.InsertPath("/folder", nil, file)
+
+	time.Sleep(time.Second)
+	now := time.Now()
+	delta := &Inode{
+		DriveItem: graph.DriveItem{
+			ID:      file.ID(),
+			Parent:  &graph.DriveItemParent{ID: file.ParentID()},
+			ModTime: &now,
+			Size:    12345,
+		},
+		mode: 0644 | fuse.S_IFREG,
+	}
+	cache.applyDelta(delta)
+}
