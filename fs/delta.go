@@ -220,7 +220,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// progress of being uploaded (also, no need to sync empty files).
 	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
 		sameContent := false
-		if !delta.IsDir() {
+		if !delta.IsDir() && delta.File != nil {
 			local.mutex.RLock()
 			if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
@@ -241,6 +241,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			local.mutex.Lock()
 			defer local.mutex.Unlock()
 			local.DriveItem.ModTime = delta.DriveItem.ModTime
+			local.DriveItem.Size = delta.DriveItem.Size
 			// the rest of these are harmless when this is a directory
 			// as they will be null anyways
 			local.DriveItem.File = delta.DriveItem.File

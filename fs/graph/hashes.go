@@ -27,7 +27,7 @@ func QuickXORHash(data *[]byte) string {
 // supposed to be. This is less of a cryptographic check and more of a file
 // integrity check.
 func (d *DriveItem) VerifyChecksum(checksum string) bool {
-	if len(checksum) == 0 {
+	if len(checksum) == 0 || d.File == nil {
 		return false
 	}
 	// all checksums are converted to upper to avoid casing issues from whatever
