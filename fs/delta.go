@@ -220,7 +220,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// progress of being uploaded (also, no need to sync empty files).
 	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
 		sameContent := false
-		if !delta.IsDir() {
+		if !delta.IsDir() && delta.File != nil {
 			local.mutex.RLock()
 			if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)

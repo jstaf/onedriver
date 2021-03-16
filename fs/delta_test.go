@@ -348,4 +348,5 @@ func TestDeltaMissingHash(t *testing.T) {
 		mode: 0644 | fuse.S_IFREG,
 	}
 	cache.applyDelta(delta)
+	// if we survive to here without a segfault, test passed
 }
