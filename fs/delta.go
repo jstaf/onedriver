@@ -241,6 +241,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			local.mutex.Lock()
 			defer local.mutex.Unlock()
 			local.DriveItem.ModTime = delta.DriveItem.ModTime
+			local.DriveItem.Size = delta.DriveItem.Size
 			// the rest of these are harmless when this is a directory
 			// as they will be null anyways
 			local.DriveItem.File = delta.DriveItem.File
