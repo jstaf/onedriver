@@ -1,13 +1,6 @@
 name: Run tests
 on: push
 jobs:
-  turnstyle:
-    name: Limit concurrent runs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: softprops/turnstyle@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   test:
     name: Run tests
     runs-on: ubuntu-latest
@@ -48,6 +41,11 @@ jobs:
 
       - name: Check that the app compiles successfully
         run: make
+      
+      - name: Limit concurrent runs
+        uses: softprops/turnstyle@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Copy auth tokens from S3
         run: |
