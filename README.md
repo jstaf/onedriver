@@ -132,6 +132,7 @@ default version of `unshare` is too old to use.
 ```bash
 # note - the tests will write and delete files/folders on your onedrive account
 # at the path /onedriver_tests
+go get -u github.com/rakyll/gotest
 make test
 ```
 

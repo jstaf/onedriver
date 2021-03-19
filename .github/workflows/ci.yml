@@ -58,8 +58,9 @@ jobs:
 
       - name: Run tests
         run: |
-          go test -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
-          go test -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
+          go get -u github.com/rakyll/gotest 
+          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
+          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
           go test -c -covermode=count -coverpkg=./fs/... ./fs/offline
           sudo ./unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
 
