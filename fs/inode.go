@@ -306,7 +306,8 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewInode(i.Name(), 0644, nil)
+		name := i.Name()
+		unsafe := NewInode(name, 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
 			return originalID, err
@@ -314,6 +315,11 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 		// this is all we really wanted from this transaction
 		newID := unsafe.ID()
 		err = i.GetCache().MoveID(originalID, newID)
+		log.WithFields(log.Fields{
+			"name":     name,
+			"original": originalID,
+			"new":      newID,
+		}).Info("Exchanged ID.")
 		return newID, err
 	}
 	return originalID, nil
@@ -622,13 +628,6 @@ func Octal(i uint32) string {
 func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	path := i.Path()
 	id := i.ID()
-	log.WithFields(log.Fields{
-		"id":   id,
-		"path": path,
-		"name": name,
-		"mode": Octal(mode),
-	}).Debug()
-
 	cache := i.GetCache()
 	if cache.IsOffline() {
 		// nope, we are refusing op to avoid data loss later
@@ -641,6 +640,13 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 	}
 
 	inode := NewInode(name, mode, i)
+	log.WithFields(log.Fields{
+		"id":      id,
+		"childid": inode.ID(),
+		"path":    path,
+		"name":    name,
+		"mode":    Octal(mode),
+	}).Debug()
 	cache.InsertChild(id, inode)
 	return i.NewInode(ctx, inode, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }
