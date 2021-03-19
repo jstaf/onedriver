@@ -79,8 +79,9 @@ func TestFilenameEscape(t *testing.T) {
 	t.Fatalf("Could not find file: \"%s\"", fname)
 }
 
-// See if this catches the 0-bytes file issue from:
-// https://github.com/jstaf/onedriver/issues/99
+// When running creat() on an existing file, we should truncate the existing file and
+// return the original inode.
+// Related to: https://github.com/jstaf/onedriver/issues/99
 func TestDoubleCreate(t *testing.T) {
 	t.Parallel()
 	fname := "double_create.txt"

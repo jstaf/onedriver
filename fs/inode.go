@@ -639,6 +639,22 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 		return nil, nil, uint32(0), syscall.EROFS
 	}
 
+	// if the inode already exists, we should truncate the existing file and return the
+	// existing file inode as per "man creat"
+	if child, _ := cache.GetChild(id, name, cache.GetAuth()); child != nil {
+		log.WithFields(log.Fields{
+			"id":      id,
+			"childid": child.ID(),
+			"path":    path,
+			"name":    name,
+			"mode":    Octal(mode),
+		}).Debug("Child inode already exists, truncating.")
+		child.data = nil
+		child.DriveItem.Size = 0
+		child.hasChanges = true
+		return child.EmbeddedInode(), nil, uint32(0), 0
+	}
+
 	inode := NewInode(name, mode, i)
 	log.WithFields(log.Fields{
 		"id":      id,
@@ -646,7 +662,7 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 		"path":    path,
 		"name":    name,
 		"mode":    Octal(mode),
-	}).Debug()
+	}).Debug("Creating inode.")
 	cache.InsertChild(id, inode)
 	return i.NewInode(ctx, inode, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }
