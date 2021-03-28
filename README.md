@@ -59,6 +59,8 @@ sudo apt update
 sudo apt install onedriver
 ```
 
+Arch/Manjaro/EndeavourOS users can install onedriver from the [AUR](https://aur.archlinux.org/packages/onedriver/).
+
 Other installation options are available below if you would prefer to manually
 install things or build the latest version from source.
 
