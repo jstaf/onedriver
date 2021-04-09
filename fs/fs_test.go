@@ -470,6 +470,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 
 	out, err := exec.Command(
 		"libreoffice",
+		"--headless",
 		"--convert-to", "docx",
 		"--outdir", TestDir,
 		fname,
