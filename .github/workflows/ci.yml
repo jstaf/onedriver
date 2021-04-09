@@ -20,7 +20,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
-          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli libreoffice-common
+          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli libreoffice
 
       - uses: actions/cache@v2
         with:
