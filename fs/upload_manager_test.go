@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-
 	bolt "go.etcd.io/bbolt"
 )
 

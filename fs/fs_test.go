@@ -480,7 +480,10 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 	}
 
 	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
-	failOnErr(t, err)
+	if err != nil {
+		t.Log(out)
+		t.Fatal(err)
+	}
 	if item.Size == 0 {
 		t.Fatal("Item size was 0!")
 	}
