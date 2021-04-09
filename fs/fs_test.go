@@ -460,3 +460,27 @@ func TestListChildrenPaging(t *testing.T) {
 		t.Fatalf("Paging limit failed. Got %d files, wanted at least 225.\n", len(files))
 	}
 }
+
+// Libreoffice writes to files in a funny manner and it can result in a 0 byte file
+// being uploaded (can check syscalls via "inotifywait -m -r .").
+func TestLibreOfficeSavePattern(t *testing.T) {
+	content := []byte("This will break things.")
+	fname := filepath.Join(TestDir, "libreoffice.txt")
+	failOnErr(t, ioutil.WriteFile(fname, content, 0644))
+
+	out, err := exec.Command(
+		"libreoffice",
+		"--convert-to", "docx",
+		"--outdir", TestDir,
+		fname,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatal(out)
+	}
+
+	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
+	failOnErr(t, err)
+	if item.Size == 0 {
+		t.Fatal("Item size was 0!")
+	}
+}

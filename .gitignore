@@ -9,6 +9,7 @@ mount/
 *.race.*
 *.pdf
 *.fa
+*.docx
 *.gz
 *.db
 *.test
