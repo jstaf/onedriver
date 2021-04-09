@@ -475,13 +475,13 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		fname,
 	).CombinedOutput()
 	if err != nil {
-		t.Log(out)
+		t.Log(string(out))
 		t.Fatal(err)
 	}
 
 	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
-	if err != nil {
-		t.Log(out)
+	if err != nil || item == nil {
+		t.Log(string(out))
 		t.Fatal(err)
 	}
 	if item.Size == 0 {
