@@ -35,6 +35,8 @@ checksums.txt: onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FU
 install: onedriver
 	cp $< /usr/bin/$<
 	cp resources/onedriver@.service /etc/systemd/user/
+	cp resources/onedriver.1.gz /usr/share/man/man1/onedriver.1.gz
+	mandb
 	systemctl daemon-reload
 
 
