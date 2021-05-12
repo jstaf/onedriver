@@ -520,7 +520,7 @@ func (c *Cache) MoveContent(oldID string, newID string) error {
 // cache is offline. Old metadata is not removed, only overwritten (to avoid an
 // offline session from wiping all metadata on a subsequent serialization).
 func (c *Cache) SerializeAll() {
-	log.Info("Serializing cache metadata to disk.")
+	log.Debug("Serializing cache metadata to disk.")
 	c.metadata.Range(func(key interface{}, value interface{}) bool {
 		c.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)

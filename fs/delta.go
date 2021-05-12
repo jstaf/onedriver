@@ -255,6 +255,6 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		"id":    id,
 		"name":  name,
 		"delta": "skip",
-	}).Debug("Skipping, no changes relative to local state.")
+	}).Trace("Skipping, no changes relative to local state.")
 	return nil
 }
