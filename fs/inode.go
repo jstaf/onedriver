@@ -34,13 +34,12 @@ type Inode struct {
 
 	mutex sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
 	graph.DriveItem
-	cache         *Cache
-	children      []string       // a slice of ids, nil when uninitialized
-	uploadSession *UploadSession // current upload session, or nil
-	data          *[]byte        // empty by default
-	hasChanges    bool           // used to trigger an upload on flush
-	subdir        uint32         // used purely by NLink()
-	mode          uint32         // do not set manually
+	cache      *Cache
+	children   []string // a slice of ids, nil when uninitialized
+	data       *[]byte  // empty by default
+	hasChanges bool     // used to trigger an upload on flush
+	subdir     uint32   // used purely by NLink()
+	mode       uint32   // do not set manually
 }
 
 // SerializeableInode is like a Inode, but can be serialized for local storage

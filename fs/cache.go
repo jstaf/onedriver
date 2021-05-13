@@ -25,9 +25,8 @@ type Cache struct {
 	uploads   *UploadManager
 
 	sync.RWMutex
-	auth      *graph.Auth
-	driveType string // personal | business
-	offline   bool
+	auth    *graph.Auth
+	offline bool
 }
 
 // boltdb buckets
@@ -248,11 +247,11 @@ func (c *Cache) GetChild(id string, name string, auth *graph.Auth) (*Inode, erro
 		return nil, err
 	}
 	for _, child := range children {
-		if strings.ToLower(child.Name()) == strings.ToLower(name) {
+		if strings.EqualFold(child.Name(), name) {
 			return child, nil
 		}
 	}
-	return nil, errors.New("Child does not exist")
+	return nil, errors.New("child does not exist")
 }
 
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If
@@ -398,7 +397,7 @@ func (c *Cache) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
 	if err != nil {
 		return err
 	} else if parent == nil {
-		const errMsg string = "Parent of key was nil! Did we accidentally use an ID for the key?"
+		const errMsg string = "parent of key was nil"
 		log.WithFields(log.Fields{
 			"key":  key,
 			"path": inode.Path(),

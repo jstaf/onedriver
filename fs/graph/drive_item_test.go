@@ -11,7 +11,7 @@ func TestGetItem(t *testing.T) {
 		t.Fatal("Failed to fetch directory root. Additional errors:", err)
 	}
 
-	item, err = GetItemPath("/lkjfsdlfjdwjkfl", &auth)
+	_, err = GetItemPath("/lkjfsdlfjdwjkfl", &auth)
 	if err == nil {
 		t.Fatal("We didn't return an error for a non-existent item!")
 	}

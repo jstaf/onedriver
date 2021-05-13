@@ -87,6 +87,7 @@ func TestDoubleCreate(t *testing.T) {
 	fname := "double_create.txt"
 
 	parent, err := fsCache.GetPath("/onedriver_tests", auth)
+	failOnErr(t, err)
 
 	parent.Create(context.Background(), fname, 0, 0644, nil)
 	child, err := fsCache.GetChild(parent.ID(), fname, auth)

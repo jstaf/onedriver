@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -24,9 +23,6 @@ const (
 	INFO
 	TRACE
 )
-
-var currentLevel = INFO
-var mutex = &sync.RWMutex{}
 
 // StringToLevel converts a string to a LogLevel in a case-insensitive manner.
 func StringToLevel(level string) log.Level {
@@ -48,21 +44,6 @@ func StringToLevel(level string) log.Level {
 		log.Errorf("Unrecognized log level \"%s\", defaulting to \"trace\".\n", level)
 		return log.TraceLevel
 	}
-}
-
-// SetLogLevel changes the current log level
-func SetLogLevel(level LogLevel) {
-	mutex.Lock()
-	currentLevel = level
-	mutex.Unlock()
-}
-
-func pad(text string, length int) string {
-	strlen := len(text)
-	if strlen < length {
-		text += strings.Repeat(" ", length-strlen)
-	}
-	return text
 }
 
 // funcName gets the current function name from a pointer

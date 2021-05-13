@@ -52,7 +52,7 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 		for _, delta := range deltas {
 			err := c.applyDelta(delta)
 			// retry deletion of non-empty directories after all other deltas applied
-			if err != nil && err.Error() == "Directory is non-empty" {
+			if err != nil && err.Error() == "directory is non-empty" {
 				secondPass = append(secondPass, delta.ID())
 			}
 		}
@@ -158,7 +158,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 				"name":  name,
 				"delta": "delete",
 			}).Warn("Refusing delta deletion of non-empty folder as per API docs.")
-			return errors.New("Directory is non-empty")
+			return errors.New("directory is non-empty")
 		}
 		log.WithFields(log.Fields{
 			"id":    id,
@@ -203,7 +203,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 				"id":        id,
 				"delta":     "rename",
 			}).Error("Either original parent or new parent not found in cache!")
-			return errors.New("Parent not in cache")
+			return errors.New("parent not in cache")
 		}
 		parent.Rename(context.Background(), local.Name(), newParent, name, 0)
 		// do not return, there may be additional changes
