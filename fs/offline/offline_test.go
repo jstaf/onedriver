@@ -59,7 +59,7 @@ func TestOfflineBagelContents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Compare(contents, []byte("bagels\n")) != 0 {
+	if !bytes.Equal(contents, []byte("bagels\n")) {
 		t.Fatalf("Did not find \"bagels\", got %s instead", string(contents))
 	}
 }
