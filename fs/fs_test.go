@@ -443,9 +443,12 @@ func TestGIOTrash(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
 
 	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
-	failOnErr(t, err)
+	if err != nil {
+		t.Log(string(out))
+		t.Fatal(err)
+	}
 	if strings.Contains(string(out), "Unable to find or create trash directory") {
-		t.Fatal(out)
+		t.Fatal(string(out))
 	}
 }
 
