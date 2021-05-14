@@ -286,13 +286,12 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				id := i.ID()
-				if !isLocalID(id) {
+				if id := i.ID(); !isLocalID(id) {
 					return id, nil
 				}
-
-				// Does the server have it?
-				latest, err := graph.GetItem(id, auth)
+				
+				// does the server have it?
+				latest, err := graph.GetItemPath(i.GetCache().InodePath(i.EmbeddedInode()), auth)
 				if err == nil {
 					// hooray!
 					err := i.GetCache().MoveID(originalID, latest.ID)
