@@ -160,7 +160,7 @@ make rpm
 sudo apt update
 sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
     devscripts debhelper build-essential pbuilder
-sudo pbuilder create  # may need to specify "--distribution eoan" on ubuntu
+sudo pbuilder create  # may need to add "--distribution focal" on ubuntu
 make deb
 ```
 
@@ -189,6 +189,14 @@ This is somewhat annoying, but only needs to happen once - after the initial
 thumbnail images have been created, thumbnails will persist between
 filesystem restarts.
 
-This project is still in active development and key features may still be
-missing. To see current progress, check out the 
-[projects page](https://github.com/jstaf/onedriver/projects/1). 
+Microsoft does not support symbolic links (or anything remotely like them) on
+OneDrive. Attempting to create symbolic links within the filesystem returns
+ENOSYS (function not implemented) because the functionality hasn't been
+implmented... by Microsoft.
+
+OneDrive is not a good place to backup files to. Use a tool like
+[restic](https://restic.net/) or [borg](https://www.borgbackup.org/) if you're
+looking for a reliable encrypted backup tool.
+
+This project is still in active development and is provided AS IS. There are no
+guarantees. It might kill your cat.
