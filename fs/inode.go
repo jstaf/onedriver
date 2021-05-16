@@ -274,37 +274,51 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
+		i.mutex.Lock()
 		uploadPath := fmt.Sprintf(
 			"/me/drive/items/%s:/%s:/content",
-			i.ParentID(),
-			url.PathEscape(i.Name()),
+			i.DriveItem.Parent.ID,
+			url.PathEscape(i.DriveItem.Name),
 		)
-		resp, err := graph.Put(uploadPath, auth, strings.NewReader(""))
+		var uploadReader *strings.Reader
+		if i.DriveItem.Size < 4*1024*1024 {
+			// we upload the current data
+			uploadReader = strings.NewReader(string(*i.data))
+		} else {
+			uploadReader = strings.NewReader("")
+		}
+		resp, err := graph.Put(uploadPath, auth, uploadReader)
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// This likely got fired off just as an initial upload completed.
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				if id := i.ID(); !isLocalID(id) {
+				if id := i.DriveItem.ID; !isLocalID(id) {
+					i.mutex.Unlock()
 					return id, nil
 				}
-				
+
 				// does the server have it?
-				latest, err := graph.GetItemPath(i.GetCache().InodePath(i.EmbeddedInode()), auth)
+				latest, err := graph.GetItemPath(i.cache.InodePath(i.EmbeddedInode()), auth)
 				if err == nil {
 					// hooray!
+					i.mutex.Unlock()
 					err := i.GetCache().MoveID(originalID, latest.ID)
 					return latest.ID, err
 				}
 			}
 			// failed to obtain an ID, return whatever it was beforehand
+			i.mutex.Unlock()
 			return originalID, err
 		}
+		// we just successfully uploaded a copy, no need to do it again
+		i.hasChanges = false
+		name := i.DriveItem.Name
+		i.mutex.Unlock()
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		name := i.Name()
 		unsafe := NewInode(name, 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
