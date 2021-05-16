@@ -101,6 +101,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 					if session.retries > 5 {
 						log.WithFields(log.Fields{
 							"id":      session.ID,
+							"name":    session.Name,
 							"err":     session.Error(),
 							"retries": session.retries,
 						}).Error(
@@ -111,14 +112,18 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 					}
 
 					log.WithFields(log.Fields{
-						"id":  session.ID,
-						"err": session.Error(),
+						"id":   session.ID,
+						"name": session.Name,
+						"err":  session.Error(),
 					}).Warning("Upload session failed, will retry from beginning.")
 					session.cancel(u.auth) // cancel large sessions
 					session.setState(uploadNotStarted, nil)
 
 				case uploadComplete:
-					log.WithField("id", session.ID).Debug("Upload completed!")
+					log.WithFields(log.Fields{
+						"id":   session.ID,
+						"name": session.Name,
+					}).Debug("Upload completed!")
 					u.finishUpload(session.ID)
 				}
 			}

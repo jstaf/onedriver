@@ -156,7 +156,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 
 	time.Sleep(time.Second * 10)
 	body, _ := graph.GetItemContent(inode.ID(), auth)
-	if bytes.Compare(body, newContent) != 0 {
+	if !bytes.Equal(body, newContent) {
 		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
 	}
 
@@ -165,7 +165,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 		time.Sleep(time.Second)
 		content, err = ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
 		failOnErr(t, err)
-		if bytes.Compare(content, newContent) == 0 {
+		if bytes.Equal(content, newContent) {
 			return
 		}
 	}

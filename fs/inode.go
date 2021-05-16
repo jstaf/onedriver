@@ -34,13 +34,12 @@ type Inode struct {
 
 	mutex sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
 	graph.DriveItem
-	cache         *Cache
-	children      []string       // a slice of ids, nil when uninitialized
-	uploadSession *UploadSession // current upload session, or nil
-	data          *[]byte        // empty by default
-	hasChanges    bool           // used to trigger an upload on flush
-	subdir        uint32         // used purely by NLink()
-	mode          uint32         // do not set manually
+	cache      *Cache
+	children   []string // a slice of ids, nil when uninitialized
+	data       *[]byte  // empty by default
+	hasChanges bool     // used to trigger an upload on flush
+	subdir     uint32   // used purely by NLink()
+	mode       uint32   // do not set manually
 }
 
 // SerializeableInode is like a Inode, but can be serialized for local storage
@@ -275,38 +274,52 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
+		i.mutex.Lock()
 		uploadPath := fmt.Sprintf(
 			"/me/drive/items/%s:/%s:/content",
-			i.ParentID(),
-			url.PathEscape(i.Name()),
+			i.DriveItem.Parent.ID,
+			url.PathEscape(i.DriveItem.Name),
 		)
-		resp, err := graph.Put(uploadPath, auth, strings.NewReader(""))
+		var uploadReader *strings.Reader
+		if i.DriveItem.Size < 4*1024*1024 {
+			// we upload the current data
+			uploadReader = strings.NewReader(string(*i.data))
+		} else {
+			uploadReader = strings.NewReader("")
+		}
+		resp, err := graph.Put(uploadPath, auth, uploadReader)
 		if err != nil {
 			if strings.Contains(err.Error(), "nameAlreadyExists") {
 				// This likely got fired off just as an initial upload completed.
 				// Check both our local copy and the server.
 
 				// Do we have it (from another thread)?
-				id := i.ID()
-				if !isLocalID(id) {
+				if id := i.DriveItem.ID; !isLocalID(id) {
+					i.mutex.Unlock()
 					return id, nil
 				}
 
-				// Does the server have it?
-				latest, err := graph.GetItem(id, auth)
+				// does the server have it?
+				latest, err := graph.GetItemPath(i.cache.InodePath(i.EmbeddedInode()), auth)
 				if err == nil {
 					// hooray!
+					i.mutex.Unlock()
 					err := i.GetCache().MoveID(originalID, latest.ID)
 					return latest.ID, err
 				}
 			}
 			// failed to obtain an ID, return whatever it was beforehand
+			i.mutex.Unlock()
 			return originalID, err
 		}
+		// we just successfully uploaded a copy, no need to do it again
+		i.hasChanges = false
+		name := i.DriveItem.Name
+		i.mutex.Unlock()
 
 		// we use a new DriveItem to unmarshal things into or it will fuck
 		// with the existing object (namely its size)
-		unsafe := NewInode(i.Name(), 0644, nil)
+		unsafe := NewInode(name, 0644, nil)
 		err = json.Unmarshal(resp, unsafe)
 		if err != nil {
 			return originalID, err
@@ -314,6 +327,11 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 		// this is all we really wanted from this transaction
 		newID := unsafe.ID()
 		err = i.GetCache().MoveID(originalID, newID)
+		log.WithFields(log.Fields{
+			"name":     name,
+			"original": originalID,
+			"new":      newID,
+		}).Info("Exchanged ID.")
 		return newID, err
 	}
 	return originalID, nil
@@ -622,13 +640,6 @@ func Octal(i uint32) string {
 func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	path := i.Path()
 	id := i.ID()
-	log.WithFields(log.Fields{
-		"id":   id,
-		"path": path,
-		"name": name,
-		"mode": Octal(mode),
-	}).Debug()
-
 	cache := i.GetCache()
 	if cache.IsOffline() {
 		// nope, we are refusing op to avoid data loss later
@@ -640,7 +651,30 @@ func (i *Inode) Create(ctx context.Context, name string, flags uint32, mode uint
 		return nil, nil, uint32(0), syscall.EROFS
 	}
 
+	// if the inode already exists, we should truncate the existing file and return the
+	// existing file inode as per "man creat"
+	if child, _ := cache.GetChild(id, name, cache.GetAuth()); child != nil {
+		log.WithFields(log.Fields{
+			"id":      id,
+			"childid": child.ID(),
+			"path":    path,
+			"name":    name,
+			"mode":    Octal(mode),
+		}).Debug("Child inode already exists, truncating.")
+		child.data = nil
+		child.DriveItem.Size = 0
+		child.hasChanges = true
+		return child.EmbeddedInode(), nil, uint32(0), 0
+	}
+
 	inode := NewInode(name, mode, i)
+	log.WithFields(log.Fields{
+		"id":      id,
+		"childid": inode.ID(),
+		"path":    path,
+		"name":    name,
+		"mode":    Octal(mode),
+	}).Debug("Creating inode.")
 	cache.InsertChild(id, inode)
 	return i.NewInode(ctx, inode, fs.StableAttr{Mode: fuse.S_IFREG}), nil, uint32(0), 0
 }

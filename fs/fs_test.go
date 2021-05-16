@@ -443,9 +443,12 @@ func TestGIOTrash(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
 
 	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
-	failOnErr(t, err)
+	if err != nil {
+		t.Log(string(out))
+		t.Fatal(err)
+	}
 	if strings.Contains(string(out), "Unable to find or create trash directory") {
-		t.Fatal(out)
+		t.Fatal(string(out))
 	}
 }
 
@@ -458,5 +461,34 @@ func TestListChildrenPaging(t *testing.T) {
 	failOnErr(t, err)
 	if len(files) < 225 {
 		t.Fatalf("Paging limit failed. Got %d files, wanted at least 225.\n", len(files))
+	}
+}
+
+// Libreoffice writes to files in a funny manner and it can result in a 0 byte file
+// being uploaded (can check syscalls via "inotifywait -m -r .").
+func TestLibreOfficeSavePattern(t *testing.T) {
+	content := []byte("This will break things.")
+	fname := filepath.Join(TestDir, "libreoffice.txt")
+	failOnErr(t, ioutil.WriteFile(fname, content, 0644))
+
+	out, err := exec.Command(
+		"libreoffice",
+		"--headless",
+		"--convert-to", "docx",
+		"--outdir", TestDir,
+		fname,
+	).CombinedOutput()
+	if err != nil {
+		t.Log(string(out))
+		t.Fatal(err)
+	}
+
+	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
+	if err != nil || item == nil {
+		t.Log(string(out))
+		t.Fatal(err)
+	}
+	if item.Size == 0 {
+		t.Fatal("Item size was 0!")
 	}
 }

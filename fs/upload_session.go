@@ -35,6 +35,7 @@ const (
 // or modTime field to the response.
 type UploadSession struct {
 	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
 	UploadURL          string    `json:"uploadUrl"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
@@ -99,8 +100,9 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	id, err := inode.RemoteID(auth)
 	if err != nil || isLocalID(id) {
 		log.WithFields(log.Fields{
+			"id":   id,
+			"name": inode.Name(),
 			"err":  err,
-			"path": inode.Path(),
 		}).Errorf("Could not obtain remote ID for upload.")
 		return nil, err
 	}
@@ -111,6 +113,7 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	// create a generic session for all files
 	session := UploadSession{
 		ID:      inode.DriveItem.ID,
+		Name:    inode.DriveItem.Name,
 		Size:    inode.DriveItem.Size,
 		Data:    make([]byte, inode.DriveItem.Size),
 		ModTime: *inode.DriveItem.ModTime,
@@ -269,6 +272,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		if err != nil {
 			log.WithFields(log.Fields{
 				"id":      u.ID,
+				"name":    u.Name,
 				"chunk":   i,
 				"nchunks": nchunks,
 				"err":     err,
@@ -281,6 +285,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		for backoff := 1; status >= 500; backoff *= 2 {
 			log.WithFields(log.Fields{
 				"id":      u.ID,
+				"name":    u.Name,
 				"chunk":   i,
 				"nchunks": nchunks,
 				"status":  status,
@@ -290,6 +295,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			if err != nil { // a serious, non 4xx/5xx error
 				log.WithFields(log.Fields{
 					"id":     u.ID,
+					"name":   u.Name,
 					"err":    err,
 					"status": status,
 				}).Error("Failed while retrying chunk upload after server-side error.")

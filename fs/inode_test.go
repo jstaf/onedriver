@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -76,4 +77,34 @@ func TestFilenameEscape(t *testing.T) {
 		}
 	}
 	t.Fatalf("Could not find file: \"%s\"", fname)
+}
+
+// When running creat() on an existing file, we should truncate the existing file and
+// return the original inode.
+// Related to: https://github.com/jstaf/onedriver/issues/99
+func TestDoubleCreate(t *testing.T) {
+	t.Parallel()
+	fname := "double_create.txt"
+
+	parent, err := fsCache.GetPath("/onedriver_tests", auth)
+	failOnErr(t, err)
+
+	parent.Create(context.Background(), fname, 0, 0644, nil)
+	child, err := fsCache.GetChild(parent.ID(), fname, auth)
+	if err != nil || child == nil {
+		t.Fatal("Could not find child post-create")
+	}
+	childID := child.ID()
+
+	parent.Create(context.Background(), fname, 0, 0644, nil)
+	child, err = fsCache.GetChild(parent.ID(), fname, auth)
+	if err != nil || child == nil {
+		t.Fatal("Could not find child post-create")
+	}
+	if childID != child.ID() {
+		t.Fatalf(
+			"IDs did not match when create run twice on same file.\nOriginal: %s\nNew: %s",
+			childID, child.ID(),
+		)
+	}
 }

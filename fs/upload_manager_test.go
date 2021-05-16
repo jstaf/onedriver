@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -20,15 +20,15 @@ import (
 func TestUploadDiskSerialization(t *testing.T) {
 	t.Parallel()
 	// write a file and get its id
-	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "upload_to_disk.txt"), []byte("cheesecake"), 0644))
-	inode, err := fsCache.GetPath("/onedriver_tests/upload_to_disk.txt", nil)
+	failOnErr(t, exec.Command("cp", "dmel.fa", filepath.Join(TestDir, "upload_to_disk.fa")).Run())
+	inode, err := fsCache.GetPath("/onedriver_tests/upload_to_disk.fa", nil)
 	failOnErr(t, err)
 
 	// we can find the in-progress upload because there is a several second
 	// delay on new uploads
 	session := UploadSession{}
-	failOnErr(t, fsCache.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketUploads)
+	failOnErr(t, fsCache.db.Update(func(tx *bolt.Tx) error {
+		b, _ := tx.CreateBucketIfNotExists(bucketUploads)
 		if b == nil {
 			return errors.New("uploads bucket did not exist")
 		}
@@ -43,7 +43,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 	fsCache.uploads.CancelUpload(session.ID)
 
 	// confirm that the file didn't get uploaded yet (just in case!)
-	driveItem, err := graph.GetItemPath("/onedriver_tests/upload_to_disk.txt", auth)
+	driveItem, err := graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
 	if err == nil || driveItem != nil {
 		if driveItem.Size > 0 {
 			t.Fatal("This test should be rewritten, the file was uploaded before " +
@@ -62,8 +62,8 @@ func TestUploadDiskSerialization(t *testing.T) {
 	})
 
 	NewUploadManager(time.Second, db, auth)
-	time.Sleep(10 * time.Second)
-	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.txt", auth)
+	time.Sleep(30 * time.Second)
+	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
 	if err != nil || driveItem == nil {
 		t.Fatal("Could not find uploaded file after unserializing from disk and resuming upload.")
 	}

@@ -36,7 +36,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 			"caller":   logger.Caller(3),
 			"calledBy": logger.Caller(4),
 		}).Error("Auth was empty and we attempted to make a request with it!")
-		return nil, errors.New("Cannot make a request with empty auth")
+		return nil, errors.New("cannot make a request with empty auth")
 	}
 
 	auth.Refresh()
