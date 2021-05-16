@@ -1,3 +1,14 @@
+onedriver (0.10.0-1) focal; urgency=low
+    
+  * Adds AUR installation method for Arch-based distros - thanks fmoledina!
+  * Fix a rare crash while syncing server-side changes missing checksums.
+  * Fix a race-condition that caused uploaded files to occasionally be replaced by a 0-byte 
+    copy (most commonly caused by the way LibreOffice saves files).
+  * Cap number of uploads that can be in-progress at any time to 5. This makes uploading 
+    uploading directories with lots of files appear to go a bit faster.
+ 
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Sun, 16 May 2021 01:40:00 -0400
+
 onedriver (0.9.2-1) focal; urgency=low
 
   * Adds fix for server-side update to Microsoft's authentication APIs.

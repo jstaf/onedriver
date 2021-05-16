@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.9.2
+Version:       0.10.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -52,6 +52,14 @@ cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service
 
 %changelog
+* Sun May 16 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
+- Adds AUR installation method for Arch-based distros - thanks fmoledina!
+- Fix a rare crash while syncing server-side changes missing checksums.
+- Fix a race-condition that caused uploaded files to occasionally be replaced by a 0-byte 
+  copy (most commonly caused by the way LibreOffice saves files).
+- Cap number of uploads that can be in-progress at any time to 5. This makes uploading 
+  uploading directories with lots of files appear to go a bit faster.
+
 * Tue Sep 29 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.2
 - Adds fix for server-side update to Microsoft's authentication APIs.
 - Fix a crash on auth renewal after computer suspend or other network interruption.
