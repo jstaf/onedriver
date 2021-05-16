@@ -18,12 +18,12 @@ else
 endif
 
 
-onedriver: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
-	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
+onedriver: $(shell find fs/ -type f) logger/*.go main.go
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
 
 
-onedriver-headless: $(shell find fs/ -type f) logger/*.go cmd/onedriver/*.go
-	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
+onedriver-headless: $(shell find fs/ -type f) logger/*.go main.go
+	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
 
 
 # run all tests, build all artifacts, compute checksums for release
