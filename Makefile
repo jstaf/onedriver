@@ -78,7 +78,7 @@ onedriver-$(RPM_FULL_VERSION).x86_64.rpm: onedriver-$(RPM_FULL_VERSION).src.rpm
 
 
 # create a release tarball for debian builds
-onedriver_$(VERSION).orig.tar.gz: onedriver-$(VERSION).tar.gz
+onedriver_$(VERSION).orig.tar.gz: v$(VERSION).tar.gz
 	cp $< $@
 
 
