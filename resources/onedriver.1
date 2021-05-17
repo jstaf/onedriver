@@ -1,0 +1,155 @@
+.\" Manpage for onedriver
+
+.TH man 1 "May 2021" "0.10.0" "onedriver man page"
+
+.SH NAME
+onedriver \- A native Linux client for Microsoft OneDrive.
+
+
+.SH SYNOPSIS
+.BR onedriver " [" \fIOPTION\fR "] [\fImountpoint\fR]
+
+
+.SH DESCRIPTION
+This program will mount your OneDrive account as a Linux filesystem at the
+location specified by \fImountpoint\fR. Note that this is not a sync client -
+files are fetched on-demand and cached locally. Only files you actually use will
+be downloaded. While offline, the filesystem will be read-only until
+connectivity is re-established.
+
+
+.SH OPTIONS
+
+.TP
+.BR \-a , " \-\-auth-only"
+Authenticate to OneDrive and then exit.
+
+.TP
+.BR \-c , " \-\-cache\-dir " \fIdir
+Change the default cache directory used by onedriver. Will be created if the path does not already exist. The \fIdir\fR argument specifies the location. 
+.sp
+For example:
+.RS
+.RS
+.sp
+.B "onedriver \-c ~/OneDriverCache"
+.sp
+.RE
+.RE
+
+.TP
+.BR \-d , "\-\-debug"
+Enable FUSE debug logging.
+
+.TP
+.BR \-h , "\-\-help"
+Displays a help message.
+
+.TP
+.BR \-l , "\-\-log "\fIlevel
+Set logging level/verbosity. \fIlevel\fR can be one of: 
+.BR fatal ", " error ", " warn ", " info ", " debug " or " trace " (default is " debug ")."
+
+.TP
+.BR \-v , "\-\-version"
+Display program version.
+
+.TP
+.BR \-w , "\-\-wipe-cache"
+Delete the existing onedriver cache directory and then exit. Equivalent to resetting the program.
+
+
+.SH SYSTEM INTEGRATION
+To start onedriver automatically and ensure you always have access to your
+files, you can start onedriver as a systemd user service. In this example,
+\fImountpoint\fR refers to where we want OneDrive to be mounted at (for
+instance, ~/OneDrive). Mounting OneDrive via systemd allows multiple drives to
+be mounted at the same time (as long as they use different mountpoints).
+
+
+.TP
+Create the mountpoint and determine the service name:
+.nf
+\fB
+mkdir -p \fImountpoint\fR  
+\fB
+export SERVICE_NAME=$(systemd-escape --template onedriver@.service --path \fImountpoint\fR)
+\fR
+.fi
+
+.TP
+Mount OneDrive:
+.nf
+\fB
+systemctl --user daemon-reload
+systemctl --user start $SERVICE_NAME
+\fR
+.fi
+
+.TP
+Mount OneDrive on login:
+.nf
+\fB
+systemctl --user enable $SERVICE_NAME
+\fR
+.fi
+
+.TP
+Check onedriver's logs:
+.nf
+\fB
+journalctl --user -u $SERVICE_NAME
+\fR
+.fi
+
+
+.SH TROUBLESHOOTING
+
+Most errors can be solved by simply restarting the program. onedriver is
+designed to recover cleanly from errors with no extra effort.
+
+It's possible that there may be a deadlock or segfault that I haven't caught in 
+my tests. If this happens, the onedriver filesystem and subsequent ops may hang
+indefinitely (ops will hang while the kernel waits for the dead onedriver 
+process to respond). When this happens, you can cleanly unmount the filesystem 
+with the following:
+
+.nf
+\fB
+fusermount -uz $MOUNTPOINT
+\fR
+.fi
+
+
+In the event that you want to reset onedriver completely (wipe all local state)
+you can do so via:
+
+.nf
+\fB
+onedriver -w
+\fR
+.fi
+
+
+.SH KNOWN ISSUES AND DISCLAIMER
+
+Many file browsers (like GNOME's Nautilus) will attempt to automatically 
+download all files within a directory in order to create thumbnail images.
+This is somewhat annoying, but only needs to happen once - after the initial
+thumbnail images have been created, thumbnails will persist between
+filesystem restarts.
+
+Microsoft does not support symbolic links (or anything remotely like them) on
+OneDrive. Attempting to create symbolic links within the filesystem returns
+ENOSYS (function not implemented) because the functionality hasn't been
+implemented... by Microsoft. Similarly, Microsoft does not expose the OneDrive
+Recycle Bin APIs - if you want to empty or restore the OneDrive Recycle Bin, you
+must do so through the OneDrive web UI (onedriver uses the native system
+trash/restore functionality independently of the OneDrive Recycle Bin).
+
+This project is still in active development and is provided AS IS. There are no
+guarantees. It might kill your cat.
+
+
+.SH SEE ALSO
+Further information can be found at https://github.com/jstaf/onedriver

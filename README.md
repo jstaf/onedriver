@@ -80,7 +80,7 @@ time (as long as they use different mountpoints).
 ```bash
 # create the mountpoint and determine the service name
 mkdir -p $MOUNTPOINT
-export SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNTPOINT)
+export SERVICE_NAME=$(systemd-escape --template onedriver@.service --path $MOUNTPOINT)
 
 # mount onedrive
 systemctl --user daemon-reload
@@ -89,8 +89,8 @@ systemctl --user start $SERVICE_NAME
 # mount onedrive on login
 systemctl --user enable $SERVICE_NAME
 
-# check onedriver's logs
-journalctl --user -u $SERVICE_NAME
+# check onedriver's logs for the current day
+journalctl --user -u $SERVICE_NAME --since today
 ```
 
 ## Building onedriver yourself
@@ -192,7 +192,10 @@ filesystem restarts.
 Microsoft does not support symbolic links (or anything remotely like them) on
 OneDrive. Attempting to create symbolic links within the filesystem returns
 ENOSYS (function not implemented) because the functionality hasn't been
-implmented... by Microsoft.
+implemented... by Microsoft. Similarly, Microsoft does not expose the OneDrive
+Recycle Bin APIs - if you want to empty or restore the OneDrive Recycle Bin, you
+must do so through the OneDrive web UI (onedriver uses the native system
+trash/restore functionality independently of the OneDrive Recycle Bin).
 
 OneDrive is not a good place to backup files to. Use a tool like
 [restic](https://restic.net/) or [borg](https://www.borgbackup.org/) if you're
