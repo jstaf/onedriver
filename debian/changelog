@@ -9,8 +9,10 @@ onedriver (0.10.0-1) focal; urgency=low
     copy (most commonly caused by the way LibreOffice saves files).
   * Cap number of uploads that can be in-progress at any time to 5. This makes uploading 
     uploading directories with lots of files appear to go a bit faster.
+  * The account name is now displayed in the title bar if you need to reauthenticate to
+    OneDrive (makes it easier to know which credentials to use when prompted).
  
- -- Jeff Stafford <jeff.stafford@protonmail.com>  Sun, 16 May 2021 01:40:00 -0400
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Sun, 17 May 2021 01:45:00 -0400
 
 onedriver (0.9.2-1) focal; urgency=low
 

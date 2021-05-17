@@ -8,7 +8,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func getAuthCode() string {
+// accountName arg is only present for compatibility with the non-headless C version.
+func getAuthCode(accountName string) string {
 	fmt.Printf("Please visit the following URL:\n%s\n\n", getAuthURL())
 	fmt.Println("Please enter the redirect URL once you are redirected to a " +
 		"blank page (after \"Let this app access your info?\"):")

@@ -57,7 +57,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
-* Sun May 16 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
+* Sun May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
 - Add AUR installation method for Arch-based distros - thanks fmoledina!
 - Add manpage for onedriver - thanks GenericGuy!
 - The onedriver systemd service now restarts itself in the event of a crash -
@@ -67,6 +67,8 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
   copy (most commonly caused by the way LibreOffice saves files).
 - Cap number of uploads that can be in-progress at any time to 5. This makes uploading 
   uploading directories with lots of files appear to go a bit faster.
+- The account name is now displayed in the title bar if you need to reauthenticate to
+  OneDrive (makes it easier to know which credentials to use when prompted).
 
 * Tue Sep 29 2020 Jeff Stafford <jeff.stafford@protonmail.com> - 0.9.2
 - Adds fix for server-side update to Microsoft's authentication APIs.

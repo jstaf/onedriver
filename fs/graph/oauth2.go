@@ -24,6 +24,7 @@ const (
 
 // Auth represents a set of oauth2 authentication tokens
 type Auth struct {
+	Account      string `json:"account"`
 	ExpiresIn    int64  `json:"expires_in"` // only used for parsing
 	ExpiresAt    int64  `json:"expires_at"`
 	AccessToken  string `json:"access_token"`
@@ -174,7 +175,13 @@ func getAuthTokens(authCode string) *Auth {
 
 // newAuth performs initial authentication flow and saves tokens to disk
 func newAuth(path string) *Auth {
-	auth := getAuthTokens(getAuthCode())
+	old := Auth{}
+	old.FromFile(path)
+	auth := getAuthTokens(getAuthCode(old.Account))
+
+	if user, err := GetUser(auth); err == nil {
+		auth.Account = user.UserPrincipalName
+	}
 	auth.ToFile(path)
 	return auth
 }
