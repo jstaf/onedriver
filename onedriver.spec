@@ -57,7 +57,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
-* Sun May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
+* Mon May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
 - Add AUR installation method for Arch-based distros - thanks fmoledina!
 - Add manpage for onedriver - thanks GenericGuy!
 - The onedriver systemd service now restarts itself in the event of a crash -

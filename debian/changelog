@@ -12,7 +12,7 @@ onedriver (0.10.0-1) focal; urgency=low
   * The account name is now displayed in the title bar if you need to reauthenticate to
     OneDrive (makes it easier to know which credentials to use when prompted).
  
- -- Jeff Stafford <jeff.stafford@protonmail.com>  Sun, 17 May 2021 01:45:00 -0400
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Mon, 17 May 2021 01:45:00 -0400
 
 onedriver (0.9.2-1) focal; urgency=low
 
