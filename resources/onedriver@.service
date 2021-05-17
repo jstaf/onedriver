@@ -3,9 +3,10 @@ Description=onedriver
 
 [Service]
 ExecStart=/usr/bin/onedriver -c "%C/onedriver/%i" %I
-ExecStop=/usr/bin/fusermount -uz %I
-ExecStopPost=/usr/bin/sleep 1
-Restart=no
+ExecStopPost=/usr/bin/fusermount -uz %I
+Restart=on-abnormal
+RestartSec=3
+RestartForceExitStatus=2
 
 [Install]
 WantedBy=default.target
