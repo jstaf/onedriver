@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.10.0
+Version:       0.10.1
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -57,6 +57,9 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Mon May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.1
+- Fix the onedriver .desktop launcher so it uses the new systemd unit name.
+
 * Mon May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
 - Add AUR installation method for Arch-based distros - thanks fmoledina!
 - Add manpage for onedriver - thanks GenericGuy!

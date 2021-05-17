@@ -20,7 +20,7 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-const version = "0.10.0"
+const version = "0.10.1"
 
 var commit string
 
