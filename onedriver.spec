@@ -5,7 +5,7 @@ Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
 URL:           https://github.com/jstaf/onedriver
-Source0:       https://github.com/jstaf/onedriver/archive/onedriver-%{version}.tar.gz
+Source0:       https://github.com/jstaf/onedriver/archive/refs/tags/v%{version}.tar.gz
 
 BuildRequires: golang >= 1.12.0
 BuildRequires: git
@@ -26,6 +26,7 @@ break.
 
 %build
 GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
+gzip resources/onedriver.1
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -33,12 +34,14 @@ mkdir -p %{buildroot}/%{_bindir}
 mkdir -p %{buildroot}/usr/share/icons/%{name}
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
+mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
 cp resources/%{name}-launcher.sh %{buildroot}/%{_bindir}
 cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.desktop %{buildroot}/usr/share/applications
 cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
+cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 
 # fix for el8 build in mock
 %define _empty_manifest_terminate_build 0
@@ -50,10 +53,15 @@ cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
 %attr(644, root, root) /usr/share/applications/%{name}.desktop
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service
+%doc
+%attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
 * Sun May 16 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
-- Adds AUR installation method for Arch-based distros - thanks fmoledina!
+- Add AUR installation method for Arch-based distros - thanks fmoledina!
+- Add manpage for onedriver - thanks GenericGuy!
+- The onedriver systemd service now restarts itself in the event of a crash -
+  thanks dipunm!
 - Fix a rare crash while syncing server-side changes missing checksums.
 - Fix a race-condition that caused uploaded files to occasionally be replaced by a 0-byte 
   copy (most commonly caused by the way LibreOffice saves files).

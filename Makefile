@@ -35,7 +35,7 @@ checksums.txt: onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FU
 install: onedriver
 	cp $< /usr/bin/$<
 	cp resources/onedriver@.service /etc/systemd/user/
-	cp resources/onedriver.1.gz /usr/share/man/man1/onedriver.1.gz
+	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
 	systemctl daemon-reload
 
@@ -49,7 +49,7 @@ localinstall: onedriver
 
 
 # used to create release tarball for rpmbuild
-onedriver-$(VERSION).tar.gz: $(shell git ls-files)
+v$(VERSION).tar.gz: $(shell git ls-files)
 	rm -rf onedriver-$(VERSION)
 	mkdir -p onedriver-$(VERSION)
 	git ls-files > filelist.txt
@@ -64,7 +64,7 @@ onedriver-$(VERSION).tar.gz: $(shell git ls-files)
 
 # build srpm package used for rpm build with mock
 srpm: onedriver-$(RPM_FULL_VERSION).src.rpm 
-onedriver-$(RPM_FULL_VERSION).src.rpm: onedriver-$(VERSION).tar.gz
+onedriver-$(RPM_FULL_VERSION).src.rpm: v$(VERSION).tar.gz
 	rpmbuild -ts $<
 	cp $$(rpm --eval '%{_topdir}')/SRPMS/$@ .
 
@@ -78,7 +78,7 @@ onedriver-$(RPM_FULL_VERSION).x86_64.rpm: onedriver-$(RPM_FULL_VERSION).src.rpm
 
 
 # create a release tarball for debian builds
-onedriver_$(VERSION).orig.tar.gz: onedriver-$(VERSION).tar.gz
+onedriver_$(VERSION).orig.tar.gz: v$(VERSION).tar.gz
 	cp $< $@
 
 
