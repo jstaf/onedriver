@@ -297,7 +297,7 @@ func TestUploadSession(t *testing.T) {
 
 	// poll endpoint to make sure it has a size greater than 0
 	size := uint64(len(contents))
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 120; i++ {
 		time.Sleep(time.Second)
 		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
 		inode := NewInodeDriveItem(item)
@@ -445,7 +445,10 @@ func TestGIOTrash(t *testing.T) {
 	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
 	if err != nil {
 		t.Log(string(out))
-		t.Fatal(err)
+		t.Log(err)
+		if _, err = os.Stat(fname); err == nil {
+			t.Fatal(fname, "still exists after deletion!")
+		}
 	}
 	if strings.Contains(string(out), "Unable to find or create trash directory") {
 		t.Fatal(string(out))
