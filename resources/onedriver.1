@@ -7,7 +7,7 @@ onedriver \- A native Linux client for Microsoft OneDrive.
 
 
 .SH SYNOPSIS
-.BR onedriver " [" \fIOPTION\fR "] [\fImountpoint\fR]
+.BR onedriver " [" \fIOPTION\fR "] <\fImountpoint\fR>
 
 
 .SH DESCRIPTION
@@ -27,15 +27,6 @@ Authenticate to OneDrive and then exit.
 .TP
 .BR \-c , " \-\-cache\-dir " \fIdir
 Change the default cache directory used by onedriver. Will be created if the path does not already exist. The \fIdir\fR argument specifies the location. 
-.sp
-For example:
-.RS
-.RS
-.sp
-.B "onedriver \-c ~/OneDriverCache"
-.sp
-.RE
-.RE
 
 .TP
 .BR \-d , "\-\-debug"
@@ -112,23 +103,11 @@ It's possible that there may be a deadlock or segfault that I haven't caught in
 my tests. If this happens, the onedriver filesystem and subsequent ops may hang
 indefinitely (ops will hang while the kernel waits for the dead onedriver 
 process to respond). When this happens, you can cleanly unmount the filesystem 
-with the following:
-
-.nf
-\fB
-fusermount -uz $MOUNTPOINT
-\fR
-.fi
+with: \fBfusermount -uz $MOUNTPOINT\fR
 
 
 In the event that you want to reset onedriver completely (wipe all local state)
-you can do so via:
-
-.nf
-\fB
-onedriver -w
-\fR
-.fi
+you can do so via: \fBonedriver -w\fR
 
 
 .SH KNOWN ISSUES AND DISCLAIMER
