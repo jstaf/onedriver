@@ -9,7 +9,7 @@ fi
 MOUNT=$(realpath "$1")
 
 # Is onedriver running on that mountpoint? If not, mount it.
-SERVICE_NAME=$(systemd-escape --template onedriver@.service $MOUNT)
+SERVICE_NAME=$(systemd-escape --template onedriver@.service --path $MOUNT)
 if ! systemctl is-active --quiet --user $SERVICE_NAME; then
     echo "Mounting filesystem at $MOUNT"
     mkdir -p $MOUNT
