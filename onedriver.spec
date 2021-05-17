@@ -60,6 +60,8 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 * Sun May 16 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.0
 - Add AUR installation method for Arch-based distros - thanks fmoledina!
 - Add manpage for onedriver - thanks GenericGuy!
+- The onedriver systemd service now restarts itself in the event of a crash -
+  thanks dipunm!
 - Fix a rare crash while syncing server-side changes missing checksums.
 - Fix a race-condition that caused uploaded files to occasionally be replaced by a 0-byte 
   copy (most commonly caused by the way LibreOffice saves files).
