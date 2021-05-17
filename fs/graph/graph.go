@@ -75,6 +75,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		auth.AccessToken = reauth.AccessToken
 		auth.RefreshToken = reauth.RefreshToken
 		auth.ExpiresAt = reauth.ExpiresAt
+		auth.Account = reauth.Account
 		request.Header.Set("Authorization", "bearer "+auth.AccessToken)
 	}
 	if response.StatusCode >= 500 || response.StatusCode == 401 {

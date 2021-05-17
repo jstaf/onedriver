@@ -28,10 +28,18 @@ static void web_view_load_changed(WebKitWebView *web_view, WebKitLoadEvent load_
 /**
  * Open a popup GTK auth window and return the final redirect location.
  */
-char *webkit_auth_window(char *auth_url) {
+char *webkit_auth_window(char *auth_url, char *account_name) {
     gtk_init(NULL, NULL);
     GtkWidget *auth_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_default_size(GTK_WINDOW(auth_window), 450, 600);
+    if (account_name && strlen(account_name) > 0) {
+        char title[512];
+        snprintf(title, 511, "onedriver (%s)", account_name);
+        gtk_window_set_title(GTK_WINDOW(auth_window), title);
+        gtk_window_set_default_size(GTK_WINDOW(auth_window), 525, 600);
+    } else {
+        gtk_window_set_title(GTK_WINDOW(auth_window), "onedriver");
+        gtk_window_set_default_size(GTK_WINDOW(auth_window), 450, 600);
+    }
 
     // create browser and add to gtk window
     WebKitWebView *web_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
