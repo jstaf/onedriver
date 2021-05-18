@@ -10,13 +10,6 @@ RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 # test-specific variables
 TEST_UID := $(shell id -u)
 TEST_GID := $(shell id -g)
-UNSHARE_VERSION = 2.34
-ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
-	UNSHARE = unshare
-else
-	UNSHARE = ./unshare
-	EXTRA_TEST_DEPS = unshare
-endif
 
 # c build variables
 DEPS = gtk+-3.0 gio-2.0 glib-2.0
@@ -31,6 +24,9 @@ LDFLAGS := $(shell pkg-config --libs $(DEPS))
 TEST_SRCS := $(shell find launcher/ -name *.c | grep -v launcher/main.c)
 TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
 TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
+
+
+all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go main.go
@@ -139,32 +135,14 @@ dmel.fa:
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
 # permission to mount the fuse filesystem.
-test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
+test: build/c-test onedriver dmel.fa
+	$<
 	rm -f *.race* fusefs_tests.log
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs/graph
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs || true
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
-	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
-
-
-# used by travis CI since the version of unshare is too old on ubuntu 18.04
-unshare:
-	rm -rf util-linux-$(UNSHARE_VERSION)*
-	wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v$(UNSHARE_VERSION)/util-linux-$(UNSHARE_VERSION).tar.gz
-	tar -xzf util-linux-$(UNSHARE_VERSION).tar.gz
-	cd util-linux-$(UNSHARE_VERSION) && ./configure --disable-dependency-tracking
-	make -C util-linux-$(UNSHARE_VERSION) unshare
-	cp util-linux-$(UNSHARE_VERSION)/unshare .
-
-
-# force auth renewal the next time onedriver starts
-auth_expire_now:
-	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
-
-
-auth_invalidate:
-	sed -i 's/"access_token":.\{5\}/"access_token":"/g' ~/.cache/onedriver/auth_tokens.json
+	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
 # will literally purge everything: all built artifacts, all logs, all tests,
