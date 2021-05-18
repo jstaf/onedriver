@@ -20,7 +20,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
-          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev dbus dbus-x11 make wget rpm awscli gdb systemd-coredump
+          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev dbus dbus-x11 make wget rpm awscli libreoffice gdb systemd-coredump
           sudo rm /usr/local/bin/aws  # whyyy
 
       - uses: actions/cache@v2
