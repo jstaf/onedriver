@@ -17,6 +17,8 @@
 #define MOUNT_MESSAGE "Mount selected OneDrive account"
 #define UNMOUNT_MESSAGE "Unmount selected OneDrive account"
 
+static GHashTable *mounts;
+
 /**
  * Enable or disable a mountpoint when button is clicked.
  */
@@ -62,9 +64,16 @@ static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
     gtk_widget_destroy(gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW));
 }
 
+static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_data) {
+    const char *mount = g_hash_table_lookup(mounts, row);
+    char uri[512] = "file://";
+    strncat(uri, mount, 504);
+    g_app_info_launch_default_for_uri(uri, NULL, NULL);
+}
+
 static GtkWidget *new_mount_row(char *mount) {
     GtkWidget *row = gtk_list_box_row_new();
-    gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
+    gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), TRUE);
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_container_add(GTK_CONTAINER(row), box);
 
@@ -111,6 +120,7 @@ static GtkWidget *new_mount_row(char *mount) {
     g_signal_connect(mount_toggle, "clicked", G_CALLBACK(activate_mount_cb), unit_name);
     gtk_box_pack_end(GTK_BOX(box), mount_toggle, FALSE, FALSE, 0);
 
+    g_hash_table_insert(mounts, row, strdup(mount));
     return row;
 }
 
@@ -139,6 +149,8 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
 }
 
 static void activate(GtkApplication *app, gpointer data) {
+    mounts = g_hash_table_new(g_direct_hash, g_direct_equal);
+
     GtkWidget *window = gtk_application_window_new(app);
     gtk_window_set_default_size(GTK_WINDOW(window), 550, 400);
 
@@ -149,8 +161,10 @@ static void activate(GtkApplication *app, gpointer data) {
 
     GtkWidget *listbox = gtk_list_box_new();
     gtk_container_add(GTK_CONTAINER(window), listbox);
-    gtk_list_box_set_activate_on_single_click(GTK_LIST_BOX(listbox), FALSE);
+    gtk_list_box_set_activate_on_single_click(GTK_LIST_BOX(listbox), TRUE);
     gtk_list_box_drag_unhighlight_row(GTK_LIST_BOX(listbox));
+    g_signal_connect(GTK_LIST_BOX(listbox), "row-activated", G_CALLBACK(activate_row_cb),
+                     NULL);
 
     GtkWidget *mountpoint_btn =
         gtk_button_new_from_icon_name(PLUS_ICON, GTK_ICON_SIZE_BUTTON);
