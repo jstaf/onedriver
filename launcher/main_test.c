@@ -70,6 +70,17 @@ MU_TEST(test_systemd_template_unit) {
     free(escaped);
 }
 
+// does systemd unit untemplating work?
+MU_TEST(test_systemd_untemplate_unit) {
+    char *unescaped;
+    mu_check(systemd_untemplate_unit("this-wont-work", &unescaped) == -1);
+    mu_check(systemd_untemplate_unit("onedriver@home-some-path", &unescaped) == 0);
+    mu_check(strcmp(unescaped, "home-some-path") == 0);
+    char *unescaped2;
+    mu_check(systemd_untemplate_unit("onedriver@opt-other.service", &unescaped2) == 0);
+    mu_check(strcmp(unescaped2, "opt-other") == 0);
+}
+
 // can we enable and disable systemd units? (and correctly check if the units are
 // enabled/disabled?)
 MU_TEST(test_systemd_unit_enabled) {

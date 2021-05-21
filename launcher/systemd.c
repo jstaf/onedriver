@@ -182,6 +182,32 @@ int systemd_template_unit(const char *template, const char *instance, char **ret
 }
 
 /**
+ * Untemplate a systemd unit name.
+ */
+int systemd_untemplate_unit(const char *unit_name, char **ret) {
+    int start = -1;
+    int end = strlen(unit_name);
+    for (int i = 0; i < strlen(unit_name); i++) {
+        if (unit_name[i] == '@') {
+            start = i;
+        } else if (unit_name[i] == '.') {
+            end = i;
+        }
+    }
+
+    if (start == -1) {
+        // no match
+        return -1;
+    }
+
+    int len = end - start;
+    char *instance = malloc(len);
+    strncpy(instance, unit_name + start, len);
+    instance[len] = '\0';
+    return 0;
+}
+
+/**
  * Connect to DBus and create a new proxy object.
  * The resulting GDBusProxy object should be freed via g_object_unref.
  */
