@@ -56,12 +56,21 @@ static void activate_mount_cb(GtkWidget *widget, char *unit_name) {
     }
 }
 
+/**
+ * Delete the mountpoint after prompting for confirmation.
+ */
 static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
-    // TODO present user with "are you sure? dialog
-    systemd_unit_set_enabled(unit_name, false);
-    systemd_unit_set_active(unit_name, false);
-    // TODO rmtree cache folder
-    gtk_widget_destroy(gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW));
+    GtkWidget *window = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "Remove mountpoint?", GTK_WINDOW(window), GTK_DIALOG_MODAL, "Cancel",
+        GTK_RESPONSE_REJECT, "Remove", GTK_RESPONSE_ACCEPT, NULL);
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        systemd_unit_set_enabled(unit_name, false);
+        systemd_unit_set_active(unit_name, false);
+        // TODO rmtree cache folder
+        gtk_widget_destroy(gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW));
+    }
+    gtk_widget_destroy(dialog);
 }
 
 static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_data) {
