@@ -62,6 +62,14 @@ MU_TEST(test_systemd_path_escape) {
     free(escaped);
 }
 
+// does systemd path unescaping work correctly?
+MU_TEST(test_systemd_path_unescape) {
+    char *unescaped;
+    mu_check(systemd_path_unescape("home-user-OneDrive", &unescaped) == 0);
+    mu_check(strcmp(unescaped, "/home/user/OneDrive") == 0);
+    free(unescaped);
+}
+
 // does systemd unit name templating work correctly?
 MU_TEST(test_systemd_template_unit) {
     char *escaped;
@@ -76,9 +84,11 @@ MU_TEST(test_systemd_untemplate_unit) {
     mu_check(systemd_untemplate_unit("this-wont-work", &unescaped) == -1);
     mu_check(systemd_untemplate_unit("onedriver@home-some-path", &unescaped) == 0);
     mu_check(strcmp(unescaped, "home-some-path") == 0);
+    free(unescaped);
     char *unescaped2;
     mu_check(systemd_untemplate_unit("onedriver@opt-other.service", &unescaped2) == 0);
     mu_check(strcmp(unescaped2, "opt-other") == 0);
+    free(unescaped2);
 }
 
 // can we enable and disable systemd units? (and correctly check if the units are
@@ -146,7 +156,9 @@ MU_TEST_SUITE(systemd_tests) {
     MU_RUN_TEST(test_fs_mountpoint_is_valid);
     MU_RUN_TEST(test_home_escape);
     MU_RUN_TEST(test_systemd_path_escape);
+    MU_RUN_TEST(test_systemd_path_unescape);
     MU_RUN_TEST(test_systemd_template_unit);
+    MU_RUN_TEST(test_systemd_untemplate_unit);
     MU_RUN_TEST(test_systemd_unit_enabled);
     MU_RUN_TEST(test_systemd_unit_active);
 }

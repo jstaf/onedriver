@@ -155,6 +155,21 @@ int systemd_path_escape(const char *path, char **ret) {
 }
 
 /**
+ * Unescape a systemd unit path.
+ */
+int systemd_path_unescape(const char *instance, char **ret) {
+    char *unescaped = systemd_unescape(instance);
+    if (!unescaped) {
+        return -1;
+    }
+    *ret = malloc(strlen(unescaped) + 1);
+    (*ret)[0] = '/';
+    strcpy(*ret + 1, unescaped);
+    free(unescaped);
+    return 0;
+}
+
+/**
  * Perform the function of the CLI utility systemd-escape.
  * Logic based on unit_name_replace_instance fromq
  * https://github.com/systemd/systemd/blob/master/src/basic/unit-name.c
@@ -189,7 +204,7 @@ int systemd_untemplate_unit(const char *unit_name, char **ret) {
     int end = strlen(unit_name);
     for (int i = 0; i < strlen(unit_name); i++) {
         if (unit_name[i] == '@') {
-            start = i;
+            start = i + 1;
         } else if (unit_name[i] == '.') {
             end = i;
         }
@@ -204,6 +219,7 @@ int systemd_untemplate_unit(const char *unit_name, char **ret) {
     char *instance = malloc(len);
     strncpy(instance, unit_name + start, len);
     instance[len] = '\0';
+    *ret = instance;
     return 0;
 }
 
