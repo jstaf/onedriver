@@ -109,19 +109,22 @@ static GtkWidget *new_mount_row(char *mount) {
 
     char *tilde_path = escape_home(mount);
     char *account_name = fs_account_name(escaped_path);
-    char *label = malloc(512);
+    GtkWidget *label;
     if (account_name) {
-        snprintf(label, 511, "%s (%s)", account_name, tilde_path);
+        label = gtk_label_new(NULL);
+        char *markup = g_markup_printf_escaped(
+            "\%s <span style=\"italic\" weight=\"light\">(\%s)</span>    ", account_name,
+            tilde_path);
+        gtk_label_set_markup(GTK_LABEL(label), markup);
+        free(markup);
         free(account_name);
     } else {
-        strncpy(label, tilde_path, 511);
+        label = gtk_label_new(tilde_path);
     }
-    GtkWidget *name = gtk_label_new(label);
-    free(label);
     free(tilde_path);
     free(escaped_path);
     // unit_name is not freed - it is used by callbacks when triggered at a later date
-    gtk_box_pack_start(GTK_BOX(box), name, FALSE, FALSE, 5);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 5);
 
     GtkWidget *delete_mountpoint_btn =
         gtk_button_new_from_icon_name(MINUS_ICON, GTK_ICON_SIZE_BUTTON);
