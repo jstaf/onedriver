@@ -164,6 +164,10 @@ sudo pbuilder create  # may need to add "--distribution focal" on ubuntu
 make deb
 ```
 
+### Docker
+
+You can test it with: `docker-compose run  --rm onedriver  bash` and a default mounting directory at `./local/mnt`
+
 ## Troubleshooting
 
 Most errors can be solved by simply restarting the program. onedriver is

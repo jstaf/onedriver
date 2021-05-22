@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+    onedriver:
+        build:
+            context: .
+        volumes:
+            - ./local/mnt:/app/mnt
+        devices:
+            - /dev/fuse
+
+        privileged: true
+        cap_add:
+         - SYS_ADMIN
