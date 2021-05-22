@@ -197,10 +197,10 @@ static void activate(GtkApplication *app, gpointer data) {
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), mountpoint_btn);
 
     char **existing_mounts = fs_known_mounts();
-    for (char **mounts = existing_mounts; *mounts; mounts++) {
-        GtkWidget *row = new_mount_row(*mounts);
+    for (char **found = existing_mounts; *found; found++) {
+        GtkWidget *row = new_mount_row(*found);
         gtk_list_box_insert(GTK_LIST_BOX(listbox), row, -1);
-        free(*mounts);
+        free(*found);
     }
     free(existing_mounts);
 
