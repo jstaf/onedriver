@@ -128,7 +128,6 @@ MU_TEST(test_systemd_unit_active) {
     char *cwd_escaped, *unit_name;
     systemd_path_escape(cwd, &cwd_escaped);
     systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, cwd_escaped, &unit_name);
-    free(cwd_escaped);
 
     // make extra sure things are off before we start
     mu_check(systemd_unit_set_active(unit_name, false));
@@ -139,9 +138,9 @@ MU_TEST(test_systemd_unit_active) {
     mu_assert(systemd_unit_is_active(unit_name), "Did not detect unit as active");
 
     // test this function while we're at it
-    char *account_name = fs_account_name((const char *)&cwd);
+    char *account_name = fs_account_name(cwd_escaped);
+    free(cwd_escaped);
     mu_assert(account_name, "Could not determine account name.");
-    // TODO actually check email is valid later
     free(account_name);
 
     mu_assert(systemd_unit_set_active(unit_name, false), "Could not stop unit.");
@@ -151,7 +150,19 @@ MU_TEST(test_systemd_unit_active) {
 }
 
 MU_TEST_SUITE(systemd_tests) {
-    mkdir("mount", 0700); // needs to exist for several tests
+    // create the mountpoint and stop it if it's already running
+    mkdir("mount", 0700);
+
+    char cwd[1024];
+    getcwd(cwd, 1024);
+    strcat(cwd, "/mount");
+    char *cwd_escaped, *unit_name;
+    systemd_path_escape(cwd, &cwd_escaped);
+    systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, cwd_escaped, &unit_name);
+    systemd_unit_set_active(unit_name, false);
+    sleep(1);
+    free(cwd_escaped);
+    free(unit_name);
 
     MU_RUN_TEST(test_fs_mountpoint_is_valid);
     MU_RUN_TEST(test_home_escape);

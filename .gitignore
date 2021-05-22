@@ -19,6 +19,7 @@ build/
 *.coverage
 *.core
 *.gdb
+vgcore.*
 
 # do not include binaries, but do include sources
 onedriver

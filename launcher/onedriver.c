@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <glib.h>
+#include <json-glib/json-glib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,32 +44,35 @@ void fs_poll_until_avail(const char *mountpoint, int timeout) {
 }
 
 /**
- * Grab the FS account name from .xdg-volume-info. Returned value should be freed by
+ * Grab the FS account name from auth_tokens.json. Returned value should be freed by
  * caller.
  */
-char *fs_account_name(const char *mount_name) {
-    int mount_len = strlen(mount_name);
-    char fname[mount_len + strlen(XDG_VOLUME_INFO) + 2];
-    strcpy((char *)&fname, mount_name);
-    strcat((char *)&fname, "/");
-    strcat((char *)&fname, XDG_VOLUME_INFO);
-    FILE *file = fopen(fname, "r");
-    if (file == NULL) {
-        g_error("Could not open file %s\n", fname);
-        return NULL;
-    }
+char *fs_account_name(const char *instance) {
+    const char *cachedir = g_get_user_cache_dir();
+    char *fname = malloc(512);
+    sprintf(fname, "%s/onedriver/%s/auth_tokens.json", cachedir, instance);
 
     char *account_name = NULL;
-    char *line = NULL;
-    size_t len = 0;
-    while (getline(&line, &len, file) != -1) {
-        if (strncmp(line, "Name=", 5) == 0) {
-            account_name = strdup(line + 5);
-            account_name[strlen(account_name) - 1] = '\0'; // get rid of newline
-            break;
-        }
+    GError *error = NULL;
+    JsonParser *parser = json_parser_new();
+    json_parser_load_from_file(parser, fname, &error);
+    if (error) {
+        g_error(error->message);
+        g_error_free(error);
+        g_object_unref(parser);
+        free(fname);
+        return account_name;
     }
-    fclose(file);
+
+    JsonReader *reader = json_reader_new(json_parser_get_root(parser));
+    if (json_reader_read_member(reader, "account")) {
+        account_name = strdup(json_reader_get_string_value(reader));
+    }
+    json_reader_end_member(reader);
+
+    g_object_unref(reader);
+    g_object_unref(parser);
+    free(fname);
     return account_name;
 }
 

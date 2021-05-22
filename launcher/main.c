@@ -31,11 +31,7 @@ static void enable_mountpoint_cb(GtkWidget *widget, char *unit_name) {
 }
 
 /**
- * Mount or unmount an acccount.
- * * start/stop mountpoint
- * * set busy signal + make icon unclickable
- * * (if active) poll for filesystem availability
- * * set correct icon + make icon clickable
+ * Start or stop the mountpoint for an acccount.
  */
 static void activate_mount_cb(GtkWidget *widget, char *unit_name) {
     // invert mountpoint state
@@ -88,6 +84,9 @@ static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
     gtk_widget_destroy(dialog);
 }
 
+/**
+ * Open the mountpoint when a user clicks on it.
+ */
 static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_data) {
     const char *mount = g_hash_table_lookup(mounts, row);
     char uri[512] = "file://";
@@ -95,22 +94,34 @@ static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_d
     g_app_info_launch_default_for_uri(uri, NULL, NULL);
 }
 
+/**
+ * Creates a new listboxrow for use in the main gui listbox.
+ */
 static GtkWidget *new_mount_row(char *mount) {
     GtkWidget *row = gtk_list_box_row_new();
     gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), TRUE);
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_container_add(GTK_CONTAINER(row), box);
 
-    char *tilde_path = escape_home(mount);
-    GtkWidget *name = gtk_label_new(tilde_path);
-    free(tilde_path);
-    gtk_box_pack_start(GTK_BOX(box), name, FALSE, FALSE, 5);
-
     char *escaped_path, *unit_name;
     systemd_path_escape(mount, &escaped_path);
     systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, escaped_path, &unit_name);
+
+    char *tilde_path = escape_home(mount);
+    char *account_name = fs_account_name(escaped_path);
+    char *label = malloc(512);
+    if (account_name) {
+        snprintf(label, 511, "%s (%s)", account_name, tilde_path);
+        free(account_name);
+    } else {
+        strncpy(label, tilde_path, 511);
+    }
+    GtkWidget *name = gtk_label_new(label);
+    free(label);
+    free(tilde_path);
     free(escaped_path);
-    // unit name is not freed - it is used by callbacks when triggered at a later date
+    // unit_name is not freed - it is used by callbacks when triggered at a later date
+    gtk_box_pack_start(GTK_BOX(box), name, FALSE, FALSE, 5);
 
     GtkWidget *delete_mountpoint_btn =
         gtk_button_new_from_icon_name(MINUS_ICON, GTK_ICON_SIZE_BUTTON);
@@ -148,7 +159,10 @@ static GtkWidget *new_mount_row(char *mount) {
     return row;
 }
 
-static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
+/**
+ * Callback for creating a new mountpoint.
+ */
+static void new_mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     char *unit_name, *mount, *escaped_mountpoint;
 
     mount = dir_chooser("Select a mountpoint");
@@ -163,6 +177,13 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     systemd_path_escape(mount, &escaped_mountpoint);
     systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, escaped_mountpoint, &unit_name);
 
+    // start the mountpoint and open it
+    systemd_unit_set_active(unit_name, true);
+    char uri[512] = "file://";
+    strncat(uri, mount, 506);
+    g_app_info_launch_default_for_uri(uri, NULL, NULL);
+
+    // now create the row
     GtkWidget *row = new_mount_row(mount);
     gtk_list_box_insert(box, row, -1);
     gtk_widget_show_all(row);
@@ -172,6 +193,9 @@ static void mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
     free(escaped_mountpoint);
 }
 
+/**
+ * Actually creates the GUI window.
+ */
 static void activate(GtkApplication *app, gpointer data) {
     mounts = g_hash_table_new(g_direct_hash, g_direct_equal);
 
@@ -193,7 +217,7 @@ static void activate(GtkApplication *app, gpointer data) {
     GtkWidget *mountpoint_btn =
         gtk_button_new_from_icon_name(PLUS_ICON, GTK_ICON_SIZE_BUTTON);
     gtk_widget_set_tooltip_text(mountpoint_btn, "Add a new OneDrive account");
-    g_signal_connect(mountpoint_btn, "clicked", G_CALLBACK(mountpoint_cb), listbox);
+    g_signal_connect(mountpoint_btn, "clicked", G_CALLBACK(new_mountpoint_cb), listbox);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), mountpoint_btn);
 
     char **existing_mounts = fs_known_mounts();

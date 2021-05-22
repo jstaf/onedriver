@@ -12,7 +12,7 @@ TEST_UID := $(shell id -u)
 TEST_GID := $(shell id -g)
 
 # c build variables
-DEPS = gtk+-3.0 gio-2.0 glib-2.0
+DEPS = gtk+-3.0 gio-2.0 glib-2.0 json-glib-1.0
 SRCS := $(shell find launcher/ -name *.c | grep -v _test)
 OBJS := $(SRCS:%.c=build/%.o)
 INC_DIRS := $(shell find launcher/ -type d | grep -v _test)
@@ -150,5 +150,5 @@ test: build/c-test onedriver dmel.fa
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
-	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
+	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/ build/
