@@ -12,8 +12,10 @@ BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
+BuildRequires: json-glib-devel
 Requires:      fuse
 Requires:      webkit2gtk3
+Requires:      json-glib
 Suggests:      systemd
 
 %description

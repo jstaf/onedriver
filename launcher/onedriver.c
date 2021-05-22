@@ -57,7 +57,7 @@ char *fs_account_name(const char *instance) {
     JsonParser *parser = json_parser_new();
     json_parser_load_from_file(parser, fname, &error);
     if (error) {
-        g_error(error->message);
+        g_error("%s", error->message);
         g_error_free(error);
         g_object_unref(parser);
         free(fname);
