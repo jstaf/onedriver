@@ -89,6 +89,19 @@ static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
  */
 static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_data) {
     const char *mount = g_hash_table_lookup(mounts, row);
+
+    // start the mount if it's not started already
+    char *unit_name, *escaped;
+    systemd_path_escape(mount, &escaped);
+    systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, escaped, &unit_name);
+    if (!systemd_unit_is_active(unit_name)) {
+        // TODO update the mountpoint button to reflect that it's been set active
+        systemd_unit_set_active(unit_name, true);
+        fs_poll_until_avail(mount, -1);
+    }
+    free(unit_name);
+    free(escaped);
+
     char uri[512] = "file://";
     strncat(uri, mount, 504);
     g_app_info_launch_default_for_uri(uri, NULL, NULL);
