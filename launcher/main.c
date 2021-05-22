@@ -97,7 +97,7 @@ static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_d
     if (!systemd_unit_is_active(unit_name)) {
         // TODO update the mountpoint button to reflect that it's been set active
         systemd_unit_set_active(unit_name, true);
-        fs_poll_until_avail(mount, -1);
+        fs_poll_until_avail(mount, 10);
     }
     free(unit_name);
     free(escaped);
@@ -195,6 +195,7 @@ static void new_mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
 
     // start the mountpoint and open it
     systemd_unit_set_active(unit_name, true);
+    fs_poll_until_avail(mount, -1);
     char uri[512] = "file://";
     strncat(uri, mount, 506);
     g_app_info_launch_default_for_uri(uri, NULL, NULL);
