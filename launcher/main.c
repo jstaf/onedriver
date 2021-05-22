@@ -64,10 +64,25 @@ static void delete_mount_cb(GtkWidget *widget, char *unit_name) {
     GtkWidget *dialog = gtk_dialog_new_with_buttons(
         "Remove mountpoint?", GTK_WINDOW(window), GTK_DIALOG_MODAL, "Cancel",
         GTK_RESPONSE_REJECT, "Remove", GTK_RESPONSE_ACCEPT, NULL);
+
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         systemd_unit_set_enabled(unit_name, false);
         systemd_unit_set_active(unit_name, false);
-        // TODO rmtree cache folder
+
+        char *instance;
+        char *path = malloc(512);
+        const char *cachedir = g_get_user_cache_dir();
+
+        systemd_untemplate_unit(unit_name, &instance);
+        sprintf(path, "%s/onedriver/%s/auth_tokens.json", cachedir, instance);
+        remove(path);
+        sprintf(path, "%s/onedriver/%s/onedriver.db", cachedir, instance);
+        remove(path);
+        sprintf(path, "%s/onedriver/%s/", cachedir, instance);
+        rmdir(path);
+
+        free(instance);
+        free(path);
         gtk_widget_destroy(gtk_widget_get_ancestor(widget, GTK_TYPE_LIST_BOX_ROW));
     }
     gtk_widget_destroy(dialog);
