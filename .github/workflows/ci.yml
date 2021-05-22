@@ -53,11 +53,6 @@ jobs:
         env:
           CFLAGS: -g
 
-      - name: Limit concurrent runs
-        uses: softprops/turnstyle@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Copy auth tokens from S3
         run: |
           which aws
