@@ -101,7 +101,7 @@ and `json-glib`.
 On Fedora, these can be obtained with 
 `dnf install golang gcc pkg-config webkit2gtk3-devel json-glib-devel`. 
 On Ubuntu, these dependencies can be installed with
-`apt install golang gcc pkg-config libwebkit2gtk-4.0-dev`.
+`apt install golang gcc pkg-config libwebkit2gtk-4.0-dev libjson-glib-dev`.
 
 ```bash
 # to build and run the binary
@@ -159,8 +159,8 @@ make rpm
 
 # create a .deb for system-wide installation on Ubuntu/Debian using pbuilder
 sudo apt update
-sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
-    devscripts debhelper build-essential pbuilder
+sudo apt install golang gcc libwebkit2gtk-4.0-dev libjson-glib-dev pkg-config git \
+    rsync devscripts debhelper build-essential pbuilder
 sudo pbuilder create  # may need to add "--distribution focal" on ubuntu
 make deb
 ```
