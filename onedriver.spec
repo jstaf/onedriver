@@ -12,8 +12,10 @@ BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
+BuildRequires: json-glib-devel
 Requires:      fuse
 Requires:      webkit2gtk3
+Requires:      json-glib
 Suggests:      systemd
 
 %description
@@ -26,6 +28,7 @@ break.
 
 %build
 GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
+make onedriver-launcher
 gzip resources/onedriver.1
 
 %install
@@ -36,7 +39,7 @@ mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/lib/systemd/user
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
-cp resources/%{name}-launcher.sh %{buildroot}/%{_bindir}
+cp %{name}-launcher %{buildroot}/%{_bindir}
 cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.desktop %{buildroot}/usr/share/applications
@@ -48,7 +51,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/%{name}
-%attr(755, root, root) %{_bindir}/%{name}-launcher.sh
+%attr(755, root, root) %{_bindir}/%{name}-launcher
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
 %attr(644, root, root) /usr/share/applications/%{name}.desktop

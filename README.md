@@ -1,4 +1,4 @@
-[![Run tests](https://github.com/jstaf/onedriver/workflows/Run%20tests/badge.svg)](https://github.com/jstaf/onedriver/actions)
+[![Run tests](https://github.com/jstaf/onedriver/workflows/Run%20tests/badge.svg)](https://github.com/jstaf/onedriver/actions?query=workflow%3A%22Run+tests%22)
 [![Coverage Status](https://coveralls.io/repos/github/jstaf/onedriver/badge.svg?branch=master)](https://coveralls.io/github/jstaf/onedriver?branch=master)
 [![Copr build status](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/package/onedriver/)
 
@@ -22,19 +22,21 @@ your files on OneDrive!
 
 ### Features
 
-* No configuration- it just works. There's nothing to setup. There's no special
+* **No configuration** - it just works. There's nothing to setup. There's no special
   interface beyond your normal file browser.
-* Files are opened and downloaded on-demand, with aggressive caching of file 
-  contents and metadata locally. onedriver does not waste disk space on files
-  that are supposed to be stored in the cloud.
-* Can be used offline. Files you've opened previously will be available even if 
-  your computer has no access to the internet.
-* Stateless. Unlike a few other OneDrive clients, there's nothing to break 
-  locally. You never have to worry about somehow messing up your local copy and 
-  having to figure out how to fix things before you can access your files again.
-* All filesystem operations are asynchronous and thread-safe, allowing you to 
-  perform as many tasks as you want simultaneously.
-* Free and open-source.
+* **Files are opened and downloaded on-demand**, with aggressive caching of file 
+  contents and metadata locally. onedriver only downloads the files you access,
+  and only redownloads files changed by another computer when you access them.
+* **Can be used offline.** Files you've opened previously will be available even if 
+  your computer has no access to the internet. The filesystem becomes read-only
+  if you lose internet access, and automatically enables write access again when you 
+  reconnect to the internet.
+* **Fast.** onedriver is a parallel network filesystem. You can perform as many 
+  simultaneous operations as you want and there are multiple levels of caching to 
+  ensure that accessing your files is as snappy and quick as it can be.
+* **Has a user interface.** You don't need to be a command-line expert to set up
+  OneDrive on Linux.
+* **Free and open-source.**
 
 ## Quick start
 
@@ -59,17 +61,19 @@ sudo apt update
 sudo apt install onedriver
 ```
 
-Arch/Manjaro/EndeavourOS users can install onedriver from the [AUR](https://aur.archlinux.org/packages/onedriver/).
+Arch/Manjaro/EndeavourOS users can install onedriver from the 
+[AUR](https://aur.archlinux.org/packages/onedriver/).
 
 Other installation options are available below if you would prefer to manually
 install things or build the latest version from source.
 
-Post-installation, you can start onedriver either via the app launcher 
-(will authenticate and mount OneDrive at `~/OneDrive`, 
-before opening OneDrive in your default file browser)
-or via the command line: `onedriver /path/to/mount/onedrive/at/`.
+Post-installation, you can start onedriver either via the `onedriver-launcher` 
+desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
 ### Multiple drives and starting OneDrive on login
+
+**Note:** You can also set this up through the GUI via the `onedriver-launcher`
+desktop app installed via rpm/deb/`make install`.
 
 To start onedriver automatically and ensure you always have access to your files,
 you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
@@ -96,11 +100,11 @@ journalctl --user -u $SERVICE_NAME --since today
 ## Building onedriver yourself
 
 In addition to the traditional [Go tooling](https://golang.org/dl/), 
-you will need a C compiler and development headers for `webkit2gtk-4.0`. 
-On Fedora, these can be obtained with 
-`dnf install golang gcc pkg-config webkit2gtk3-devel`. 
+you will need a C compiler and development headers for `webkit2gtk-4.0`
+and `json-glib`. On Fedora, these can be obtained with 
+`dnf install golang gcc pkg-config webkit2gtk3-devel json-glib-devel`. 
 On Ubuntu, these dependencies can be installed with
-`apt install golang gcc pkg-config libwebkit2gtk-4.0-dev`.
+`apt install golang gcc pkg-config libwebkit2gtk-4.0-dev libjson-glib-dev`.
 
 ```bash
 # to build and run the binary
@@ -125,16 +129,12 @@ macOS, BSD, and even Windows as long as you have a variant of FUSE installed
 
 ### Running the tests
 
-There are two test suites - one for online use and one for offline use. Note 
-that the offline tests require `sudo` to remove network access to simulate no 
-access to the network. A newer version of `unshare` is compiled before running
-tests to support running on older distributions like Ubuntu 18.04 where the
-default version of `unshare` is too old to use.
+
+The tests will write and delete files/folders on your onedrive account at the
+path `/onedriver_tests`. Note that the offline test suite requires `sudo` to
+remove network access to simulate being offline. 
 
 ```bash
-# note - the tests will write and delete files/folders on your onedrive account
-# at the path /onedriver_tests
-go get -u github.com/rakyll/gotest
 make test
 ```
 
@@ -147,19 +147,16 @@ onedriver has multiple installation methods depending on your needs.
 make
 sudo make install
 
-# install for current user only
-make localinstall
-
 # create an RPM for system-wide installation on RHEL/CentOS/Fedora using mock
-sudo dnf install golang gcc webkit2gtk-devel pkg-config git rsync \
-    rpmdevtools rpm-build mock
+sudo dnf install golang gcc webkit2gtk3-devel json-glib-devel pkg-config git \
+    rsync rpmdevtools rpm-build mock
 sudo usermod -aG mock $USER
 make rpm
 
 # create a .deb for system-wide installation on Ubuntu/Debian using pbuilder
 sudo apt update
-sudo apt install golang gcc libwebkit2gtk-4.0-dev pkg-config git rsync \
-    devscripts debhelper build-essential pbuilder
+sudo apt install golang gcc libwebkit2gtk-4.0-dev libjson-glib-dev pkg-config git \
+    rsync devscripts debhelper build-essential pbuilder
 sudo pbuilder create  # may need to add "--distribution focal" on ubuntu
 make deb
 ```
@@ -177,9 +174,12 @@ with the following:
 
 ```bash
 # in new terminal window
-fusermount -uz mount
+fusermount -uz $MOUNTPOINT
 killall make  # if running tests via make
 ```
+
+onedriver can be completely reset (delete all cached local data) with 
+`onedriver -w`.
 
 ## Known issues & disclaimer
 

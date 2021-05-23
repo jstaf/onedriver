@@ -1,21 +1,31 @@
-.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, auth_expire_now, auth_invalidate, install, localinstall
+.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, install
 
 # autocalculate software/package versions
-VERSION = $(shell grep Version onedriver.spec | sed 's/Version: *//g')
-RELEASE = $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
-DIST = $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
+VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RELEASE := $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
+DIST := $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
 RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 
 # test-specific variables
-TEST_UID = $(shell id -u)
-TEST_GID = $(shell id -g)
-UNSHARE_VERSION = 2.34
-ifeq ($(shell unshare --help | grep setuid | wc -l), 1)
-	UNSHARE = unshare
-else
-	UNSHARE = ./unshare
-	EXTRA_TEST_DEPS = unshare
-endif
+TEST_UID := $(shell id -u)
+TEST_GID := $(shell id -g)
+
+# c build variables
+DEPS = gtk+-3.0 gio-2.0 glib-2.0 json-glib-1.0
+SRCS := $(shell find launcher/ -name *.c | grep -v _test)
+OBJS := $(SRCS:%.c=build/%.o)
+INC_DIRS := $(shell find launcher/ -type d | grep -v _test)
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+CFLAGS := ${CFLAGS} $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
+LDFLAGS := $(shell pkg-config --libs $(DEPS))
+
+# c test variables
+TEST_SRCS := $(shell find launcher/ -name *.c | grep -v launcher/main.c)
+TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
+TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
+
+
+all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) logger/*.go main.go
@@ -27,25 +37,37 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go main.go
 
 
 # run all tests, build all artifacts, compute checksums for release
-all: test checksums.txt
-checksums.txt: onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
+checksums.txt: test onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
 	sha256sum $^ > checksums.txt
 
 
-install: onedriver
-	cp $< /usr/bin/$<
+install: onedriver onedriver-launcher
+	cp onedriver /usr/bin/
+	cp onedriver-launcher /usr/bin/
+	mkdir /usr/share/icons/onedriver/
+	cp resources/onedriver.svg /usr/share/icons/onedriver/
+	cp resources/onedriver.png /usr/share/icons/onedriver/
+	cp resources/onedriver.desktop /usr/share/applications/
 	cp resources/onedriver@.service /etc/systemd/user/
 	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
-	systemctl daemon-reload
 
 
-localinstall: onedriver
-	mkdir -p ~/.config/systemd/user ~/.local/bin
-	cp $< ~/.local/bin/$<
-	cp resources/onedriver@.service ~/.config/systemd/user/
-	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
-	systemctl --user daemon-reload
+onedriver-launcher: $(OBJS)
+	gcc -o $@ $^ $(LDFLAGS)
+
+
+build/%.o: %.c
+	mkdir -p $(shell dirname $@)
+	gcc -o $@ -c $^ $(CFLAGS)
+
+
+build/c-test: $(TEST_OBJS)
+	gcc -o $@ $^ $(TEST_LDFLAGS)
+
+
+c-test: build/c-test
+	$<
 
 
 # used to create release tarball for rpmbuild
@@ -53,7 +75,6 @@ v$(VERSION).tar.gz: $(shell git ls-files)
 	rm -rf onedriver-$(VERSION)
 	mkdir -p onedriver-$(VERSION)
 	git ls-files > filelist.txt
-	# needed for debian build
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(VERSION)
@@ -109,37 +130,14 @@ dmel.fa:
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
 # permission to mount the fuse filesystem.
-test: onedriver dmel.fa $(EXTRA_TEST_DEPS)
+test: build/c-test onedriver dmel.fa
+	$<
 	rm -f *.race* fusefs_tests.log
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs/graph
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs || true
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
-	sudo $(UNSHARE) -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
-
-
-# used by travis CI since the version of unshare is too old on ubuntu 18.04
-unshare:
-	rm -rf util-linux-$(UNSHARE_VERSION)*
-	wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v$(UNSHARE_VERSION)/util-linux-$(UNSHARE_VERSION).tar.gz
-	tar -xzf util-linux-$(UNSHARE_VERSION).tar.gz
-	cd util-linux-$(UNSHARE_VERSION) && ./configure --disable-dependency-tracking
-	make -C util-linux-$(UNSHARE_VERSION) unshare
-	cp util-linux-$(UNSHARE_VERSION)/unshare .
-
-
-# force auth renewal the next time onedriver starts
-auth_expire_now:
-	sed -i 's/"expires_at":[0-9]\+/"expires_at":0/g' ~/.cache/onedriver/auth_tokens.json
-
-
-auth_invalidate:
-	sed -i 's/"access_token":.\{5\}/"access_token":"/g' ~/.cache/onedriver/auth_tokens.json
-
-
-# for autocompletion by ide-clangd
-compile_flags.txt:
-	pkg-config --cflags gtk+-3.0 webkit2gtk-4.0 | sed 's/ /\n/g' > $@
+	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
 # will literally purge everything: all built artifacts, all logs, all tests,
@@ -147,5 +145,5 @@ compile_flags.txt:
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
-	rm -f *.log *.fa *.gz *.test onedriver onedriver-headless unshare .auth_tokens.json
-	rm -rf util-linux-*/ onedriver-*/ vendor/
+	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
+	rm -rf util-linux-*/ onedriver-*/ vendor/ build/

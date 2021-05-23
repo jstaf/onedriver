@@ -3,7 +3,7 @@ on: push
 jobs:
   test:
     name: Run tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
@@ -20,18 +20,28 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt update
-          sudo apt install gcc pkg-config libwebkit2gtk-4.0-dev make wget rpm awscli libreoffice
+          sudo apt install \
+            gcc \
+            pkg-config \
+            libwebkit2gtk-4.0-dev \
+            libjson-glib-dev \
+            dbus \
+            dbus-x11 \
+            make \
+            wget \
+            rpm \
+            awscli \
+            libreoffice \
+            gdb \
+            systemd-coredump
+          sudo rm /usr/local/bin/aws  # whyyy
 
       - uses: actions/cache@v2
         with:
           path: |
             ~/go/pkg/mod
-            unshare
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
-
-      - name: Compile newer unshare version
-        run: make unshare
 
       - name: Check go formatting
         run: |
@@ -40,21 +50,43 @@ jobs:
 
       - name: Check that the app compiles successfully
         run: make
-      
-      - name: Limit concurrent runs
-        uses: softprops/turnstyle@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CFLAGS: -g
 
       - name: Copy auth tokens from S3
         run: |
-          /usr/bin/aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
-          /usr/bin/aws s3 cp s3://fusefs-travis/dmel.fa.gz .
+          which aws
+          aws --version
+          aws s3 cp s3://fusefs-travis/$ACCOUNT_TYPE/.auth_tokens.json .
+          aws s3 cp s3://fusefs-travis/dmel.fa.gz .
           gunzip dmel.fa.gz
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           ACCOUNT_TYPE: ${{ matrix.account_type }}
+
+      - name: Run c tests
+        run: |
+          sudo cp resources/onedriver@.service /etc/systemd/user
+          sudo cp onedriver /usr/bin
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+          sudo mkdir -p -m 0700 $XDG_RUNTIME_DIR
+          sudo chown $(whoami). $XDG_RUNTIME_DIR
+          sudo systemctl start user@$(id -u).service
+          make build/c-test
+          dbus-launch build/c-test
+        env:
+          CFLAGS: -g
+        continue-on-error: true
+
+      - name: Run coredumpctl on failure
+        run: |
+          sleep 5
+          coredumpctl dump > c-test.core
+          printf 'bt\nq\n' > backtrace.gdb
+          gdb -batch -x backtrace.gdb build/c-test c-test.core
+        if: failure()
 
       - name: Run tests
         run: |
@@ -62,7 +94,7 @@ jobs:
           gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
           gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
           go test -c -covermode=count -coverpkg=./fs/... ./fs/offline
-          sudo ./unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
+          sudo unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
 
       - name: Copy new auth tokens to S3
         run: /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
