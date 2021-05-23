@@ -129,14 +129,12 @@ macOS, BSD, and even Windows as long as you have a variant of FUSE installed
 
 ### Running the tests
 
-There are two test suites - one for online use and one for offline use. Note 
-that the offline tests require `sudo` to remove network access to simulate 
-being offline.  
+
+The tests will write and delete files/folders on your onedrive account at the
+path `/onedriver_tests`. Note that the offline test suite requires `sudo` to
+remove network access to simulate being offline. 
 
 ```bash
-# note - the tests will write and delete files/folders on your onedrive account
-# at the path /onedriver_tests
-go get -u github.com/rakyll/gotest
 make test
 ```
 
@@ -176,9 +174,12 @@ with the following:
 
 ```bash
 # in new terminal window
-fusermount -uz mount
+fusermount -uz $MOUNTPOINT
 killall make  # if running tests via make
 ```
+
+onedriver can be completely reset (delete all cached local data) with 
+`onedriver -w`.
 
 ## Known issues & disclaimer
 
