@@ -42,20 +42,17 @@ checksums.txt: test onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(R
 	sha256sum $^ > checksums.txt
 
 
-install: onedriver
-	cp $< /usr/bin/$<
+install: onedriver onedriver-launcher
+	cp onedriver /usr/bin/
+	cp onedriver-launcher /usr/bin/
+	mkdir /usr/share/icons/onedriver/
+	cp resources/onedriver.svg /usr/share/icons/onedriver/
+	cp resources/onedriver.png /usr/share/icons/onedriver/
+	cp resources/onedriver.desktop /usr/share/applications/
 	cp resources/onedriver@.service /etc/systemd/user/
 	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
 	systemctl daemon-reload
-
-
-localinstall: onedriver
-	mkdir -p ~/.config/systemd/user ~/.local/bin
-	cp $< ~/.local/bin/$<
-	cp resources/onedriver@.service ~/.config/systemd/user/
-	sed -i 's/\/usr\/bin/%h\/.local\/bin/g' ~/.config/systemd/user/onedriver@.service
-	systemctl --user daemon-reload
 
 
 onedriver-launcher: $(OBJS)

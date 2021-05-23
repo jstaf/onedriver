@@ -7,7 +7,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/pflag v1.0.5
 	go.etcd.io/bbolt v1.3.5
-	golang.org/x/sys v0.0.0-20210511113859-b0526f3d8744 // indirect
+	golang.org/x/sys v0.0.0-20210521203332-0cec03c779c1 // indirect
 )
 
 go 1.13
