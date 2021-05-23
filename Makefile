@@ -1,5 +1,4 @@
-.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, \
-	auth_expire_now, auth_invalidate, install, localinstall
+.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, install
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -52,7 +51,6 @@ install: onedriver onedriver-launcher
 	cp resources/onedriver@.service /etc/systemd/user/
 	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
-	systemctl daemon-reload
 
 
 onedriver-launcher: $(OBJS)
