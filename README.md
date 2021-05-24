@@ -7,36 +7,71 @@ onedriver
 
 **onedriver is a native Linux filesystem for Microsoft OneDrive.**
 
-The overwhelming majority of OneDrive clients are actually sync tools, and will
-actually download the entire contents of your OneDrive to disk. No one wants
-this. Why are you paying for cloud storage if it has to stay on your local
-computer?
+onedriver is a network filesystem that gives your computer direct access to your
+files on Microsoft OneDrive. To your computer, there is no difference between
+using files on OneDrive and files on your local hard disk. onedriver isn't a 
+sync client, but it comes with all of the best features of one.
 
-onedriver is not a sync client. It is a network filesystem that exposes the
-contents of your OneDrive to the kernel directly. To your computer, there is
-no difference between working with files on OneDrive and the files on your
-local hard disk. Just mount onedriver to a directory, and get started with
-your files on OneDrive!
+onedriver is extremely straightforwards to use:
 
-**Getting started with onedriver is as simple as running `onedriver /path/to/mount/onedrive/at`**
+* Install onedriver using your favorite installation method.
+* Add one or more OneDrive accounts and select a mountpoint using the GUI 
+  (or via the command-line, I don't discriminate!).
+* Just start using your files on OneDrive as if they were normal files.
 
-### Features
+I've spent a lot of time trying to make onedriver fast, convenient, and easy to
+use. Though you can use it on servers, the goal here is to make it easy to work
+with OneDrive files on your Linux desktop. You can easily sync files between
+Windows and Linux computers. You can setup your phone to auto-upload photos to
+OneDrive and edit and view them on your Linux computer. You can switch between
+LibreOffice on your local computer and the Microsoft 365 online apps as needed
+when working. Want to migrate from Windows to Linux? Just throw all your Windows
+files into OneDrive, add your OneDrive account to Linux with onedriver, and call
+it a day.
 
-* **No configuration** - it just works. There's nothing to setup. There's no special
-  interface beyond your normal file browser.
-* **Files are opened and downloaded on-demand**, with aggressive caching of file 
-  contents and metadata locally. onedriver only downloads the files you access,
-  and only redownloads files changed by another computer when you access them.
+**Microsoft OneDrive works on Linux.**
+
+Getting started with your files on OneDrive is as easy as running:
+`onedriver /path/to/mount/onedrive/at` (there's also a helpful GUI!).
+
+## Key features
+
+onedriver has several nice features that make it significantly more useful than
+other OneDrive clients:
+
+* **Files are downloaded only when you use them.** onedriver will only download
+  a file if you (or a program on your computer) uses that file. You don't need
+  to wait hours for a sync client to sync your entire OneDrive account to your local 
+  computer or try to guess which files and folders you might need later while
+  setting up a "selective sync". onedriver gives you instant access to *all* your
+  files and only downloads the ones you use.
+
+* **Bidirectional sync.** Although onedriver doesn't actually "sync" any files,
+  any changes that occur on OneDrive will be automatically reflected on your local
+  machine. onedriver will only redownload a file when you access a file that has 
+  been changed remotely on OneDrive. If you somehow simultaneously modify a file
+  both locally on your computer and also remotely on OneDrive, your local copy
+  will always take priority (to avoid you losing any local work).
+
 * **Can be used offline.** Files you've opened previously will be available even if 
   your computer has no access to the internet. The filesystem becomes read-only
   if you lose internet access, and automatically enables write access again when you 
   reconnect to the internet.
-* **Fast.** onedriver is a parallel network filesystem. You can perform as many 
-  simultaneous operations as you want and there are multiple levels of caching to 
-  ensure that accessing your files is as snappy and quick as it can be.
-* **Has a user interface.** You don't need to be a command-line expert to set up
-  OneDrive on Linux.
-* **Free and open-source.**
+
+* **Fast.** Great care has been taken to ensure that onedriver never makes a
+  network request unless it actually needs to. onedriver caches both filesystem
+  metadata and file contents both in memory and on-disk. Accessing your OneDrive
+  files will be fast and snappy even if you're engaged in a fight to the death
+  for the last power outlet at a coffeeshop with bad wifi. (This has definitely
+  never happened to me before, why do you ask?)
+
+* **Has a user interface.** You can add and remove your OneDrive accounts without
+  ever using the command-line. Once you've added your OneDrive accounts, there's
+  no special interface beyond your normal file browser.
+
+* **Free and open-source.** They're your files. Why should you have to pay to 
+  access them? onedriver is licensed under the GPLv3, which means you will *always*
+  have access to use onedriver to access your files on OneDrive.
 
 ## Quick start
 
@@ -64,16 +99,14 @@ sudo apt install onedriver
 Arch/Manjaro/EndeavourOS users can install onedriver from the 
 [AUR](https://aur.archlinux.org/packages/onedriver/).
 
-Other installation options are available below if you would prefer to manually
-install things or build the latest version from source.
-
 Post-installation, you can start onedriver either via the `onedriver-launcher` 
 desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
-### Multiple drives and starting OneDrive on login
+### Multiple drives and starting OneDrive on login via systemd
 
 **Note:** You can also set this up through the GUI via the `onedriver-launcher`
-desktop app installed via rpm/deb/`make install`.
+desktop app installed via rpm/deb/`make install`. You can skip this section
+if you're using the GUI. It's honestly easier.
 
 To start onedriver automatically and ensure you always have access to your files,
 you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
@@ -90,7 +123,7 @@ export SERVICE_NAME=$(systemd-escape --template onedriver@.service --path $MOUNT
 systemctl --user daemon-reload
 systemctl --user start $SERVICE_NAME
 
-# mount onedrive on login
+# automatically mount onedrive when you login
 systemctl --user enable $SERVICE_NAME
 
 # check onedriver's logs for the current day
@@ -116,7 +149,8 @@ mkdir mount
 ls -l mount
 
 # unmount the filesystem
-fusermount -u mount
+fusermount -uz mount
+# you can also just "ctrl-c" onedriver to unmount it
 ```
 
 A headless binary (no GUI) can be built with `make onedriver-headless`.
@@ -129,7 +163,6 @@ macOS, BSD, and even Windows as long as you have a variant of FUSE installed
 
 ### Running the tests
 
-
 The tests will write and delete files/folders on your onedrive account at the
 path `/onedriver_tests`. Note that the offline test suite requires `sudo` to
 remove network access to simulate being offline. 
@@ -138,9 +171,9 @@ remove network access to simulate being offline.
 make test
 ```
 
-### Installation
+### Installation from source
 
-onedriver has multiple installation methods depending on your needs.
+onedriver has multiple installation methods depending on your needs. 
 
 ```bash
 # install directly from source
@@ -151,6 +184,7 @@ sudo make install
 sudo dnf install golang gcc webkit2gtk3-devel json-glib-devel pkg-config git \
     rsync rpmdevtools rpm-build mock
 sudo usermod -aG mock $USER
+newgrp mock
 make rpm
 
 # create a .deb for system-wide installation on Ubuntu/Debian using pbuilder
@@ -183,11 +217,12 @@ onedriver can be completely reset (delete all cached local data) with
 
 ## Known issues & disclaimer
 
-Many file browsers (like GNOME's Nautilus) will attempt to automatically 
-download all files within a directory in order to create thumbnail images.
-This is somewhat annoying, but only needs to happen once - after the initial
-thumbnail images have been created, thumbnails will persist between
-filesystem restarts.
+Many file browsers (like GNOME's Nautilus - see 
+[bug report](https://gitlab.gnome.org/GNOME/nautilus/-/issues/1209)) 
+will attempt to automatically download all files within a directory in order to
+create thumbnail images. This is somewhat annoying, but only needs to happen
+once - after the initial thumbnail images have been created, thumbnails will
+persist between filesystem restarts. 
 
 Microsoft does not support symbolic links (or anything remotely like them) on
 OneDrive. Attempting to create symbolic links within the filesystem returns
@@ -197,9 +232,17 @@ Recycle Bin APIs - if you want to empty or restore the OneDrive Recycle Bin, you
 must do so through the OneDrive web UI (onedriver uses the native system
 trash/restore functionality independently of the OneDrive Recycle Bin).
 
+onedriver loads files into memory when you access them. This makes things very 
+fast, but obviously doesn't work very well if you have very large files. Use a 
+sync client like [rclone](https://rclone.org/) if you need the ability to copy 
+multi-gigabyte files to OneDrive.
+
 OneDrive is not a good place to backup files to. Use a tool like
 [restic](https://restic.net/) or [borg](https://www.borgbackup.org/) if you're
-looking for a reliable encrypted backup tool.
+looking for a reliable encrypted backup tool. I know some of you want to "back
+up your files to OneDrive". Don't do it. Restic and Borg are better in every
+possible way than any OneDrive client ever will be when it comes to creating
+backups you can count on.
 
-This project is still in active development and is provided AS IS. There are no
-guarantees. It might kill your cat.
+Finally, this project is still in active development and is provided AS IS.
+There are no guarantees. It might kill your cat.
