@@ -492,7 +492,36 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 
 	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
 	if err != nil || item == nil {
+		t.Fatal(err)
+	}
+	if item.Size == 0 {
+		t.Fatal("Item size was 0!")
+	}
+}
+
+// We need to test the LibreOffice save behavior for files above the the small
+// file upload limit.
+func TestLibreOfficeSavePatternLarge(t *testing.T) {
+	fname := filepath.Join(TestDir, "libreoffice_large.txt")
+	// gotta use dmel.fa as our example file because libreoffice compresses files by
+	// default and we need to stay above the small file upload limit
+	failOnErr(t, exec.Command("cp", "dmel.fa", fname).Run())
+
+	out, err := exec.Command(
+		"libreoffice",
+		"--headless",
+		"--convert-to", "docx",
+		"--outdir", TestDir,
+		fname,
+	).CombinedOutput()
+	if err != nil {
 		t.Log(string(out))
+		t.Fatal(err)
+	}
+
+	time.Sleep(30 * time.Second)
+	item, err := graph.GetItemPath("/onedriver_tests/libreoffice_large.docx", auth)
+	if err != nil || item == nil {
 		t.Fatal(err)
 	}
 	if item.Size == 0 {
