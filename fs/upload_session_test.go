@@ -64,7 +64,7 @@ func TestUploadSessionSmall(t *testing.T) {
 func TestUploadSessionSmallFS(t *testing.T) {
 	t.Parallel()
 	data := []byte("super special data for upload test 2")
-	err := os.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
+	err := ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	failOnErr(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -81,7 +81,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 
 	// upload it again to ensure uploads with an existing remote id succeed
 	data = []byte("more super special data")
-	err = os.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
+	err = ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	failOnErr(t, err)
 
 	time.Sleep(15 * time.Second)
