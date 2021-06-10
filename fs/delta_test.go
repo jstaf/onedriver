@@ -150,7 +150,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, auth)
+	session, err := NewUploadSession(inode)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -189,7 +189,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("remote")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, auth)
+	session, err := NewUploadSession(inode)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 

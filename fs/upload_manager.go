@@ -133,7 +133,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 // QueueUpload queues an item for upload.
 func (u *UploadManager) QueueUpload(inode *Inode) error {
-	session, err := NewUploadSession(inode, u.auth)
+	session, err := NewUploadSession(inode)
 	if err == nil {
 		u.queue <- session
 	}
@@ -158,7 +158,7 @@ func (u *UploadManager) finishUpload(id string) {
 		}
 		return nil
 	})
-	if u.inFlight == 0 {
+	if u.inFlight <= 0 {
 		log.WithFields(log.Fields{
 			"id":       id,
 			"inFlight": u.inFlight,

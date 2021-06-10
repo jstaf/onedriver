@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,8 +18,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// 10MB is the recommended upload size according to the graph API docs
-const chunkSize uint64 = 10 * 1024 * 1024
+const (
+	// 10MB is the recommended upload size according to the graph API docs
+	uploadChunkSize        uint64 = 10 * 1024 * 1024
+	uploadLargeSessionSize uint64 = 4 * 1024 * 1024
+)
 
 // upload states
 const (
@@ -35,12 +39,14 @@ const (
 // or modTime field to the response.
 type UploadSession struct {
 	ID                 string    `json:"id"`
+	ParentID           string    `json:"parentID"`
 	Name               string    `json:"name"`
 	UploadURL          string    `json:"uploadUrl"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
 	Data               []byte    `json:"data,omitempty"`
-	Checksum           string    `json:"checksum,omitempty"`
+	SHA1Hash           string    `json:"sha1hash,omitempty"`
+	QuickXORHash       string    `json:"quickxorhash,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
@@ -75,7 +81,7 @@ type FileSystemInfo struct {
 // isLargeSession returns whether or not this is a formal upload session that
 // must be registered with the API (over 4MB, according to the documentation).
 func (u *UploadSession) isLargeSession() bool {
-	return u.Size > 4*1024*1024
+	return u.Size > uploadLargeSessionSize
 }
 
 func (u *UploadSession) getState() int {
@@ -96,27 +102,18 @@ func (u *UploadSession) setState(state int, err error) error {
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
-	id, err := inode.RemoteID(auth)
-	if err != nil || isLocalID(id) {
-		log.WithFields(log.Fields{
-			"id":   id,
-			"name": inode.Name(),
-			"err":  err,
-		}).Errorf("Could not obtain remote ID for upload.")
-		return nil, err
-	}
-
+func NewUploadSession(inode *Inode) (*UploadSession, error) {
 	inode.mutex.RLock()
 	defer inode.mutex.RUnlock()
 
 	// create a generic session for all files
 	session := UploadSession{
-		ID:      inode.DriveItem.ID,
-		Name:    inode.DriveItem.Name,
-		Size:    inode.DriveItem.Size,
-		Data:    make([]byte, inode.DriveItem.Size),
-		ModTime: *inode.DriveItem.ModTime,
+		ID:       inode.DriveItem.ID,
+		ParentID: inode.DriveItem.Parent.ID,
+		Name:     inode.DriveItem.Name,
+		Size:     inode.DriveItem.Size,
+		Data:     make([]byte, inode.DriveItem.Size),
+		ModTime:  *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
 		log.WithFields(log.Fields{
@@ -127,16 +124,13 @@ func NewUploadSession(inode *Inode, auth *graph.Auth) (*UploadSession, error) {
 	}
 	copy(session.Data, *inode.data)
 
-	if inode.DriveItem.File.Hashes.SHA1Hash != "" {
-		session.Checksum = inode.DriveItem.File.Hashes.SHA1Hash
-	} else if inode.DriveItem.File.Hashes.QuickXorHash != "" {
-		session.Checksum = inode.DriveItem.File.Hashes.QuickXorHash
+	if inode.DriveItem.File != nil {
+		session.SHA1Hash = inode.DriveItem.File.Hashes.SHA1Hash
+		session.QuickXORHash = inode.DriveItem.File.Hashes.QuickXorHash
 	} else {
-		log.WithFields(log.Fields{
-			"id":   inode.DriveItem.ID,
-			"name": inode.DriveItem.Name,
-		}).Error("both inode checksums were nil!")
-		return nil, errors.New("both inode checksums were nil")
+		// compute both hashes for now, session does not know the drivetype
+		session.SHA1Hash = graph.SHA1Hash(&session.Data)
+		session.QuickXORHash = graph.QuickXORHash(&session.Data)
 	}
 	return &session, nil
 }
@@ -164,7 +158,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	}
 
 	// how much of the file are we going to upload?
-	end := offset + chunkSize
+	end := offset + uploadChunkSize
 	var reqChunkSize uint64
 	if end > u.Size {
 		end = u.Size
@@ -198,115 +192,126 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	return response, resp.StatusCode, nil
 }
 
-// verifyRemoteChecksum confirms that the newly-uploaded remote file matches the
-// local checksum. Returns false if there is a mismatch.
-func (u *UploadSession) verifyRemoteChecksum(response []byte) error {
-	remote := graph.DriveItem{}
-	if err := json.Unmarshal(response, &remote); err != nil {
-		return u.setState(uploadErrored, err)
-	}
-	if !remote.VerifyChecksum(u.Checksum) {
-		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
-	}
-	return u.setState(uploadComplete, nil)
-}
-
 // Upload copies the file's contents to the server. Should only be called as a
 // goroutine, or it can potentially block for a very long time. The uploadSession.error
 // field contains errors to be handled if called as a goroutine.
 func (u *UploadSession) Upload(auth *graph.Auth) error {
 	log.WithField("id", u.ID).Debug("Uploading file.")
 	u.setState(uploadStarted, nil)
+
+	var uploadPath string
+	var resp []byte
+	var err error
 	if !u.isLargeSession() {
+		if isLocalID(u.ID) {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s:/%s:/content",
+				u.ParentID,
+				url.PathEscape(u.Name),
+			)
+		} else {
+			uploadPath = fmt.Sprintf("/me/drive/items/%s/content", u.ID)
+		}
+
 		// small files handled in this block
-		remote, err := graph.Put(
-			fmt.Sprintf("/me/drive/items/%s/content", u.ID),
-			auth,
-			bytes.NewReader(u.Data),
-		)
+		resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
 		if err != nil && strings.Contains(err.Error(), "resourceModified") {
 			// retry the request after a second, likely the server is having issues
 			time.Sleep(time.Second)
-			remote, err = graph.Put(
-				fmt.Sprintf("/me/drive/items/%s/content", u.ID),
-				auth,
-				bytes.NewReader(u.Data),
+			resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
+		}
+		if err != nil {
+			return u.setState(uploadErrored, err)
+		}
+	} else {
+		// must create a formal upload session with the API for large sessions
+		sessionPostData, _ := json.Marshal(UploadSessionPost{
+			ConflictBehavior: "replace",
+			FileSystemInfo: FileSystemInfo{
+				LastModifiedDateTime: u.ModTime,
+			},
+		})
+
+		if isLocalID(u.ID) {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s:/%s:/createUploadSession",
+				u.ParentID,
+				url.PathEscape(u.Name),
 			)
+		} else {
+			uploadPath = fmt.Sprintf("/me/drive/items/%s/createUploadSession", u.ID)
 		}
+		resp, err = graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
 		if err != nil {
 			return u.setState(uploadErrored, err)
 		}
-		return u.verifyRemoteChecksum(remote)
-	}
 
-	// must create a formal upload session with the API for large sessions
-	sessionPostData, _ := json.Marshal(UploadSessionPost{
-		ConflictBehavior: "replace",
-		FileSystemInfo: FileSystemInfo{
-			LastModifiedDateTime: u.ModTime,
-		},
-	})
-	resp, err := graph.Post(
-		fmt.Sprintf("/me/drive/items/%s/createUploadSession", u.ID),
-		auth,
-		bytes.NewReader(sessionPostData),
-	)
-	if err != nil {
-		return u.setState(uploadErrored, err)
-	}
-	// populate UploadURL/expiration - we unmarshal into a fresh session here
-	// just in case the API does something silly at a later date and overwrites
-	// a field it shouldn't.
-	tmp := UploadSession{}
-	if err = json.Unmarshal(resp, &tmp); err != nil {
-		return u.setState(uploadErrored, err)
-	}
-	u.UploadURL = tmp.UploadURL
-	u.ExpirationDateTime = tmp.ExpirationDateTime
-
-	// api upload session created successfully, now do actual content upload
-	var status int
-	nchunks := int(math.Ceil(float64(u.Size) / float64(chunkSize)))
-	for i := 0; i < nchunks; i++ {
-		resp, status, err = u.uploadChunk(auth, uint64(i)*chunkSize)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"id":      u.ID,
-				"name":    u.Name,
-				"chunk":   i,
-				"nchunks": nchunks,
-				"err":     err,
-			}).Error("Error during chunk upload.")
+		// populate UploadURL/expiration - we unmarshal into a fresh session here
+		// just in case the API does something silly at a later date and overwrites
+		// a field it shouldn't.
+		tmp := UploadSession{}
+		if err = json.Unmarshal(resp, &tmp); err != nil {
 			return u.setState(uploadErrored, err)
 		}
+		u.UploadURL = tmp.UploadURL
+		u.ExpirationDateTime = tmp.ExpirationDateTime
 
-		// retry server-side failures with an exponential back-off strategy. Will not
-		// exit this loop unless it receives a non 5xx error or serious failure
-		for backoff := 1; status >= 500; backoff *= 2 {
-			log.WithFields(log.Fields{
-				"id":      u.ID,
-				"name":    u.Name,
-				"chunk":   i,
-				"nchunks": nchunks,
-				"status":  status,
-			}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
-			time.Sleep(time.Duration(backoff) * time.Second)
-			resp, status, err = u.uploadChunk(auth, uint64(i)*chunkSize)
-			if err != nil { // a serious, non 4xx/5xx error
+		// api upload session created successfully, now do actual content upload
+		var status int
+		nchunks := int(math.Ceil(float64(u.Size) / float64(uploadChunkSize)))
+		for i := 0; i < nchunks; i++ {
+			resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
+			if err != nil {
 				log.WithFields(log.Fields{
-					"id":     u.ID,
-					"name":   u.Name,
-					"err":    err,
-					"status": status,
-				}).Error("Failed while retrying chunk upload after server-side error.")
+					"id":      u.ID,
+					"name":    u.Name,
+					"chunk":   i,
+					"nchunks": nchunks,
+					"err":     err,
+				}).Error("Error during chunk upload.")
 				return u.setState(uploadErrored, err)
 			}
-		}
 
-		// handle client-side errors
-		if status >= 400 {
-			return u.setState(uploadErrored, errors.New(string(resp)))
+			// retry server-side failures with an exponential back-off strategy. Will not
+			// exit this loop unless it receives a non 5xx error or serious failure
+			for backoff := 1; status >= 500; backoff *= 2 {
+				log.WithFields(log.Fields{
+					"id":      u.ID,
+					"name":    u.Name,
+					"chunk":   i,
+					"nchunks": nchunks,
+					"status":  status,
+				}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
+				time.Sleep(time.Duration(backoff) * time.Second)
+				resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
+				if err != nil { // a serious, non 4xx/5xx error
+					log.WithFields(log.Fields{
+						"id":     u.ID,
+						"name":   u.Name,
+						"err":    err,
+						"status": status,
+					}).Error("Failed while retrying chunk upload after server-side error.")
+					return u.setState(uploadErrored, err)
+				}
+			}
+
+			// handle client-side errors
+			if status >= 400 {
+				return u.setState(uploadErrored, errors.New(string(resp)))
+			}
 		}
 	}
-	return u.verifyRemoteChecksum(resp)
+
+	// server has indicated that the upload was successful - now we check to verify the
+	// checksum is what it's supposed to be.
+	remote := graph.DriveItem{}
+	if err := json.Unmarshal(resp, &remote); err != nil {
+		return u.setState(uploadErrored, err)
+	}
+	if !remote.VerifyChecksum(u.SHA1Hash) && !remote.VerifyChecksum(u.QuickXORHash) {
+		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
+	}
+	// update the UploadSession's ID in the event that we exchange a local for a remote ID
+	u.ID = remote.ID
+	return u.setState(uploadComplete, nil)
 }

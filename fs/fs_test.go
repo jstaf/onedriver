@@ -267,47 +267,6 @@ func TestUnlink(t *testing.T) {
 	}
 }
 
-// copy large file inside onedrive mount, then verify that we can still
-// access selected lines
-func TestUploadSession(t *testing.T) {
-	t.Parallel()
-	fname := filepath.Join(TestDir, "dmel.fa")
-	failOnErr(t, exec.Command("cp", "dmel.fa", fname).Run())
-
-	contents, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
-
-	header := ">X dna:chromosome chromosome:BDGP6.22:X:1:23542271:1 REF"
-	if string(contents[:len(header)]) != header {
-		t.Fatalf("Could not read FASTA header. Wanted \"%s\", got \"%s\"\n",
-			header, string(contents[:len(header)]))
-	}
-
-	final := "AAATAAAATAC\n" // makes yucky test output, but is the final line
-	match := string(contents[len(contents)-len(final):])
-	if match != final {
-		t.Fatalf("Could not read final line of FASTA. Wanted \"%s\", got \"%s\"\n",
-			final, match)
-	}
-
-	st, _ := os.Stat(fname)
-	if st.Size() == 0 {
-		t.Fatal("File size cannot be 0.")
-	}
-
-	// poll endpoint to make sure it has a size greater than 0
-	size := uint64(len(contents))
-	for i := 0; i < 120; i++ {
-		time.Sleep(time.Second)
-		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
-		inode := NewInodeDriveItem(item)
-		if item != nil && inode.Size() == size {
-			return
-		}
-	}
-	t.Fatalf("\nUpload session did not complete successfully!")
-}
-
 // OneDrive is case-insensitive due to limitations imposed by Windows NTFS
 // filesystem. Make sure we prevent users of normal systems from running into
 // issues with OneDrive's case-insensitivity.
@@ -462,6 +421,7 @@ func TestGIOTrash(t *testing.T) {
 // Test that we are able to work around onedrive paging limits when
 // listing a folder's children.
 func TestListChildrenPaging(t *testing.T) {
+	t.Parallel()
 	// files have been prepopulated during test setup to avoid being picked up by
 	// the delta thread
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
@@ -474,6 +434,7 @@ func TestListChildrenPaging(t *testing.T) {
 // Libreoffice writes to files in a funny manner and it can result in a 0 byte file
 // being uploaded (can check syscalls via "inotifywait -m -r .").
 func TestLibreOfficeSavePattern(t *testing.T) {
+	t.Parallel()
 	content := []byte("This will break things.")
 	fname := filepath.Join(TestDir, "libreoffice.txt")
 	failOnErr(t, ioutil.WriteFile(fname, content, 0644))
@@ -502,6 +463,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 // We need to test the LibreOffice save behavior for files above the the small
 // file upload limit.
 func TestLibreOfficeSavePatternLarge(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(TestDir, "libreoffice_large.txt")
 	// gotta use dmel.fa as our example file because libreoffice compresses files by
 	// default and we need to stay above the small file upload limit
