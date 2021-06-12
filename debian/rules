@@ -15,12 +15,14 @@ override_dh_auto_clean:
 override_dh_auto_build:
 	# GOCACHE will be for a nonexistent user in pbuilder otherwise
 	GOCACHE=/tmp/go-cache go build -mod=vendor -ldflags="-X main.commit=$(shell cat .commit)"
+	GOCACHE=/tmp/go-cache CGO_ENABLED=0 go build -o onedriver-headless -mod=vendor -ldflags="-X main.commit=$(shell cat .commit)"
 	$(MAKE) onedriver-launcher
 	gzip resources/onedriver.1
 
 
 override_dh_auto_install:
 	install -D -m 0755 onedriver $$(pwd)/debian/onedriver/usr/bin/onedriver
+	install -D -m 0755 onedriver-headless $$(pwd)/debian/onedriver/usr/bin/onedriver-headless
 	install -D -m 0755 onedriver-launcher $$(pwd)/debian/onedriver/usr/bin/onedriver-launcher
 	install -D -m 0644 resources/onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.png
 	install -D -m 0644 resources/onedriver.svg $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.svg
