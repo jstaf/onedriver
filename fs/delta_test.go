@@ -82,7 +82,15 @@ func TestDeltaRename(t *testing.T) {
 		0644,
 	))
 
-	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
 	inode := NewInodeDriveItem(item)
 
@@ -112,7 +120,15 @@ func TestDeltaMoveParent(t *testing.T) {
 	))
 	time.Sleep(time.Second)
 
-	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
 
 	newParent, err := graph.GetItemPath("/onedriver_tests/", auth)
@@ -184,9 +200,18 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
 
 	// change and upload it via the API
-	item, err := graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
-	inode := NewInodeDriveItem(item)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
+
+	inode := NewInodeDriveItem(item)
 	newContent := []byte("remote")
 	inode.setContent(newContent)
 	session, err := NewUploadSession(inode)
