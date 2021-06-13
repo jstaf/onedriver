@@ -272,9 +272,6 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
-		// pull any data on disk back into memory
-		i.Open(context.Background(), 0)
-
 		// perform a blocking upload of the item
 		session, err := NewUploadSession(i)
 		if err != nil {

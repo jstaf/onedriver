@@ -112,17 +112,22 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 		ParentID: inode.DriveItem.Parent.ID,
 		Name:     inode.DriveItem.Name,
 		Size:     inode.DriveItem.Size,
-		Data:     make([]byte, inode.DriveItem.Size),
+		Data:     nil,
 		ModTime:  *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
-		log.WithFields(log.Fields{
-			"id":   inode.DriveItem.ID,
-			"name": inode.DriveItem.Name,
-		}).Error("Tried to dereference a nil pointer.")
-		return nil, errors.New("inode data was nil")
+		session.Data = inode.GetCache().GetContent(inode.DriveItem.ID)
+		if session.Data == nil {
+			log.WithFields(log.Fields{
+				"id":   inode.DriveItem.ID,
+				"name": inode.DriveItem.Name,
+			}).Error("Tried to load file data from disk but could not find any!")
+			return nil, errors.New("inode data was nil")
+		}
+	} else {
+		session.Data = make([]byte, inode.DriveItem.Size)
+		copy(session.Data, *inode.data)
 	}
-	copy(session.Data, *inode.data)
 
 	if inode.DriveItem.File != nil {
 		session.SHA1Hash = inode.DriveItem.File.Hashes.SHA1Hash

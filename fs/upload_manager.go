@@ -158,12 +158,7 @@ func (u *UploadManager) finishUpload(id string) {
 		}
 		return nil
 	})
-	if u.inFlight <= 0 {
-		log.WithFields(log.Fields{
-			"id":       id,
-			"inFlight": u.inFlight,
-		}).Warn("Files in flight cannot be less than 0")
-	} else {
+	if u.inFlight > 0 {
 		u.inFlight--
 	}
 	delete(u.sessions, id)
