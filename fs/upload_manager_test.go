@@ -96,8 +96,10 @@ func TestRepeatedUploads(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		uploadme := []byte(fmt.Sprintf("iteration: %d", i))
 		failOnErr(t, ioutil.WriteFile(fname, uploadme, 0644))
-		time.Sleep(5 * time.Second)
-		content, err := graph.GetItemContent(inode.ID(), auth)
+		time.Sleep(10 * time.Second)
+		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
+		failOnErr(t, err)
+		content, err := graph.GetItemContent(item.ID, auth)
 		failOnErr(t, err)
 
 		if !bytes.Equal(content, uploadme) {
