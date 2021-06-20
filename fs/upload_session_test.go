@@ -35,12 +35,12 @@ func TestUploadSession(t *testing.T) {
 			session.ID)
 	}
 	if sessionMtime := uint64(session.ModTime.Unix()); sessionMtime != mtime {
-		t.Fatalf("session modtime changed - before: %d - after: %d", sessionMtime, mtime)
+		t.Fatalf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
 
 	item, err := graph.GetItem(session.ID, auth)
 	if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
-		t.Errorf("remote item modtime changed - before: %d - after: %d", mtimeItem, mtime)
+		t.Errorf("remote item modtime changed - before: %d - after: %d", mtime, mtimeItem)
 	}
 
 	resp, err := graph.GetItemContent(session.ID, auth)
