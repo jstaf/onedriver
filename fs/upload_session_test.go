@@ -13,8 +13,8 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
-// TestUploadSessionSmall verifies that the basic functionality of uploads works correctly.
-func TestUploadSessionSmall(t *testing.T) {
+// TestUploadSession verifies that the basic functionality of uploads works correctly.
+func TestUploadSession(t *testing.T) {
 	t.Parallel()
 	testDir, err := fsCache.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
@@ -24,6 +24,7 @@ func TestUploadSessionSmall(t *testing.T) {
 	if _, errno := inode.Write(context.Background(), nil, data, 0); errno != 0 {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
+	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode)
 	failOnErr(t, err)
@@ -32,6 +33,14 @@ func TestUploadSessionSmall(t *testing.T) {
 	if isLocalID(session.ID) {
 		t.Fatalf("The session's ID was somehow still local following an upload: %s\n",
 			session.ID)
+	}
+	if sessionMtime := uint64(session.ModTime.Unix()); sessionMtime != mtime {
+		t.Fatalf("session modtime changed - before: %d - after: %d", sessionMtime, mtime)
+	}
+
+	item, err := graph.GetItem(session.ID, auth)
+	if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
+		t.Errorf("remote item modtime changed - before: %d - after: %d", mtimeItem, mtime)
 	}
 
 	resp, err := graph.GetItemContent(session.ID, auth)
