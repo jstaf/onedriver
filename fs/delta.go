@@ -215,10 +215,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// actually modifies remotely is the actual file data, so we simply accept
 	// the remote metadata changes that do not deal with the file's content
 	// changing.
-	//
-	// Do not sync if the file size is 0, as this is likely a file in the
-	// progress of being uploaded (also, no need to sync empty files).
-	if delta.ModTime() > local.ModTime() && delta.Size() > 0 {
+	if delta.ModTime() > local.ModTime() {
 		sameContent := false
 		if !delta.IsDir() && delta.File != nil {
 			local.mutex.RLock()

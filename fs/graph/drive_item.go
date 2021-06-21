@@ -56,6 +56,7 @@ type DriveItem struct {
 	ID               string           `json:"id,omitempty"`
 	Name             string           `json:"name,omitempty"`
 	Size             uint64           `json:"size,omitempty"`
+	CreateTime       *time.Time       `json:"createdDateTime,omitempty"`
 	ModTime          *time.Time       `json:"lastModifiedDatetime,omitempty"`
 	Parent           *DriveItemParent `json:"parentReference,omitempty"`
 	Folder           *Folder          `json:"folder,omitempty"`

@@ -65,10 +65,11 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	currentTime := time.Now()
 	return &Inode{
 		DriveItem: graph.DriveItem{
-			ID:      localID(),
-			Name:    name,
-			Parent:  itemParent,
-			ModTime: &currentTime,
+			ID:         localID(),
+			Name:       name,
+			Parent:     itemParent,
+			CreateTime: &currentTime,
+			ModTime:    &currentTime,
 		},
 		children: make([]string, 0),
 		data:     &empty,
@@ -480,9 +481,9 @@ func (i *Inode) makeattr() fuse.Attr {
 	return fuse.Attr{
 		Size:  i.Size(),
 		Nlink: i.NLink(),
+		Ctime: i.CreateTime(),
 		Mtime: mtime,
 		Atime: mtime,
-		Ctime: mtime,
 		Mode:  i.Mode(),
 		Owner: fuse.Owner{
 			Uid: uint32(os.Getuid()),
@@ -515,6 +516,7 @@ func (i *Inode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
+		// we don't change ctime because the futimens syscall doesn't change ctime
 		i.DriveItem.ModTime = &mtime
 	}
 
@@ -562,6 +564,13 @@ func (i *Inode) Mode() uint32 {
 		return fuse.S_IFREG | 0644
 	}
 	return i.mode
+}
+
+// CreateTime returns the UNIX timestamp of file creation
+func (i *Inode) CreateTime() uint64 {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	return uint64(i.DriveItem.CreateTime.Unix())
 }
 
 // ModTime returns the Unix timestamp of last modification (to get a time.Time

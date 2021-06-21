@@ -24,6 +24,7 @@ func TestUploadSession(t *testing.T) {
 	if _, errno := inode.Write(context.Background(), nil, data, 0); errno != 0 {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
+	ctime := inode.CreateTime()
 	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode)
@@ -39,6 +40,9 @@ func TestUploadSession(t *testing.T) {
 	}
 
 	item, err := graph.GetItem(session.ID, auth)
+	if ctimeItem := uint64(item.CreateTime.Unix()); ctimeItem != ctime {
+		t.Errorf("remote item createtime changed - before: %d - after: %d", ctime, ctimeItem)
+	}
 	if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
 		t.Errorf("remote item modtime changed - before: %d - after: %d", mtime, mtimeItem)
 	}
