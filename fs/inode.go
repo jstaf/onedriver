@@ -289,6 +289,7 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 		// we just successfully uploaded a copy, no need to do it again
 		i.hasChanges = false
+		i.DriveItem.ETag = session.ETag
 		name := i.DriveItem.Name
 		i.mutex.Unlock()
 

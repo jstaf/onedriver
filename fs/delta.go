@@ -172,14 +172,25 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// does the item exist locally? if not, add the delta to the cache under the
 	// appropriate parent
 	if local == nil {
-		log.WithFields(log.Fields{
-			"id":       id,
-			"parentID": parentID,
-			"name":     name,
-			"delta":    "create",
-		}).Info("Creating inode from delta.")
-		c.InsertChild(parentID, delta)
-		return nil
+		// check if we don't have it here first
+		local, _ = c.GetChild(parentID, name, nil)
+		if local != nil {
+			log.WithFields(log.Fields{
+				"id":       id,
+				"localID":  local.ID(),
+				"parentID": parentID,
+				"name":     name,
+			}).Info("Local item already exists under different ID.")
+		} else {
+			log.WithFields(log.Fields{
+				"id":       id,
+				"parentID": parentID,
+				"name":     name,
+				"delta":    "create",
+			}).Info("Creating inode from delta.")
+			c.InsertChild(parentID, delta)
+			return nil
+		}
 	}
 
 	// was the item moved?
@@ -215,7 +226,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// actually modifies remotely is the actual file data, so we simply accept
 	// the remote metadata changes that do not deal with the file's content
 	// changing.
-	if delta.ModTime() > local.ModTime() {
+	if delta.ModTime() > local.ModTime() && !delta.ETagIsMatch(local.ETag) {
 		sameContent := false
 		if !delta.IsDir() && delta.File != nil {
 			local.mutex.RLock()
@@ -239,6 +250,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			defer local.mutex.Unlock()
 			local.DriveItem.ModTime = delta.DriveItem.ModTime
 			local.DriveItem.Size = delta.DriveItem.Size
+			local.DriveItem.ETag = delta.DriveItem.ETag
 			// the rest of these are harmless when this is a directory
 			// as they will be null anyways
 			local.DriveItem.File = delta.DriveItem.File

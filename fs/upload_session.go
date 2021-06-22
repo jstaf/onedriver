@@ -43,6 +43,7 @@ type UploadSession struct {
 	Data               []byte    `json:"data,omitempty"`
 	SHA1Hash           string    `json:"sha1hash,omitempty"`
 	QuickXORHash       string    `json:"quickxorhash,omitempty"`
+	ETag               string    `json:"eTag,omitempty"`
 	CreateTime         time.Time `json:"createtime,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
@@ -290,5 +291,6 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID
 	u.ID = remote.ID
+	u.ETag = remote.ETag
 	return u.setState(uploadComplete, nil)
 }
