@@ -189,6 +189,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 						"localID":  localID,
 						"parentID": parentID,
 						"name":     name,
+						"err":      err,
 					}).Error("Could not move item to new, nonlocal ID!")
 				}
 			}

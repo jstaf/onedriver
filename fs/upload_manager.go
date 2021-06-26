@@ -136,6 +136,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 								"id":    session.ID,
 								"oldID": session.OldID,
 								"name":  session.Name,
+								"err":   err,
 							}).Error("Could not move inode to new ID!")
 						}
 					}
