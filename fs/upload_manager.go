@@ -28,7 +28,7 @@ type UploadManager struct {
 func NewUploadManager(duration time.Duration, db *bolt.DB, cache *Cache, auth *graph.Auth) *UploadManager {
 	manager := UploadManager{
 		queue:         make(chan *UploadSession),
-		deletionQueue: make(chan string),
+		deletionQueue: make(chan string, 1000), // FIXME - why does this chan need to be buffered now???
 		sessions:      make(map[string]*UploadSession),
 		auth:          auth,
 		db:            db,
