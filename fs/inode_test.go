@@ -63,6 +63,7 @@ func TestIsDir(t *testing.T) {
 // A filename like .~lock.libreoffice-test.docx# will fail to upload unless the
 // filename is escaped.
 func TestFilenameEscape(t *testing.T) {
+	t.Parallel()
 	fname := `.~lock.libreoffice-test.docx#`
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
 
