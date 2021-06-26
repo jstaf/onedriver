@@ -293,7 +293,11 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	if err := json.Unmarshal(resp, &remote); err != nil {
 		return u.setState(uploadErrored, err)
 	}
-	if !remote.VerifyChecksum(u.SHA1Hash) && !remote.VerifyChecksum(u.QuickXORHash) {
+	if remote.File == nil && remote.Size != u.Size {
+		// if we are absolutely pounding the microsoft API, a remote item may sometimes
+		// come back without checksums, so we check the size of the uploaded item instead.
+		return u.setState(uploadErrored, errors.New("size mismatch when remote checksums did not exist"))
+	} else if !remote.VerifyChecksum(u.SHA1Hash) && !remote.VerifyChecksum(u.QuickXORHash) {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID

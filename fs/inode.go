@@ -771,6 +771,8 @@ func (i *Inode) Rename(ctx context.Context, name string, newParent fs.InodeEmbed
 		log.WithFields(log.Fields{
 			"id":       id,
 			"parentID": parentID,
+			"path":     path,
+			"dest":     dest,
 			"err":      err,
 		}).Error("Failed to rename remote item.")
 		return syscall.EREMOTEIO
