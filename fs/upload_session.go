@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-	sync "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
