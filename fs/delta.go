@@ -175,12 +175,23 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		// check if we don't have it here first
 		local, _ = c.GetChild(parentID, name, nil)
 		if local != nil {
+			localID := local.ID()
 			log.WithFields(log.Fields{
 				"id":       id,
-				"localID":  local.ID(),
+				"localID":  localID,
 				"parentID": parentID,
 				"name":     name,
 			}).Info("Local item already exists under different ID.")
+			if isLocalID(localID) {
+				if err := c.MoveID(localID, id); err != nil {
+					log.WithFields(log.Fields{
+						"id":       id,
+						"localID":  localID,
+						"parentID": parentID,
+						"name":     name,
+					}).Error("Could not move item to new, nonlocal ID!")
+				}
+			}
 		} else {
 			log.WithFields(log.Fields{
 				"id":       id,

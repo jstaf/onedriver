@@ -20,17 +20,19 @@ type UploadManager struct {
 	sessions      map[string]*UploadSession
 	inFlight      uint8 // number of sessions in flight
 	auth          *graph.Auth
+	cache         *Cache
 	db            *bolt.DB
 }
 
 // NewUploadManager creates a new queue/thread for uploads
-func NewUploadManager(duration time.Duration, db *bolt.DB, auth *graph.Auth) *UploadManager {
+func NewUploadManager(duration time.Duration, db *bolt.DB, cache *Cache, auth *graph.Auth) *UploadManager {
 	manager := UploadManager{
 		queue:         make(chan *UploadSession),
 		deletionQueue: make(chan string),
 		sessions:      make(map[string]*UploadSession),
 		auth:          auth,
 		db:            db,
+		cache:         cache,
 	}
 	db.View(func(tx *bolt.Tx) error {
 		// Add any incomplete sessions from disk - any sessions here were never
@@ -90,7 +92,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 				case uploadNotStarted:
 					// max active upload sessions are capped at this limit for faster
 					// uploads of individual files and also to prevent possible server-
-					// side throttling that can cause errors
+					// side throttling that can cause errors.
 					if u.inFlight < maxUploadsInFlight {
 						u.inFlight++
 						go session.Upload(u.auth)
@@ -121,10 +123,34 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 				case uploadComplete:
 					log.WithFields(log.Fields{
-						"id":   session.ID,
-						"name": session.Name,
+						"id":    session.ID,
+						"oldID": session.OldID,
+						"name":  session.Name,
 					}).Debug("Upload completed!")
-					u.finishUpload(session.ID)
+
+					// ID changed during upload, move to new ID
+					if session.OldID != session.ID {
+						err := u.cache.MoveID(session.OldID, session.ID)
+						if err != nil {
+							log.WithFields(log.Fields{
+								"id":    session.ID,
+								"oldID": session.OldID,
+								"name":  session.Name,
+							}).Error("Could not move inode to new ID!")
+						}
+					}
+
+					// inode will exist at the new ID now, but we check if inode
+					// is nil to see if the item has been deleted since upload start
+					if inode := u.cache.GetID(session.ID); inode != nil {
+						inode.mutex.Lock()
+						inode.DriveItem.ETag = session.ETag
+						inode.mutex.Unlock()
+					}
+
+					// the old ID is the one that was used to add it to the queue.
+					// cleanup the session.
+					u.finishUpload(session.OldID)
 				}
 			}
 		}

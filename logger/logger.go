@@ -113,6 +113,6 @@ func LogTestSetup() *os.File {
 	log.SetOutput(logFile)
 	log.SetReportCaller(true)
 	log.SetFormatter(LogrusFormatter())
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.TraceLevel)
 	return logFile
 }

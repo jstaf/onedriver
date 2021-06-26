@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
+	sync "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,22 +35,23 @@ const (
 // or modTime field to the response.
 type UploadSession struct {
 	ID                 string    `json:"id"`
+	OldID              string    `json:"oldID"`
 	ParentID           string    `json:"parentID"`
 	Name               string    `json:"name"`
-	UploadURL          string    `json:"uploadUrl"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
 	Data               []byte    `json:"data,omitempty"`
 	SHA1Hash           string    `json:"sha1hash,omitempty"`
 	QuickXORHash       string    `json:"quickxorhash,omitempty"`
-	ETag               string    `json:"eTag,omitempty"`
 	CreateTime         time.Time `json:"createtime,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
-	mutex sync.Mutex
-	state int
-	error // embedded error tracks errors that killed an upload
+	mutex     sync.Mutex
+	UploadURL string `json:"uploadUrl"`
+	ETag      string `json:"eTag,omitempty"`
+	state     int
+	error     // embedded error tracks errors that killed an upload
 }
 
 // MarshalJSON implements a custom JSON marshaler to avoid race conditions
@@ -100,6 +101,7 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 	// create a generic session for all files
 	session := UploadSession{
 		ID:         inode.DriveItem.ID,
+		OldID:      inode.DriveItem.ID,
 		ParentID:   inode.DriveItem.Parent.ID,
 		Name:       inode.DriveItem.Name,
 		Size:       inode.DriveItem.Size,
@@ -108,7 +110,7 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 		ModTime:    *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
-		session.Data = inode.GetCache().GetContent(inode.DriveItem.ID)
+		session.Data = inode.cache.GetContent(inode.DriveItem.ID)
 		if session.Data == nil {
 			log.WithFields(log.Fields{
 				"id":   inode.DriveItem.ID,
@@ -134,7 +136,10 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 
 // cancel the upload session by deleting the temp file at the endpoint.
 func (u *UploadSession) cancel(auth *graph.Auth) {
-	if u.UploadURL != "" {
+	u.mutex.Lock()
+	nonemptyURL := u.UploadURL != ""
+	u.mutex.Unlock()
+	if nonemptyURL {
 		state := u.getState()
 		if state == uploadStarted || state == uploadErrored {
 			// dont care about result, this is purely us being polite to the server
@@ -232,8 +237,10 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	if err = json.Unmarshal(resp, &tmp); err != nil {
 		return u.setState(uploadErrored, err)
 	}
+	u.mutex.Lock()
 	u.UploadURL = tmp.UploadURL
 	u.ExpirationDateTime = tmp.ExpirationDateTime
+	u.mutex.Unlock()
 
 	// api upload session created successfully, now do actual content upload
 	var status int
@@ -290,7 +297,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID
+	u.mutex.Lock()
 	u.ID = remote.ID
 	u.ETag = remote.ETag
+	u.mutex.Unlock()
 	return u.setState(uploadComplete, nil)
 }

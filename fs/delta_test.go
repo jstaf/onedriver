@@ -334,6 +334,7 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 // test verifies that the delta thread does not modify modification times if the
 // content is unchanged.
 func TestDeltaNoModTimeUpdate(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(DeltaDir, "mod_time_update.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("a pretend lockfile"), 0644))
 	finfo, err := os.Stat(fname)
