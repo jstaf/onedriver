@@ -49,7 +49,6 @@ type UploadSession struct {
 	Data               []byte    `json:"data,omitempty"`
 	SHA1Hash           string    `json:"sha1hash,omitempty"`
 	QuickXORHash       string    `json:"quickxorhash,omitempty"`
-	CreateTime         time.Time `json:"createtime,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
@@ -78,7 +77,6 @@ type UploadSessionPost struct {
 
 // FileSystemInfo carries the filesystem metadata like Mtime/Atime
 type FileSystemInfo struct {
-	CreatedDateTime      time.Time `json:"createdDateTime,omitempty"`
 	LastModifiedDateTime time.Time `json:"lastModifiedDateTime,omitempty"`
 }
 
@@ -106,14 +104,13 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 
 	// create a generic session for all files
 	session := UploadSession{
-		ID:         inode.DriveItem.ID,
-		OldID:      inode.DriveItem.ID,
-		ParentID:   inode.DriveItem.Parent.ID,
-		Name:       inode.DriveItem.Name,
-		Size:       inode.DriveItem.Size,
-		Data:       nil,
-		CreateTime: *inode.DriveItem.CreateTime,
-		ModTime:    *inode.DriveItem.ModTime,
+		ID:       inode.DriveItem.ID,
+		OldID:    inode.DriveItem.ID,
+		ParentID: inode.DriveItem.Parent.ID,
+		Name:     inode.DriveItem.Name,
+		Size:     inode.DriveItem.Size,
+		Data:     nil,
+		ModTime:  *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
 		session.Data = inode.cache.GetContent(inode.DriveItem.ID)
@@ -257,7 +254,6 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		sessionPostData, _ := json.Marshal(UploadSessionPost{
 			ConflictBehavior: "replace",
 			FileSystemInfo: FileSystemInfo{
-				CreatedDateTime:      u.CreateTime,
 				LastModifiedDateTime: u.ModTime,
 			},
 		})

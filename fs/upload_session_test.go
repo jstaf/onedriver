@@ -24,7 +24,6 @@ func TestUploadSession(t *testing.T) {
 	if _, errno := inode.Write(context.Background(), nil, data, 0); errno != 0 {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
-	ctime := inode.CreateTime()
 	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode)
@@ -38,19 +37,13 @@ func TestUploadSession(t *testing.T) {
 	if sessionMtime := uint64(session.ModTime.Unix()); sessionMtime != mtime {
 		t.Errorf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
-	if sessionCtime := uint64(session.CreateTime.Unix()); sessionCtime != ctime {
-		t.Errorf("session createtime changed - before: %d - after: %d", ctime, sessionCtime)
-	}
 
 	/*
-		The fact that these checks don't work is a server-side failure on Microsoft's part.
+		The fact that this doesn't work is a server-side failure on Microsoft's part.
 		I guess we can't trust Microsoft's modification times, which is why we use etags
 		now.
 
 		item, err := graph.GetItem(session.ID, auth)
-		if ctimeItem := uint64(item.CreateTime.Unix()); ctimeItem != ctime {
-			t.Errorf("remote item createtime changed - before: %d - after: %d", ctime, ctimeItem)
-		}
 		if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
 			t.Errorf("remote item modtime changed - before: %d - after: %d", mtime, mtimeItem)
 		}

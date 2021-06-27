@@ -65,11 +65,10 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	currentTime := time.Now()
 	return &Inode{
 		DriveItem: graph.DriveItem{
-			ID:         localID(),
-			Name:       name,
-			Parent:     itemParent,
-			CreateTime: &currentTime,
-			ModTime:    &currentTime,
+			ID:      localID(),
+			Name:    name,
+			Parent:  itemParent,
+			ModTime: &currentTime,
 		},
 		children: make([]string, 0),
 		data:     &empty,
@@ -482,7 +481,7 @@ func (i *Inode) makeattr() fuse.Attr {
 	return fuse.Attr{
 		Size:  i.Size(),
 		Nlink: i.NLink(),
-		Ctime: i.CreateTime(),
+		Ctime: mtime,
 		Mtime: mtime,
 		Atime: mtime,
 		Mode:  i.Mode(),
@@ -565,13 +564,6 @@ func (i *Inode) Mode() uint32 {
 		return fuse.S_IFREG | 0644
 	}
 	return i.mode
-}
-
-// CreateTime returns the UNIX timestamp of file creation
-func (i *Inode) CreateTime() uint64 {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-	return uint64(i.DriveItem.CreateTime.Unix())
 }
 
 // ModTime returns the Unix timestamp of last modification (to get a time.Time
@@ -799,7 +791,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 	path := i.Path()
 	id := i.ID()
 	f := int(flags)
-	if f&os.O_RDWR+f&os.O_WRONLY > 0 && i.GetCache().offline {
+	if f&os.O_RDWR+f&os.O_WRONLY > 0 && i.GetCache().IsOffline() {
 		log.WithFields(log.Fields{
 			"path":  path,
 			"id":    id,
