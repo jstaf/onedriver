@@ -516,7 +516,6 @@ func (i *Inode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
-		// we don't change ctime because the futimens syscall doesn't change ctime
 		i.DriveItem.ModTime = &mtime
 	}
 

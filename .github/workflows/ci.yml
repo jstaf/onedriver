@@ -102,7 +102,7 @@ jobs:
           ACCOUNT_TYPE: ${{ matrix.account_type }}
         if: always()
 
-      - name: Combine test coverage and generate lcov for Coveralls
+      - name: Combine test coverage into single file
         run: |
           go get github.com/wadey/gocovmerge
           gocovmerge *.coverage > coverage.out
