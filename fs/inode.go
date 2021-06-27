@@ -3,10 +3,8 @@ package fs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -274,65 +272,34 @@ func (i *Inode) RemoteID(auth *graph.Auth) (string, error) {
 
 	originalID := i.ID()
 	if isLocalID(originalID) && auth.AccessToken != "" {
-		i.mutex.Lock()
-		uploadPath := fmt.Sprintf(
-			"/me/drive/items/%s:/%s:/content",
-			i.DriveItem.Parent.ID,
-			url.PathEscape(i.DriveItem.Name),
-		)
-		var uploadReader *strings.Reader
-		if i.DriveItem.Size < 4*1024*1024 {
-			// we upload the current data
-			uploadReader = strings.NewReader(string(*i.data))
-		} else {
-			uploadReader = strings.NewReader("")
-		}
-		resp, err := graph.Put(uploadPath, auth, uploadReader)
+		// perform a blocking upload of the item
+		session, err := NewUploadSession(i)
 		if err != nil {
-			if strings.Contains(err.Error(), "nameAlreadyExists") {
-				// This likely got fired off just as an initial upload completed.
-				// Check both our local copy and the server.
+			return originalID, err
+		}
+		i.mutex.Lock()
 
-				// Do we have it (from another thread)?
-				if id := i.DriveItem.ID; !isLocalID(id) {
-					i.mutex.Unlock()
-					return id, nil
-				}
-
-				// does the server have it?
-				latest, err := graph.GetItemPath(i.cache.InodePath(i.EmbeddedInode()), auth)
-				if err == nil {
-					// hooray!
-					i.mutex.Unlock()
-					err := i.GetCache().MoveID(originalID, latest.ID)
-					return latest.ID, err
-				}
-			}
+		err = session.Upload(auth)
+		if err != nil {
 			// failed to obtain an ID, return whatever it was beforehand
 			i.mutex.Unlock()
 			return originalID, err
 		}
+
 		// we just successfully uploaded a copy, no need to do it again
 		i.hasChanges = false
+		i.DriveItem.ETag = session.ETag
 		name := i.DriveItem.Name
 		i.mutex.Unlock()
 
-		// we use a new DriveItem to unmarshal things into or it will fuck
-		// with the existing object (namely its size)
-		unsafe := NewInode(name, 0644, nil)
-		err = json.Unmarshal(resp, unsafe)
-		if err != nil {
-			return originalID, err
-		}
 		// this is all we really wanted from this transaction
-		newID := unsafe.ID()
-		err = i.GetCache().MoveID(originalID, newID)
+		err = i.GetCache().MoveID(originalID, session.ID)
 		log.WithFields(log.Fields{
 			"name":     name,
 			"original": originalID,
-			"new":      newID,
+			"new":      session.ID,
 		}).Info("Exchanged ID.")
-		return newID, err
+		return session.ID, err
 	}
 	return originalID, nil
 }
@@ -514,9 +481,9 @@ func (i *Inode) makeattr() fuse.Attr {
 	return fuse.Attr{
 		Size:  i.Size(),
 		Nlink: i.NLink(),
+		Ctime: mtime,
 		Mtime: mtime,
 		Atime: mtime,
-		Ctime: mtime,
 		Mode:  i.Mode(),
 		Owner: fuse.Owner{
 			Uid: uint32(os.Getuid()),
@@ -795,6 +762,8 @@ func (i *Inode) Rename(ctx context.Context, name string, newParent fs.InodeEmbed
 		log.WithFields(log.Fields{
 			"id":       id,
 			"parentID": parentID,
+			"path":     path,
+			"dest":     dest,
 			"err":      err,
 		}).Error("Failed to rename remote item.")
 		return syscall.EREMOTEIO
@@ -821,7 +790,7 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 	path := i.Path()
 	id := i.ID()
 	f := int(flags)
-	if f&os.O_RDWR+f&os.O_WRONLY > 0 && i.GetCache().offline {
+	if f&os.O_RDWR+f&os.O_WRONLY > 0 && i.GetCache().IsOffline() {
 		log.WithFields(log.Fields{
 			"path":  path,
 			"id":    id,
@@ -886,24 +855,18 @@ func (i *Inode) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseF
 		}).Info("Not using cached item due to file hash mismatch.")
 	}
 
+	if isLocalID(id) {
+		// it's a local ID, and we failed to find the cached local content
+		return nil, uint32(0), syscall.EBADF
+	}
+
 	// didn't have it on disk, now try api
 	log.WithFields(log.Fields{
 		"id":   id,
 		"path": path,
 	}).Info("Fetching remote content for item from API.")
 
-	auth := cache.GetAuth()
-	id, err := i.RemoteID(auth)
-	if err != nil || id == "" {
-		log.WithFields(log.Fields{
-			"id":   id,
-			"path": path,
-			"err":  err,
-		}).Error("Could not obtain remote ID.")
-		return nil, uint32(0), syscall.EREMOTEIO
-	}
-
-	body, err := graph.GetItemContent(id, auth)
+	body, err := graph.GetItemContent(id, cache.GetAuth())
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":  err,

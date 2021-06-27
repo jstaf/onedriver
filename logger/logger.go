@@ -109,10 +109,10 @@ func LogrusFormatter() *log.TextFormatter {
 
 // LogTestSetup is a helper function purely used during tests.
 func LogTestSetup() *os.File {
-	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	logFile, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	log.SetOutput(logFile)
 	log.SetReportCaller(true)
 	log.SetFormatter(LogrusFormatter())
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.TraceLevel)
 	return logFile
 }

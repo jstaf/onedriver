@@ -82,7 +82,15 @@ func TestDeltaRename(t *testing.T) {
 		0644,
 	))
 
-	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/delta_rename_start", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
 	inode := NewInodeDriveItem(item)
 
@@ -112,7 +120,15 @@ func TestDeltaMoveParent(t *testing.T) {
 	))
 	time.Sleep(time.Second)
 
-	item, err := graph.GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/delta_move_start", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
 
 	newParent, err := graph.GetItemPath("/onedriver_tests/", auth)
@@ -150,7 +166,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, auth)
+	session, err := NewUploadSession(inode)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -184,12 +200,21 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
 
 	// change and upload it via the API
-	item, err := graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
-	inode := NewInodeDriveItem(item)
+	var item *graph.DriveItem
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		item, err = graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
+		if err == nil {
+			break
+		}
+	}
 	failOnErr(t, err)
+
+	inode := NewInodeDriveItem(item)
 	newContent := []byte("remote")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, auth)
+	session, err := NewUploadSession(inode)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -309,6 +334,7 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 // test verifies that the delta thread does not modify modification times if the
 // content is unchanged.
 func TestDeltaNoModTimeUpdate(t *testing.T) {
+	t.Parallel()
 	fname := filepath.Join(DeltaDir, "mod_time_update.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("a pretend lockfile"), 0644))
 	finfo, err := os.Stat(fname)

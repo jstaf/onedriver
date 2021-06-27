@@ -4,6 +4,7 @@ jobs:
   test:
     name: Run tests
     runs-on: ubuntu-20.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -75,18 +76,15 @@ jobs:
           sudo chown $(whoami). $XDG_RUNTIME_DIR
           sudo systemctl start user@$(id -u).service
           make build/c-test
-          dbus-launch build/c-test
+          if ! dbus-launch build/c-test ; then
+            sleep 5
+            coredumpctl dump > c-test.core
+            printf 'bt\nq\n' > backtrace.gdb
+            gdb -batch -x backtrace.gdb build/c-test c-test.core
+          fi
         env:
           CFLAGS: -g
         continue-on-error: true
-
-      - name: Run coredumpctl on failure
-        run: |
-          sleep 5
-          coredumpctl dump > c-test.core
-          printf 'bt\nq\n' > backtrace.gdb
-          gdb -batch -x backtrace.gdb build/c-test c-test.core
-        if: failure()
 
       - name: Run tests
         run: |
@@ -104,11 +102,17 @@ jobs:
           ACCOUNT_TYPE: ${{ matrix.account_type }}
         if: always()
 
-      - name: Send coverage to Coveralls
+      - name: Combine test coverage into single file
         run: |
-          go get github.com/mattn/goveralls
           go get github.com/wadey/gocovmerge
           gocovmerge *.coverage > coverage.out
-          goveralls -coverprofile=coverage.out -service=github
-        env:
-          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Convert coverage to lcov
+        uses: jandelgado/gcov2lcov-action@v1.0.5
+          
+      - name: Send test coverage to Coveralls
+        uses: coverallsapp/github-action@v1.1.2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: coverage.lcov
+        continue-on-error: true

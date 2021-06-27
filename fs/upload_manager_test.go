@@ -61,11 +61,11 @@ func TestUploadDiskSerialization(t *testing.T) {
 		return b.Put([]byte(session.ID), payload)
 	})
 
-	NewUploadManager(time.Second, db, auth)
-	time.Sleep(30 * time.Second)
+	NewUploadManager(time.Second, db, fsCache, auth)
+	time.Sleep(45 * time.Second)
 	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
 	if err != nil || driveItem == nil {
-		t.Fatal("Could not find uploaded file after unserializing from disk and resuming upload.")
+		t.Fatalf("Could not find uploaded file after unserializing from disk and resuming upload. Err: %s", err)
 	}
 	if driveItem.Size == 0 {
 		t.Fatal("Size was 0 - the upload was never completed.")
@@ -75,15 +75,31 @@ func TestUploadDiskSerialization(t *testing.T) {
 // Make sure that uploading the same file multiple times works exactly as it should.
 func TestRepeatedUploads(t *testing.T) {
 	t.Parallel()
+
+	// test setup
 	fname := filepath.Join(TestDir, "repeated_upload.txt")
 	failOnErr(t, ioutil.WriteFile(fname, []byte("initial content"), 0644))
-	inode, _ := fsCache.GetPath("/onedriver_tests/repeated_upload.txt", auth)
+	var success bool
+	var inode *Inode
+	for i := 0; i < 5; i++ {
+		time.Sleep(2 * time.Second)
+		inode, _ = fsCache.GetPath("/onedriver_tests/repeated_upload.txt", auth)
+		if !isLocalID(inode.ID()) {
+			success = true
+			break
+		}
+	}
+	if !success {
+		t.Fatalf("ID was local after upload")
+	}
 
 	for i := 0; i < 5; i++ {
-		uploadme := []byte(fmt.Sprintf("iteration: %d\n", i))
+		uploadme := []byte(fmt.Sprintf("iteration: %d", i))
 		failOnErr(t, ioutil.WriteFile(fname, uploadme, 0644))
 		time.Sleep(5 * time.Second)
-		content, err := graph.GetItemContent(inode.ID(), auth)
+		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
+		failOnErr(t, err)
+		content, err := graph.GetItemContent(item.ID, auth)
 		failOnErr(t, err)
 
 		if !bytes.Equal(content, uploadme) {

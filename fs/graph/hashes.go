@@ -36,3 +36,8 @@ func (d *DriveItem) VerifyChecksum(checksum string) bool {
 	return strings.ToUpper(d.File.Hashes.SHA1Hash) == checksum ||
 		strings.ToUpper(d.File.Hashes.QuickXorHash) == checksum
 }
+
+// ETagIsMatch returns true if the etag matches the one in the DriveItem
+func (d *DriveItem) ETagIsMatch(etag string) bool {
+	return d.ETag != "" && d.ETag == etag
+}

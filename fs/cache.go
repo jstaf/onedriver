@@ -88,7 +88,7 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
-	cache.uploads = NewUploadManager(2*time.Second, db, auth)
+	cache.uploads = NewUploadManager(2*time.Second, db, cache, auth)
 
 	if !cache.IsOffline() {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
@@ -447,8 +447,10 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	// now actually perform the metadata+content move
 	c.DeleteID(oldID)
 	c.InsertID(newID, inode)
-	c.MoveContent(oldID, newID)
-	return nil
+	if inode.IsDir() {
+		return nil
+	}
+	return c.MoveContent(oldID, newID)
 }
 
 // MovePath an item to a new position

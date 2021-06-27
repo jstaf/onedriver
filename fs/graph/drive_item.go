@@ -62,6 +62,7 @@ type DriveItem struct {
 	File             *File            `json:"file,omitempty"`
 	Deleted          *Deleted         `json:"deleted,omitempty"`
 	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
+	ETag             string           `json:"eTag,omitempty"`
 }
 
 // GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
