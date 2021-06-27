@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,8 +18,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// 10MB is the recommended upload size according to the graph API docs
-const uploadChunkSize uint64 = 10 * 1024 * 1024
+const (
+	// 10MB is the recommended upload size according to the graph API docs
+	uploadChunkSize uint64 = 10 * 1024 * 1024
+
+	// uploads larget than 4MB must use a formal upload session
+	uploadLargeSize uint64 = 4 * 1024 * 1024
+)
 
 // upload states
 const (
@@ -137,6 +143,8 @@ func NewUploadSession(inode *Inode) (*UploadSession, error) {
 // cancel the upload session by deleting the temp file at the endpoint.
 func (u *UploadSession) cancel(auth *graph.Auth) {
 	u.mutex.Lock()
+	// small upload sessions will also have an empty UploadURL in addition to
+	// uninitialized large file uploads.
 	nonemptyURL := u.UploadURL != ""
 	u.mutex.Unlock()
 	if nonemptyURL {
@@ -203,87 +211,116 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	}).Debug("Uploading file.")
 	u.setState(uploadStarted, nil)
 
-	// We use a different upload path depending on if the file already exists remotely
-	// or not (existing items are tracked by ID, not by path).
 	var uploadPath string
-	if isLocalID(u.ID) {
-		uploadPath = fmt.Sprintf(
-			"/me/drive/items/%s:/%s:/createUploadSession",
-			url.PathEscape(u.ParentID),
-			url.PathEscape(u.Name),
-		)
-	} else {
-		uploadPath = fmt.Sprintf(
-			"/me/drive/items/%s/createUploadSession",
-			url.PathEscape(u.ID),
-		)
-	}
-	sessionPostData, _ := json.Marshal(UploadSessionPost{
-		ConflictBehavior: "replace",
-		FileSystemInfo: FileSystemInfo{
-			CreatedDateTime:      u.CreateTime,
-			LastModifiedDateTime: u.ModTime,
-		},
-	})
-	resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
-	if err != nil {
-		return u.setState(uploadErrored, err)
-	}
-
-	// populate UploadURL/expiration - we unmarshal into a fresh session here
-	// just in case the API does something silly at a later date and overwrites
-	// a field it shouldn't.
-	tmp := UploadSession{}
-	if err = json.Unmarshal(resp, &tmp); err != nil {
-		return u.setState(uploadErrored, err)
-	}
-	u.mutex.Lock()
-	u.UploadURL = tmp.UploadURL
-	u.ExpirationDateTime = tmp.ExpirationDateTime
-	u.mutex.Unlock()
-
-	// api upload session created successfully, now do actual content upload
-	var status int
-	nchunks := int(math.Ceil(float64(u.Size) / float64(uploadChunkSize)))
-	for i := 0; i < nchunks; i++ {
-		resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
+	var resp []byte
+	if u.Size < uploadLargeSize {
+		// Small upload sessions use a simple PUT request, but this does not support
+		// adding file modification times. We don't really care though, because
+		// after some experimentation, the Microsoft API doesn't seem to properly
+		// support these either (this is why we have to use etags).
+		if isLocalID(u.ID) {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s:/%s:/content",
+				url.PathEscape(u.ParentID),
+				url.PathEscape(u.Name),
+			)
+		} else {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s/content",
+				url.PathEscape(u.ID),
+			)
+		}
+		// small files handled in this block
+		var err error
+		resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
+		if err != nil && strings.Contains(err.Error(), "resourceModified") {
+			// retry the request after a second, likely the server is having issues
+			time.Sleep(time.Second)
+			resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
+		}
 		if err != nil {
-			log.WithFields(log.Fields{
-				"id":      u.ID,
-				"name":    u.Name,
-				"chunk":   i,
-				"nchunks": nchunks,
-				"err":     err,
-			}).Error("Error during chunk upload.")
+			return u.setState(uploadErrored, err)
+		}
+	} else {
+		if isLocalID(u.ID) {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s:/%s:/createUploadSession",
+				url.PathEscape(u.ParentID),
+				url.PathEscape(u.Name),
+			)
+		} else {
+			uploadPath = fmt.Sprintf(
+				"/me/drive/items/%s/createUploadSession",
+				url.PathEscape(u.ID),
+			)
+		}
+		sessionPostData, _ := json.Marshal(UploadSessionPost{
+			ConflictBehavior: "replace",
+			FileSystemInfo: FileSystemInfo{
+				CreatedDateTime:      u.CreateTime,
+				LastModifiedDateTime: u.ModTime,
+			},
+		})
+		resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
+		if err != nil {
 			return u.setState(uploadErrored, err)
 		}
 
-		// retry server-side failures with an exponential back-off strategy. Will not
-		// exit this loop unless it receives a non 5xx error or serious failure
-		for backoff := 1; status >= 500; backoff *= 2 {
-			log.WithFields(log.Fields{
-				"id":      u.ID,
-				"name":    u.Name,
-				"chunk":   i,
-				"nchunks": nchunks,
-				"status":  status,
-			}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
-			time.Sleep(time.Duration(backoff) * time.Second)
+		// populate UploadURL/expiration - we unmarshal into a fresh session here
+		// just in case the API does something silly at a later date and overwrites
+		// a field it shouldn't.
+		tmp := UploadSession{}
+		if err = json.Unmarshal(resp, &tmp); err != nil {
+			return u.setState(uploadErrored, err)
+		}
+		u.mutex.Lock()
+		u.UploadURL = tmp.UploadURL
+		u.ExpirationDateTime = tmp.ExpirationDateTime
+		u.mutex.Unlock()
+
+		// api upload session created successfully, now do actual content upload
+		var status int
+		nchunks := int(math.Ceil(float64(u.Size) / float64(uploadChunkSize)))
+		for i := 0; i < nchunks; i++ {
 			resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
-			if err != nil { // a serious, non 4xx/5xx error
+			if err != nil {
 				log.WithFields(log.Fields{
-					"id":     u.ID,
-					"name":   u.Name,
-					"err":    err,
-					"status": status,
-				}).Error("Failed while retrying chunk upload after server-side error.")
+					"id":      u.ID,
+					"name":    u.Name,
+					"chunk":   i,
+					"nchunks": nchunks,
+					"err":     err,
+				}).Error("Error during chunk upload.")
 				return u.setState(uploadErrored, err)
 			}
-		}
 
-		// handle client-side errors
-		if status >= 400 {
-			return u.setState(uploadErrored, errors.New(string(resp)))
+			// retry server-side failures with an exponential back-off strategy. Will not
+			// exit this loop unless it receives a non 5xx error or serious failure
+			for backoff := 1; status >= 500; backoff *= 2 {
+				log.WithFields(log.Fields{
+					"id":      u.ID,
+					"name":    u.Name,
+					"chunk":   i,
+					"nchunks": nchunks,
+					"status":  status,
+				}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
+				time.Sleep(time.Duration(backoff) * time.Second)
+				resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
+				if err != nil { // a serious, non 4xx/5xx error
+					log.WithFields(log.Fields{
+						"id":     u.ID,
+						"name":   u.Name,
+						"err":    err,
+						"status": status,
+					}).Error("Failed while retrying chunk upload after server-side error.")
+					return u.setState(uploadErrored, err)
+				}
+			}
+
+			// handle client-side errors
+			if status >= 400 {
+				return u.setState(uploadErrored, errors.New(string(resp)))
+			}
 		}
 	}
 
