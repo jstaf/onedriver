@@ -151,6 +151,7 @@ static GtkWidget *new_mount_row(char *mount) {
     gtk_switch_set_active(GTK_SWITCH(mount_toggle), systemd_unit_is_active(unit_name));
     gtk_widget_set_tooltip_text(mount_toggle, MOUNT_MESSAGE);
     g_signal_connect(mount_toggle, "state-set", G_CALLBACK(activate_mount_cb), unit_name);
+    gtk_widget_set_valign(mount_toggle, GTK_ALIGN_CENTER);
     gtk_box_pack_end(GTK_BOX(box), mount_toggle, FALSE, FALSE, 0);
 
     g_hash_table_insert(mounts, row, strdup(mount));
