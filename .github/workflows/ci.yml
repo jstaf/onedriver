@@ -4,7 +4,7 @@ jobs:
   test:
     name: Run tests
     runs-on: ubuntu-20.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -115,4 +115,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: coverage.lcov
-        continue-on-error: true
+          flag-name: ${{ matrix.account_type }}
+          parallel: true
+  finish:
+    name: Complete Coveralls run
+    needs: test
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        parallel-finished: true
