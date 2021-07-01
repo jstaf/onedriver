@@ -10,13 +10,11 @@
 // some useful icon constants (from gtk3-icon-browser)
 #define PLUS_ICON "list-add-symbolic"
 #define MINUS_ICON "user-trash-symbolic"
-#define MOUNT_ICON "folder-remote-symbolic"
-#define UNMOUNT_ICON "media-eject-symbolic"
 #define ENABLED_ICON "object-select-symbolic"
 
 #define MOUNT_MESSAGE "Mount or unmount selected OneDrive account"
 
-static GHashTable *mounts;
+static GHashTable *mounts, *switches;
 
 /**
  * Enable or disable a mountpoint when button is clicked.
@@ -80,10 +78,12 @@ static void activate_row_cb(GtkListBox *box, GtkListBoxRow *row, gpointer user_d
     char *unit_name, *escaped;
     systemd_path_escape(mount, &escaped);
     systemd_template_unit(ONEDRIVER_SERVICE_TEMPLATE, escaped, &unit_name);
-    if (!systemd_unit_is_active(unit_name)) {
-        // TODO update the mountpoint button to reflect that it's been set active
-        systemd_unit_set_active(unit_name, true);
+    if (!systemd_unit_is_active(unit_name) && systemd_unit_set_active(unit_name, true)) {
         fs_poll_until_avail(mount, 10);
+
+        // activate the switch to match the unit state if it's not already active
+        GtkWidget *sw = g_hash_table_lookup(switches, row);
+        gtk_switch_set_active(GTK_SWITCH(sw), TRUE);
     }
     free(unit_name);
     free(escaped);
@@ -145,8 +145,7 @@ static GtkWidget *new_mount_row(char *mount) {
                      unit_name);
     gtk_box_pack_end(GTK_BOX(box), unit_enabled_btn, FALSE, FALSE, 0);
 
-    // and a button to actually start/stop the mountpoint
-
+    // and a switch to actually start/stop the mountpoint
     GtkWidget *mount_toggle = gtk_switch_new();
     gtk_switch_set_active(GTK_SWITCH(mount_toggle), systemd_unit_is_active(unit_name));
     gtk_widget_set_tooltip_text(mount_toggle, MOUNT_MESSAGE);
@@ -155,6 +154,7 @@ static GtkWidget *new_mount_row(char *mount) {
     gtk_box_pack_end(GTK_BOX(box), mount_toggle, FALSE, FALSE, 0);
 
     g_hash_table_insert(mounts, row, strdup(mount));
+    g_hash_table_insert(switches, row, mount_toggle);
     return row;
 }
 
@@ -198,6 +198,7 @@ static void new_mountpoint_cb(GtkWidget *widget, GtkListBox *box) {
  */
 static void activate(GtkApplication *app, gpointer data) {
     mounts = g_hash_table_new(g_direct_hash, g_direct_equal);
+    switches = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     GtkWidget *window = gtk_application_window_new(app);
     gtk_window_set_default_size(GTK_WINDOW(window), 550, 400);
