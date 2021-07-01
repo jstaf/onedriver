@@ -122,8 +122,8 @@ jobs:
     needs: test
     runs-on: ubuntu-20.04
     steps:
-    - name: Coveralls Finished
-      uses: coverallsapp/github-action@master
+    - name: Coveralls finished
+      uses: coverallsapp/github-action@v1.1.2
       with:
         github-token: ${{ secrets.github_token }}
         parallel-finished: true
