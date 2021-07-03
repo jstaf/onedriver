@@ -120,6 +120,7 @@ jobs:
   finish:
     name: Complete Coveralls run
     needs: test
+    if: always()
     runs-on: ubuntu-20.04
     steps:
     - name: Coveralls finished

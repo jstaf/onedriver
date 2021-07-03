@@ -1,3 +1,17 @@
+onedriver (0.11.0-1) focal; urgency=low
+
+  * Now includes a snazzy GUI for managing your mountpoints. No terminal skills are required
+    to use onedriver now.
+  * The upload logic has been rewritten to no longer use 0-byte files as placeholders in 
+    any scenario. This fixes a race condition where software like LibreOffice, KeepassXC, or 
+    Krita could generate a 0-byte file instead of the intended file when the file was 4MB or
+    larger.
+  * onedriver now uses etags AND modification times when syncing server-side changes back to
+    the client. This reduces the number of times that files must be redownloaded because of
+    bad timestamp data from the Microsoft API.
+
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Sat, 3 Jul 2021 13:30:00 -0400
+
 onedriver (0.10.1-1) focal; urgency=low
 
   * Fix the onedriver .desktop launcher so it uses the new systemd unit name.
