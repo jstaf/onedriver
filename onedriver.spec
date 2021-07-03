@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.10.1
+Version:       0.11.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -60,6 +60,17 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Sat Jul 3 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.0
+- Now includes a snazzy GUI for managing your mountpoints. No terminal skills are required
+  to use onedriver now.
+- The upload logic has been rewritten to no longer use 0-byte files as placeholders in 
+  any scenario. This fixes a race condition where software like LibreOffice, KeepassXC, or 
+  Krita could generate a 0-byte file instead of the intended file when the file was 4MB or
+  larger.
+- onedriver now uses etags AND modification times when syncing server-side changes back to
+  the client. This reduces the number of times that files must be redownloaded because of
+  bad timestamp data from the Microsoft API.
+
 * Mon May 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.10.1
 - Fix the onedriver .desktop launcher so it uses the new systemd unit name.
 
