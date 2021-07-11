@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.11.0
+Version:       0.11.1
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -60,6 +60,9 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Sun Jul 11 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.1
+- Fix startup crash in onedriver-launcher when onedriver has not been launched before.
+
 * Sat Jul 3 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.0
 - Now includes a snazzy GUI for managing your mountpoints. No terminal skills are required
   to use onedriver now.
