@@ -111,7 +111,9 @@ char **fs_known_mounts() {
     strcat(strcat(strcpy(cachedir, g_get_user_cache_dir()), "/"), ONEDRIVER_NAME);
     DIR *cache = opendir(cachedir);
     if (!cache) {
-        return NULL;
+        char **r = malloc(sizeof(char *));
+        *r = NULL;
+        return r;
     }
     free(cachedir);
 
