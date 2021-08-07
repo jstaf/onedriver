@@ -1,4 +1,5 @@
 .vscode/
+.osc/
 compile_flags.txt
 .commit
 .date
