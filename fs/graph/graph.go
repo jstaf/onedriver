@@ -10,7 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/jstaf/onedriver/logger"
@@ -191,12 +191,13 @@ func GetDrive(auth *Auth) (Drive, error) {
 	return drive, json.Unmarshal(resp, &drive)
 }
 
-// IsOffline checks if an error is indicative of being offline.
+// IsOffline checks if an error string from Request() is indicative of being offline.
 func IsOffline(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "network is unreachable") ||
-		strings.Contains(err.Error(), "connection refused") ||
-		strings.Contains(err.Error(), "failure in name resolution")
+	// our error messages from Request() will be prefixed with "HTTP ### -" if we actually
+	// got an HTTP response (indicating we are not offline)
+	rexp := regexp.MustCompile("HTTP [0-9]+ - ")
+	return !rexp.MatchString(err.Error())
 }
