@@ -53,6 +53,11 @@ char *fs_account_name(const char *instance) {
     sprintf(fname, "%s/onedriver/%s/auth_tokens.json", cachedir, instance);
 
     char *account_name = NULL;
+    struct stat st;
+    if (stat(fname, &st) != 0) {
+        return account_name;
+    }
+
     GError *error = NULL;
     JsonParser *parser = json_parser_new();
     json_parser_load_from_file(parser, fname, &error);
