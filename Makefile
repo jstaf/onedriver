@@ -110,6 +110,7 @@ onedriver_$(VERSION)-$(RELEASE)_source.changes: onedriver_$(VERSION).orig.tar.gz
 
 
 # just a helper target to use while building debs
+dsc: onedriver_$(VERSION)-$(RELEASE).dsc
 onedriver_$(VERSION)-$(RELEASE).dsc: onedriver_$(VERSION).orig.tar.gz
 	dpkg-source --build onedriver-$(VERSION)
 

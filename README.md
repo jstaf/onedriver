@@ -85,16 +85,14 @@ sudo dnf copr enable jstaf/onedriver
 sudo dnf install onedriver
 ```
 
-Ubuntu/Pop!_OS/Debian users can install onedriver from this
-[PPA](https://launchpad.net/~jstaf/+archive/ubuntu/onedriver).
+Ubuntu/Pop!_OS/Debian users can install onedriver from the
+[OpenSUSE Build Service](https://software.opensuse.org/download.html?project=home%3Ajstaf&package=onedriver)
+(despite the name, OBS also does a nice job of building packages for Debian).
 Like the COPR install, this will enable you to install onedriver through your
 package manager and install updates as they become available.
-
-```bash
-sudo add-apt-repository ppa:jstaf/onedriver
-sudo apt update
-sudo apt install onedriver
-```
+If you previously installed onedriver via PPA,
+you can purge the old PPA from your system via:
+`sudo add-apt-repository --remove ppa:jstaf/onedriver`
 
 Arch/Manjaro/EndeavourOS users can install onedriver from the 
 [AUR](https://aur.archlinux.org/packages/onedriver/).
