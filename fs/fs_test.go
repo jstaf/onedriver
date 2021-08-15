@@ -92,6 +92,28 @@ func TestMkdirRmdir(t *testing.T) {
 	failOnErr(t, exec.Command("mkdir", fname).Run())
 }
 
+// Test that attempting to move a directory onto an existing directory functions
+// correctly. The contents of the two directories should be merged.
+func TestDirMerge(t *testing.T) {
+	t.Parallel()
+	dest := filepath.Join(TestDir, "preexisting_dir")
+	failOnErr(t, os.Mkdir(dest, 0755))
+	failOnErr(t, ioutil.WriteFile(filepath.Join(dest, "file1.txt"), []byte("this is file 1"), 0644))
+
+	failOnErr(t, os.Mkdir("/tmp/preexisting_dir", 0755))
+	failOnErr(t, ioutil.WriteFile("/tmp/preexisting_dir/file2.txt", []byte("this is file 2"), 0644))
+
+	// now move the file from /tmp to OneDrive and confirm the directories merge
+	failOnErr(t, exec.Command("mv", "/tmp/preexisting_dir", TestDir).Run())
+
+	if _, err := os.Stat(filepath.Join(dest, "file1.txt")); err != nil {
+		t.Error(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "file2.txt")); err != nil {
+		t.Error(err)
+	}
+}
+
 // test that we can write to a file and read its contents back correctly
 func TestReadWrite(t *testing.T) {
 	t.Parallel()
