@@ -92,6 +92,21 @@ func TestMkdirRmdir(t *testing.T) {
 	failOnErr(t, exec.Command("mkdir", fname).Run())
 }
 
+// We shouldn't be able to rmdir nonempty directories
+func TestRmdirNonempty(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(TestDir, "nonempty")
+	failOnErr(t, os.Mkdir(dir, 0755))
+	failOnErr(t, os.Mkdir(filepath.Join(dir, "contents"), 0755))
+	if os.Remove(dir) == nil {
+		t.Fatal("We somehow removed a nonempty directory!")
+	}
+
+	if os.RemoveAll(dir) != nil {
+		t.Fatal("Could not remove a nonempty directory the correct way!")
+	}
+}
+
 // test that we can write to a file and read its contents back correctly
 func TestReadWrite(t *testing.T) {
 	t.Parallel()

@@ -83,7 +83,10 @@ func TestMain(m *testing.M) {
 
 	// cleanup from last run
 	log.Info("Setup test environment ---------------------------------")
-	os.RemoveAll(TestDir)
+	if err := os.RemoveAll(TestDir); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	os.Mkdir(TestDir, 0755)
 	os.Mkdir(DeltaDir, 0755)
 

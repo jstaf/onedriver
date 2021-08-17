@@ -709,6 +709,10 @@ func (i *Inode) Unlink(ctx context.Context, name string) syscall.Errno {
 
 // Rmdir deletes a child directory. Reuses Unlink.
 func (i *Inode) Rmdir(ctx context.Context, name string) syscall.Errno {
+	child, _ := i.GetCache().GetChild(i.ID(), name, nil)
+	if child != nil && child.HasChildren() {
+		return syscall.ENOTEMPTY
+	}
 	return i.Unlink(ctx, name)
 }
 
