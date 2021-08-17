@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.11.1
+Version:       0.11.2
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -60,6 +60,10 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Tue Aug 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.2
+- onedriver now disallows rmdir on nonempty directories.
+- The filesystem now detects if it is offline more reliably.
+
 * Sun Jul 11 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.1
 - Fix startup crash in onedriver-launcher when onedriver has not been launched before.
 
