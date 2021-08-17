@@ -92,21 +92,18 @@ func TestMkdirRmdir(t *testing.T) {
 	failOnErr(t, exec.Command("mkdir", fname).Run())
 }
 
-// Test that attempting to move a directory onto an existing directory functions
-// correctly. The cross-device move should fail when mv can't remove the target directory.
-func TestInterDeviceMove(t *testing.T) {
+// We shouldn't be able to rmdir nonempty directories
+func TestRmdirNonempty(t *testing.T) {
 	t.Parallel()
-	dest := filepath.Join(TestDir, "preexisting_dir")
-	failOnErr(t, os.Mkdir(dest, 0755))
-	failOnErr(t, ioutil.WriteFile(filepath.Join(dest, "file1.txt"), []byte("this is file 1"), 0644))
+	dir := filepath.Join(TestDir, "nonempty")
+	failOnErr(t, os.Mkdir(dir, 0755))
+	failOnErr(t, os.Mkdir(filepath.Join(dir, "contents"), 0755))
+	if os.Remove(dir) == nil {
+		t.Fatal("We somehow removed a nonempty directory!")
+	}
 
-	os.Mkdir("/tmp/preexisting_dir", 0755)
-	failOnErr(t, ioutil.WriteFile("/tmp/preexisting_dir/file2.txt", []byte("this is file 2"), 0644))
-
-	// now move the file from /tmp to OneDrive
-	_, err := exec.Command("mv", "/tmp/preexisting_dir", TestDir).CombinedOutput()
-	if err == nil {
-		t.Fatal("Inter-device copy succeeded and overwrote a non-empty directory")
+	if os.RemoveAll(dir) != nil {
+		t.Fatal("Could not remove a nonempty directory the correct way!")
 	}
 }
 
