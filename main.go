@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
@@ -113,24 +111,16 @@ func main() {
 	}
 
 	// create a new filesystem and mount it
-	auth := graph.Authenticate(authPath)
-	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
-	root, _ := cache.GetPath("/", auth)
-	go cache.DeltaLoop(30 * time.Second)
-
-	xdgVolumeInfo(cache, auth)
-
-	second := time.Second
-	server, err := fs.Mount(mountpoint, root, &fs.Options{
-		EntryTimeout: &second,
-		AttrTimeout:  &second,
-		MountOptions: fuse.MountOptions{
+	server, err := fuse.NewServer(
+		odfs.NewFilesystem(),
+		mountpoint,
+		&fuse.MountOptions{
 			Name:          "onedriver",
 			FsName:        "onedriver",
 			DisableXAttrs: true,
 			MaxBackground: 1024,
 		},
-	})
+	)
 	if err != nil {
 		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
 			"(Try running \"fusermount -uz %s\")\n", mountpoint)
@@ -143,7 +133,7 @@ func main() {
 
 	// serve filesystem
 	server.SetDebug(*debugOn)
-	server.Wait()
+	server.Serve()
 }
 
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
