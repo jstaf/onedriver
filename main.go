@@ -112,7 +112,7 @@ func main() {
 
 	// create a new filesystem and mount it
 	server, err := fuse.NewServer(
-		odfs.NewFilesystem(),
+		odfs.NewFilesystem(dir, graph.Authenticate(authPath)),
 		mountpoint,
 		&fuse.MountOptions{
 			Name:          "onedriver",

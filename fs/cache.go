@@ -305,9 +305,6 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 			return children, nil
 		}
 		// something else happened besides being offline
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("Error while fetching children.")
 		return nil, err
 	}
 

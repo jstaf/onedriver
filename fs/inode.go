@@ -30,7 +30,8 @@ import (
 type Inode struct {
 	fs.Inode `json:"-"`
 
-	mutex sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
+	mutex  sync.RWMutex // used to be a pointer, but fs.Inode also embeds a mutex :(
+	nodeID uint64       // filesystem inode ID
 	graph.DriveItem
 	cache      *Cache
 	children   []string // a slice of ids, nil when uninitialized
@@ -134,6 +135,24 @@ func (i *Inode) SetName(name string) {
 	i.mutex.Lock()
 	i.DriveItem.Name = name
 	i.mutex.Unlock()
+}
+
+// NodeID returns the inodes ID in the filesystem
+func (i *Inode) NodeID() uint64 {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	return i.nodeID
+}
+
+// SetNodeID sets the inode ID for an inode if not already set. Does nothing if
+// the Inode already has an ID.
+func (i *Inode) SetNodeID(id uint64) uint64 {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	if i.nodeID == 0 {
+		i.nodeID = id
+	}
+	return i.nodeID
 }
 
 var charset = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -479,6 +498,7 @@ func (i *Inode) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 func (i *Inode) makeattr() fuse.Attr {
 	mtime := i.ModTime()
 	return fuse.Attr{
+		//	Ino:   i.NodeID(),
 		Size:  i.Size(),
 		Nlink: i.NLink(),
 		Ctime: mtime,
