@@ -174,7 +174,7 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name 
 		return fuse.ENOENT
 	}
 
-	//out.NodeId = header.NodeId
+	out.NodeId = child.NodeID()
 	out.Attr = child.makeattr()
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)

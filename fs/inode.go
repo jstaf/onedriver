@@ -498,7 +498,7 @@ func (i *Inode) Flush(ctx context.Context, f fs.FileHandle) syscall.Errno {
 func (i *Inode) makeattr() fuse.Attr {
 	mtime := i.ModTime()
 	return fuse.Attr{
-		//	Ino:   i.NodeID(),
+		Ino:   i.NodeID(),
 		Size:  i.Size(),
 		Nlink: i.NLink(),
 		Ctime: mtime,
