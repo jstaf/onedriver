@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -82,6 +83,7 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, input *fuse.OpenIn, out *fu
 	log.WithFields(log.Fields{
 		"nodeID": input.NodeId,
 		"id":     id,
+		"name":   dir.Name(),
 	}).Debug()
 
 	children, err := f.cache.GetChildrenID(id, f.auth)
@@ -95,13 +97,17 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, input *fuse.OpenIn, out *fu
 		return fuse.EREMOTEIO
 	}
 
-	entries := make([]*Inode, 1)
-	entries[0] = dir
 	parent := f.cache.GetID(dir.ParentID())
-	if parent != nil {
-		//TODO include mountpoint parent directory
-		entries = append(entries, parent)
+	if parent == nil {
+		// This is the parent of the mountpoint. The FUSE kernel module discards
+		// this info, so what we put here doesn't actually matter.
+		parent = NewInode("..", 0755|fuse.S_IFDIR, nil)
+		parent.nodeID = math.MaxUint64
 	}
+
+	entries := make([]*Inode, 2)
+	entries[0] = dir
+	entries[1] = parent
 
 	for _, child := range children {
 		f.insertInode(child)
@@ -123,16 +129,11 @@ func (f *Filesystem) ReleaseDir(input *fuse.ReleaseIn) {
 
 // ReadDirPlus reads an individual directory entry AND does a lookup.
 func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, input *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
-	log.WithFields(log.Fields{
-		"nodeID": input.NodeId,
-		"offset": input.Offset,
-	}).Trace()
-
 	f.opendirsM.RLock()
 	entries, ok := f.opendirs[input.NodeId]
 	f.opendirsM.RUnlock()
 	if !ok {
-		return fuse.EINVAL
+		return fuse.EBADF
 	}
 
 	if input.Offset >= uint64(len(entries)) {
@@ -140,24 +141,27 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, input *fuse.ReadIn, out
 		return fuse.OK
 	}
 
-	entry := entries[input.Offset]
-	entryOut := out.AddDirLookupEntry(fuse.DirEntry{
-		Ino:  entry.NodeID(),
-		Name: entry.Name(),
-		Mode: entry.Mode(),
-	})
-	entryOut.Attr = entry.makeattr()
+	inode := entries[input.Offset]
+	entry := fuse.DirEntry{
+		Ino:  inode.NodeID(),
+		Mode: inode.Mode(),
+	}
+	// first two entries will always be "." and ".."
+	switch input.Offset {
+	case 0:
+		entry.Name = "."
+	case 1:
+		entry.Name = ".."
+	default:
+		entry.Name = inode.Name()
+	}
+
+	entryOut := out.AddDirLookupEntry(entry)
+	entryOut.Attr = inode.makeattr()
 	entryOut.SetAttrTimeout(timeout)
 	entryOut.SetEntryTimeout(timeout)
 	return fuse.OK
 }
-
-/*
-// ReadDirPlus just delegates calls to ReadDir
-func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, input *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
-	return f.ReadDir(cancel, input, out)
-}
-*/
 
 // Lookup is called by the kernel when the VFS wants to know about a file inside
 // a directory.
