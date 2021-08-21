@@ -163,6 +163,40 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, input *fuse.ReadIn, out
 	return fuse.OK
 }
 
+// ReadDir reads a directory entry. Usually doesn't get called (ReadDirPlus is
+// typically used).
+func (f *Filesystem) ReadDir(cancel <-chan struct{}, input *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
+	f.opendirsM.RLock()
+	entries, ok := f.opendirs[input.NodeId]
+	f.opendirsM.RUnlock()
+	if !ok {
+		return fuse.EBADF
+	}
+
+	if input.Offset >= uint64(len(entries)) {
+		// just tried to seek past end of directory, we're all done!
+		return fuse.OK
+	}
+
+	inode := entries[input.Offset]
+	entry := fuse.DirEntry{
+		Ino:  inode.NodeID(),
+		Mode: inode.Mode(),
+	}
+	// first two entries will always be "." and ".."
+	switch input.Offset {
+	case 0:
+		entry.Name = "."
+	case 1:
+		entry.Name = ".."
+	default:
+		entry.Name = inode.Name()
+	}
+
+	out.AddDirEntry(entry)
+	return fuse.OK
+}
+
 // Lookup is called by the kernel when the VFS wants to know about a file inside
 // a directory.
 func (f *Filesystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name string, out *fuse.EntryOut) fuse.Status {

@@ -229,54 +229,6 @@ func (i *Inode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	return 0
 }
 
-// Readdir returns a list of directory entries (formerly OpenDir).
-func (i *Inode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	log.WithFields(log.Fields{
-		"path": i.Path(),
-		"id":   i.ID(),
-	}).Debug()
-
-	cache := i.GetCache()
-	// directories are always created with a remote graph id
-	children, err := cache.GetChildrenID(i.ID(), cache.GetAuth())
-	if err != nil {
-		// not an item not found error (Lookup/Getattr will always be called
-		// before Readdir()), something has happened to our connection
-		log.WithFields(log.Fields{
-			"path": i.Path(),
-			"err":  err,
-		}).Error("Error during Readdir()")
-		return nil, syscall.EREMOTEIO
-	}
-
-	entries := make([]fuse.DirEntry, 0)
-	for _, child := range children {
-		entry := fuse.DirEntry{
-			Name: child.Name(),
-			Mode: child.Mode(),
-		}
-		entries = append(entries, entry)
-	}
-	return fs.NewListDirStream(entries), 0
-}
-
-// Lookup an individual child of an inode.
-func (i *Inode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	log.WithFields(log.Fields{
-		"path": i.Path(),
-		"id":   i.ID(),
-		"name": name,
-	}).Trace()
-
-	cache := i.GetCache()
-	child, _ := cache.GetChild(i.ID(), strings.ToLower(name), cache.GetAuth())
-	if child == nil {
-		return nil, syscall.ENOENT
-	}
-	out.Attr = child.makeattr()
-	return i.NewInode(ctx, child, fs.StableAttr{Mode: child.Mode() & fuse.S_IFDIR}), 0
-}
-
 // RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded. You can use an empty Auth object if
