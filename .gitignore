@@ -21,6 +21,7 @@ build/
 *.core
 *.gdb
 vgcore.*
+__debug_bin
 
 # do not include binaries, but do include sources
 onedriver

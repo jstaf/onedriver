@@ -152,7 +152,11 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 
 // Rmdir removes a directory if it's empty.
 func (f *Filesystem) Rmdir(cancel <-chan struct{}, in *fuse.InHeader, name string) fuse.Status {
-	child := f.getInode(in.NodeId)
+	parentID := f.getInodeID(in.NodeId)
+	if parentID == "" {
+		return fuse.ENOENT
+	}
+	child, _ := f.cache.GetChild(parentID, name, f.auth)
 	if child == nil {
 		return fuse.ENOENT
 	}
@@ -536,7 +540,7 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 	f.cache.DeleteID(id)
 	f.cache.DeleteContent(id)
-	return fuse.ENOSYS
+	return fuse.OK
 }
 
 // Read an inode's data like a file.
@@ -764,6 +768,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 
 	i.mutex.Unlock()
 	out.Attr = i.makeAttr()
+	out.SetTimeout(timeout)
 	return fuse.OK
 }
 
