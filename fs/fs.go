@@ -66,7 +66,7 @@ func (f *Filesystem) insertInode(inode *Inode) uint64 {
 func (f *Filesystem) getInodeID(nodeID uint64) string {
 	f.m.RLock()
 	defer f.m.RUnlock()
-	if nodeID > f.lastNodeID || nodeID > 100000 {
+	if nodeID > f.lastNodeID || nodeID == 0 {
 		return ""
 	}
 	return f.inodes[nodeID-1]
@@ -85,7 +85,7 @@ func (f *Filesystem) getInode(nodeID uint64) *Inode {
 func (f *Filesystem) setInodeID(nodeID uint64, newID string) {
 	f.m.Lock()
 	defer f.m.Unlock()
-	if nodeID > f.lastNodeID {
+	if nodeID > f.lastNodeID || nodeID == 0 {
 		return
 	}
 	f.inodes[nodeID-1] = newID
