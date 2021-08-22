@@ -125,13 +125,6 @@ func (c *Cache) IsOffline() bool {
 	return c.offline
 }
 
-func leadingSlash(path string) string {
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return path
-}
-
 // GetID gets an inode from the cache by ID. No API fetching is performed.
 // Result is nil if no inode is found.
 func (c *Cache) GetID(id string) *Inode {

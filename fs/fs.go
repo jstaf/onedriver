@@ -142,7 +142,11 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 	newInode := NewInodeDriveItem(item)
 	newInode.mode = in.Mode | fuse.S_IFDIR
 	f.cache.InsertChild(id, newInode)
-	f.insertInode(newInode)
+
+	out.NodeId = f.insertInode(newInode)
+	out.Attr = newInode.makeAttr()
+	out.SetAttrTimeout(timeout)
+	out.SetEntryTimeout(timeout)
 	return fuse.OK
 }
 
@@ -343,7 +347,7 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 		"mode":    Octal(in.Mode),
 	}).Debug("Creating inode.")
 	f.cache.InsertChild(parentID, inode)
-	f.insertInode(inode)
+	out.NodeId = f.insertInode(inode)
 	out.Attr = inode.makeAttr()
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
