@@ -87,9 +87,9 @@ func TestChmod(t *testing.T) {
 func TestMkdirRmdir(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "folder1")
-	failOnErr(t, exec.Command("mkdir", fname).Run())
-	failOnErr(t, exec.Command("rmdir", fname).Run())
-	failOnErr(t, exec.Command("mkdir", fname).Run())
+	failOnErr(t, os.Mkdir(fname, 0755))
+	failOnErr(t, os.Remove(fname))
+	failOnErr(t, os.Mkdir(fname, 0755))
 }
 
 // We shouldn't be able to rmdir nonempty directories
