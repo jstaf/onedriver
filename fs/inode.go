@@ -11,7 +11,6 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
 )
 
 // Inode represents a file or folder fetched from the Graph API. All struct
@@ -180,52 +179,6 @@ func (i *Inode) ParentID() string {
 		return ""
 	}
 	return i.DriveItem.Parent.ID
-}
-
-// RemoteID uploads an empty file to obtain a Onedrive ID if it doesn't already
-// have one. This is necessary to avoid race conditions against uploads if the
-// file has not already been uploaded. You can use an empty Auth object if
-// you're sure that the item already has an ID or otherwise don't need to fetch
-// an ID (such as when deleting an item that is only local).
-func (i *Inode) RemoteID(cache *Cache, auth *graph.Auth) (string, error) {
-	if i.IsDir() {
-		// Directories are always created with an ID. (And this method is only
-		// really used for files anyways...)
-		return i.ID(), nil
-	}
-
-	originalID := i.ID()
-	if isLocalID(originalID) && auth.AccessToken != "" {
-		// perform a blocking upload of the item
-		session, err := NewUploadSession(i, cache)
-		if err != nil {
-			return originalID, err
-		}
-		i.mutex.Lock()
-
-		err = session.Upload(auth)
-		if err != nil {
-			// failed to obtain an ID, return whatever it was beforehand
-			i.mutex.Unlock()
-			return originalID, err
-		}
-
-		// we just successfully uploaded a copy, no need to do it again
-		i.hasChanges = false
-		i.DriveItem.ETag = session.ETag
-		name := i.DriveItem.Name
-		i.mutex.Unlock()
-
-		// this is all we really wanted from this transaction
-		err = cache.MoveID(originalID, session.ID)
-		log.WithFields(log.Fields{
-			"name":     name,
-			"original": originalID,
-			"new":      session.ID,
-		}).Info("Exchanged ID.")
-		return session.ID, err
-	}
-	return originalID, nil
 }
 
 // Path returns an inode's full Path

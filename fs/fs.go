@@ -66,7 +66,7 @@ func (f *Filesystem) insertInode(inode *Inode) uint64 {
 func (f *Filesystem) getInodeID(nodeID uint64) string {
 	f.m.RLock()
 	defer f.m.RUnlock()
-	if nodeID > f.lastNodeID {
+	if nodeID > f.lastNodeID || nodeID > 100000 {
 		return ""
 	}
 	return f.inodes[nodeID-1]
@@ -79,6 +79,62 @@ func (f *Filesystem) getInode(nodeID uint64) *Inode {
 		return nil
 	}
 	return f.cache.GetID(id)
+}
+
+// setInodeID changes the OneDrive ID stored by the filesystem.
+func (f *Filesystem) setInodeID(nodeID uint64, newID string) {
+	f.m.Lock()
+	defer f.m.Unlock()
+	if nodeID > f.lastNodeID {
+		return
+	}
+	f.inodes[nodeID-1] = newID
+}
+
+// remoteID uploads a file to obtain a Onedrive ID if it doesn't already
+// have one. This is necessary to avoid race conditions against uploads if the
+// file has not already been uploaded.
+func (f *Filesystem) remoteID(i *Inode) (string, error) {
+	if i.IsDir() {
+		// Directories are always created with an ID. (And this method is only
+		// really used for files anyways...)
+		return i.ID(), nil
+	}
+
+	originalID := i.ID()
+	if isLocalID(originalID) && f.auth.AccessToken != "" {
+		// perform a blocking upload of the item
+		session, err := NewUploadSession(i, f.cache)
+		if err != nil {
+			return originalID, err
+		}
+		i.mutex.Lock()
+
+		err = session.Upload(f.auth)
+		if err != nil {
+			// failed to obtain an ID, return whatever it was beforehand
+			i.mutex.Unlock()
+			return originalID, err
+		}
+
+		// we just successfully uploaded a copy, no need to do it again
+		i.hasChanges = false
+		i.DriveItem.ETag = session.ETag
+		name := i.DriveItem.Name
+		nodeID := i.nodeID
+		i.mutex.Unlock()
+
+		// this is all we really wanted from this transaction
+		err = f.cache.MoveID(originalID, session.ID)
+		f.setInodeID(nodeID, session.ID)
+		log.WithFields(log.Fields{
+			"name":     name,
+			"original": originalID,
+			"new":      session.ID,
+		}).Info("Exchanged ID.")
+		return session.ID, err
+	}
+	return originalID, nil
 }
 
 // Statfs returns information about the filesystem. Mainly useful for checking
@@ -800,7 +856,7 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 
 	auth := f.cache.GetAuth()
 	inode, _ := f.cache.GetChild(oldParentID, name, auth)
-	id, err := inode.RemoteID(f.cache, auth)
+	id, err := f.remoteID(inode)
 	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
 		log.WithFields(log.Fields{
