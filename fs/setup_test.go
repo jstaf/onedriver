@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 	go UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
-	server.WaitMount()
+	go server.Serve()
 
 	// cleanup from last run
 	log.Info("Setup test environment ---------------------------------")
