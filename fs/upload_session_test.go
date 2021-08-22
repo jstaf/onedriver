@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
@@ -20,13 +21,23 @@ func TestUploadSession(t *testing.T) {
 	failOnErr(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
+	nodeID := fs.insertInode(inode)
 	data := []byte("our super special data")
-	if _, errno := inode.Write(context.Background(), nil, data, 0); errno != 0 {
+	_, errno := fs.Write(
+		context.Background().Done(),
+		&fuse.WriteIn{
+			InHeader: fuse.InHeader{NodeId: nodeID},
+			Offset:   0,
+			Size:     uint32(len(data)),
+		},
+		data,
+	)
+	if errno != fuse.OK {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
 	mtime := inode.ModTime()
 
-	session, err := NewUploadSession(inode)
+	session, err := NewUploadSession(inode, fsCache)
 	failOnErr(t, err)
 	err = session.Upload(auth)
 	failOnErr(t, err)
@@ -57,11 +68,20 @@ func TestUploadSession(t *testing.T) {
 
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
-	if _, errno := inode.Write(context.Background(), nil, newData, 0); errno != 0 {
+	_, errno = fs.Write(
+		context.Background().Done(),
+		&fuse.WriteIn{
+			InHeader: fuse.InHeader{NodeId: nodeID},
+			Offset:   0,
+			Size:     uint32(len(newData)),
+		},
+		data,
+	)
+	if errno != fuse.OK {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
 
-	session2, err := NewUploadSession(inode)
+	session2, err := NewUploadSession(inode, fsCache)
 	failOnErr(t, err)
 	err = session2.Upload(auth)
 	failOnErr(t, err)

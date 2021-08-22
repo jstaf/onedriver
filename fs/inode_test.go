@@ -90,20 +90,36 @@ func TestDoubleCreate(t *testing.T) {
 	parent, err := fsCache.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
 
-	parent.Create(context.Background(), fname, 0, 0644, nil)
+	fs.Create(
+		context.Background().Done(),
+		&fuse.CreateIn{
+			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
+			Mode:     0644,
+		},
+		fname,
+		&fuse.CreateOut{},
+	)
 	child, err := fsCache.GetChild(parent.ID(), fname, auth)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
 	childID := child.ID()
 
-	parent.Create(context.Background(), fname, 0, 0644, nil)
+	fs.Create(
+		context.Background().Done(),
+		&fuse.CreateIn{
+			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
+			Mode:     0644,
+		},
+		fname,
+		&fuse.CreateOut{},
+	)
 	child, err = fsCache.GetChild(parent.ID(), fname, auth)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
 	if childID != child.ID() {
-		t.Fatalf(
+		t.Errorf(
 			"IDs did not match when create run twice on same file.\nOriginal: %s\nNew: %s",
 			childID, child.ID(),
 		)

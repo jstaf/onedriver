@@ -7,9 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 	"testing"
-	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
@@ -44,20 +42,16 @@ func TestMain(m *testing.M) {
 	log.Info("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
-	cache := odfs.NewCache(auth, "test.db")
-	root, _ := cache.GetPath("/", auth)
-	go cache.DeltaLoop(5 * time.Second)
-	second := time.Second
-	server, _ := fs.Mount(mountLoc, root, &fs.Options{
-		EntryTimeout: &second,
-		AttrTimeout:  &second,
-		MountOptions: fuse.MountOptions{
+	server, _ := fuse.NewServer(
+		odfs.NewFilesystem(".", auth),
+		mountLoc,
+		&fuse.MountOptions{
 			Name:          "onedriver",
 			FsName:        "onedriver",
 			DisableXAttrs: true,
 			MaxBackground: 1024,
 		},
-	})
+	)
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)

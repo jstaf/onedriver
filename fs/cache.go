@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
@@ -84,7 +83,6 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 			}).Fatal("Could not fetch root item of filesystem!")
 		}
 	}
-	root.cache = cache
 	cache.root = root.ID()
 	cache.InsertID(cache.root, root)
 
@@ -134,12 +132,6 @@ func leadingSlash(path string) string {
 	return path
 }
 
-// InodePath calculates an inode's path to the filesystem root
-func (c *Cache) InodePath(fuseInode *fs.Inode) string {
-	root, _ := c.GetPath("/", nil)
-	return leadingSlash(fuseInode.Path(root.EmbeddedInode()))
-}
-
 // GetID gets an inode from the cache by ID. No API fetching is performed.
 // Result is nil if no inode is found.
 func (c *Cache) GetID(id string) *Inode {
@@ -157,7 +149,6 @@ func (c *Cache) GetID(id string) *Inode {
 			return err
 		})
 		if found != nil {
-			found.cache = c
 			c.metadata.Store(id, found) // move to memory for next time
 		}
 		return found
@@ -170,9 +161,6 @@ func (c *Cache) GetID(id string) *Inode {
 // rename/move an item.
 func (c *Cache) InsertID(id string, inode *Inode) {
 	// make sure the item knows about the cache itself, then insert
-	inode.mutex.Lock()
-	inode.cache = c
-	inode.mutex.Unlock()
 	c.metadata.Store(id, inode)
 
 	parentID := inode.ParentID()
@@ -313,7 +301,6 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 	for _, item := range fetched {
 		// we will always have an id after fetching from the server
 		child := NewInodeDriveItem(item)
-		child.cache = c
 		c.metadata.Store(child.DriveItem.ID, child)
 
 		// store in result map
@@ -450,23 +437,21 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	return c.MoveContent(oldID, newID)
 }
 
-// MovePath an item to a new position
-func (c *Cache) MovePath(oldPath string, newPath string, auth *graph.Auth) error {
-	inode, err := c.GetPath(oldPath, auth)
+// MovePath moves an item to a new position.
+func (c *Cache) MovePath(oldParent, newParent, oldName, newName string, auth *graph.Auth) error {
+	inode, err := c.GetChild(oldParent, oldName, auth)
 	if err != nil {
 		return err
 	}
 
-	c.DeletePath(oldPath)
-	if newBase := filepath.Base(newPath); filepath.Base(oldPath) != newBase {
-		inode.SetName(newBase)
-	}
-	if err := c.InsertPath(newPath, auth, inode); err != nil {
-		// insert failed, reinsert in old location
-		inode.SetName(filepath.Base(oldPath))
-		c.InsertPath(oldPath, auth, inode)
-		return err
-	}
+	id := inode.ID()
+	c.DeleteID(id)
+
+	// this is the actual move op
+	inode.SetName(newName)
+	parent := c.GetID(newParent)
+	inode.Parent.ID = parent.DriveItem.ID
+	c.InsertID(id, inode)
 	return nil
 }
 

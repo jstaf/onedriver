@@ -160,7 +160,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 // QueueUpload queues an item for upload.
 func (u *UploadManager) QueueUpload(inode *Inode) error {
-	session, err := NewUploadSession(inode)
+	session, err := NewUploadSession(inode, u.cache)
 	if err == nil {
 		u.queue <- session
 	}

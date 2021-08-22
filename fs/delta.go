@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -184,12 +183,11 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			}).Info("Local item already exists under different ID.")
 			if isLocalID(localID) {
 				if err := c.MoveID(localID, id); err != nil {
-					log.WithFields(log.Fields{
+					log.WithError(err).WithFields(log.Fields{
 						"id":       id,
 						"localID":  localID,
 						"parentID": parentID,
 						"name":     name,
-						"err":      err,
 					}).Error("Could not move item to new, nonlocal ID!")
 				}
 			}
@@ -206,29 +204,19 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	}
 
 	// was the item moved?
+	localName := local.Name()
 	if local.ParentID() != parentID || local.Name() != name {
 		log.WithFields(log.Fields{
 			"parent":    local.ParentID(),
-			"name":      local.Name(),
+			"name":      localName,
 			"newParent": parentID,
 			"newName":   name,
 			"id":        id,
 			"delta":     "rename",
 		}).Info("Applying server-side rename")
-		parent := c.GetID(local.ParentID())
-		newParent := c.GetID(parentID)
-		if parent == nil || newParent == nil {
-			log.WithFields(log.Fields{
-				"parent":    local.ParentID(),
-				"name":      local.Name(),
-				"newParent": parentID,
-				"newName":   name,
-				"id":        id,
-				"delta":     "rename",
-			}).Error("Either original parent or new parent not found in cache!")
-			return errors.New("parent not in cache")
-		}
-		parent.Rename(context.Background(), local.Name(), newParent, name, 0)
+		oldParentID := local.ParentID()
+		// local rename only
+		c.MovePath(oldParentID, parentID, localName, name, c.auth)
 		// do not return, there may be additional changes
 	}
 
