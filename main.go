@@ -112,7 +112,10 @@ func main() {
 
 	// create a new filesystem and mount it
 	server, err := fuse.NewServer(
-		odfs.NewFilesystem(dir, graph.Authenticate(authPath)),
+		odfs.NewFilesystem(
+			graph.Authenticate(authPath),
+			filepath.Join(dir, "onedriver.db"),
+		),
 		mountpoint,
 		&fuse.MountOptions{
 			Name:          "onedriver",
@@ -138,8 +141,8 @@ func main() {
 
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
 // corner of the mountpoint and shows the account name in the nautilus sidebar
-func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
-	if child, _ := cache.GetPath("/.xdg-volume-info", auth); child != nil {
+func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
+	if child, _ := fs.GetPath("/.xdg-volume-info", auth); child != nil {
 		return
 	}
 	log.Info("Creating .xdg-volume-info")
@@ -164,9 +167,9 @@ func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
 	if err != nil {
 		log.Error(err)
 	}
-	root, _ := cache.GetPath("/", auth) // cannot fail
+	root, _ := fs.GetPath("/", auth) // cannot fail
 	inode := odfs.NewInode(".xdg-volume-info", 0644, root)
 	if json.Unmarshal(resp, &inode) == nil {
-		cache.InsertID(inode.ID(), inode)
+		fs.InsertID(inode.ID(), inode)
 	}
 }
