@@ -21,13 +21,13 @@ func TestUploadDiskSerialization(t *testing.T) {
 	t.Parallel()
 	// write a file and get its id
 	failOnErr(t, exec.Command("cp", "dmel.fa", filepath.Join(TestDir, "upload_to_disk.fa")).Run())
-	inode, err := fsCache.GetPath("/onedriver_tests/upload_to_disk.fa", nil)
+	inode, err := fs.GetPath("/onedriver_tests/upload_to_disk.fa", nil)
 	failOnErr(t, err)
 
 	// we can find the in-progress upload because there is a several second
 	// delay on new uploads
 	session := UploadSession{}
-	failOnErr(t, fsCache.db.Update(func(tx *bolt.Tx) error {
+	failOnErr(t, fs.db.Update(func(tx *bolt.Tx) error {
 		b, _ := tx.CreateBucketIfNotExists(bucketUploads)
 		if b == nil {
 			return errors.New("uploads bucket did not exist")
@@ -40,7 +40,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 	}))
 
 	// kill the session before it gets uploaded
-	fsCache.uploads.CancelUpload(session.ID)
+	fs.uploads.CancelUpload(session.ID)
 
 	// confirm that the file didn't get uploaded yet (just in case!)
 	driveItem, err := graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
@@ -83,7 +83,7 @@ func TestRepeatedUploads(t *testing.T) {
 	var inode *Inode
 	for i := 0; i < 5; i++ {
 		time.Sleep(2 * time.Second)
-		inode, _ = fsCache.GetPath("/onedriver_tests/repeated_upload.txt", auth)
+		inode, _ = fs.GetPath("/onedriver_tests/repeated_upload.txt", auth)
 		if !isLocalID(inode.ID()) {
 			success = true
 			break

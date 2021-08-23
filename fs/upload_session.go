@@ -99,7 +99,7 @@ func (u *UploadSession) setState(state int, err error) error {
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(inode *Inode, cache *Cache) (*UploadSession, error) {
+func NewUploadSession(inode *Inode, fs *Filesystem) (*UploadSession, error) {
 	inode.mutex.RLock()
 	defer inode.mutex.RUnlock()
 
@@ -115,7 +115,7 @@ func NewUploadSession(inode *Inode, cache *Cache) (*UploadSession, error) {
 		ModTime:  *inode.DriveItem.ModTime,
 	}
 	if inode.data == nil {
-		session.Data = cache.GetContent(inode.DriveItem.ID)
+		session.Data = fs.GetContent(inode.DriveItem.ID)
 		if session.Data == nil {
 			log.WithFields(log.Fields{
 				"id":   inode.DriveItem.ID,

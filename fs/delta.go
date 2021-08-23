@@ -13,7 +13,7 @@ import (
 
 // DeltaLoop creates a new thread to poll the server for changes and should be
 // called as a goroutine
-func (c *Cache) DeltaLoop(interval time.Duration) {
+func (f *Filesystem) DeltaLoop(interval time.Duration) {
 	log.Trace("Starting delta goroutine.")
 	for { // eva
 		// get deltas
@@ -21,16 +21,16 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 		pollSuccess := false
 		deltas := make(map[string]*Inode)
 		for {
-			incoming, cont, err := c.pollDeltas(c.GetAuth())
+			incoming, cont, err := f.pollDeltas(f.auth)
 			if err != nil {
 				// the only thing that should be able to bring the FS out
 				// of a read-only state is a successful delta call
 				log.WithField("err", err).Error(
 					"Error during delta fetch, marking fs as offline.",
 				)
-				c.Lock()
-				c.offline = true
-				c.Unlock()
+				f.Lock()
+				f.offline = true
+				f.Unlock()
 				break
 			}
 
@@ -49,7 +49,7 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 		// now apply deltas
 		secondPass := make([]string, 0)
 		for _, delta := range deltas {
-			err := c.applyDelta(delta)
+			err := f.applyDelta(delta)
 			// retry deletion of non-empty directories after all other deltas applied
 			if err != nil && err.Error() == "directory is non-empty" {
 				secondPass = append(secondPass, delta.ID())
@@ -57,23 +57,23 @@ func (c *Cache) DeltaLoop(interval time.Duration) {
 		}
 		for _, id := range secondPass {
 			// failures should explicitly be ignored the second time around as per docs
-			c.applyDelta(deltas[id])
+			f.applyDelta(deltas[id])
 		}
 
-		if !c.IsOffline() {
-			c.SerializeAll()
+		if !f.IsOffline() {
+			f.SerializeAll()
 		}
 
 		if pollSuccess {
-			c.Lock()
-			if c.offline {
+			f.Lock()
+			if f.offline {
 				log.Info("Delta fetch success, marking fs as online.")
 			}
-			c.offline = false
-			c.Unlock()
+			f.offline = false
+			f.Unlock()
 
-			c.db.Update(func(tx *bolt.Tx) error {
-				return tx.Bucket(bucketDelta).Put([]byte("deltaLink"), []byte(c.deltaLink))
+			f.db.Update(func(tx *bolt.Tx) error {
+				return tx.Bucket(bucketDelta).Put([]byte("deltaLink"), []byte(f.deltaLink))
 			})
 
 			// wait until next interval
@@ -96,8 +96,8 @@ type deltaResponse struct {
 // client will actually appear as deltas from the server (there is no
 // distinction between local and remote changes from the server's perspective,
 // everything is a delta, regardless of where it came from).
-func (c *Cache) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
-	resp, err := graph.Get(c.deltaLink, auth)
+func (f *Filesystem) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
+	resp, err := graph.Get(f.deltaLink, auth)
 	if err != nil {
 		return make([]*Inode, 0), false, err
 	}
@@ -109,10 +109,10 @@ func (c *Cache) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
 	// reached the end of this polling cycle and should not continue until the
 	// next poll interval.
 	if page.NextLink != "" {
-		c.deltaLink = strings.TrimPrefix(page.NextLink, graph.GraphURL)
+		f.deltaLink = strings.TrimPrefix(page.NextLink, graph.GraphURL)
 		return page.Values, true, nil
 	}
-	c.deltaLink = strings.TrimPrefix(page.DeltaLink, graph.GraphURL)
+	f.deltaLink = strings.TrimPrefix(page.DeltaLink, graph.GraphURL)
 	return page.Values, false, nil
 }
 
@@ -121,7 +121,7 @@ func (c *Cache) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
 // * Deleted items
 // * Changed content remotely, but not locally
 // * New items in a folder we have locally
-func (c *Cache) applyDelta(delta *Inode) error {
+func (f *Filesystem) applyDelta(delta *Inode) error {
 	id := delta.ID()
 	name := delta.Name()
 	log.WithFields(log.Fields{
@@ -133,7 +133,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 
 	// do we have it at all?
 	parentID := delta.ParentID()
-	if parent := c.GetID(parentID); parent == nil {
+	if parent := f.GetID(parentID); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
 		log.WithFields(log.Fields{
@@ -145,7 +145,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		return nil
 	}
 
-	local := c.GetID(id)
+	local := f.GetID(id)
 
 	// was it deleted?
 	if delta.Deleted != nil {
@@ -164,7 +164,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 			"name":  name,
 			"delta": "delete",
 		}).Info("Applying server-side deletion of item.")
-		c.DeleteID(id)
+		f.DeleteID(id)
 		return nil
 	}
 
@@ -172,7 +172,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 	// appropriate parent
 	if local == nil {
 		// check if we don't have it here first
-		local, _ = c.GetChild(parentID, name, nil)
+		local, _ = f.GetChild(parentID, name, nil)
 		if local != nil {
 			localID := local.ID()
 			log.WithFields(log.Fields{
@@ -182,7 +182,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 				"name":     name,
 			}).Info("Local item already exists under different ID.")
 			if isLocalID(localID) {
-				if err := c.MoveID(localID, id); err != nil {
+				if err := f.MoveID(localID, id); err != nil {
 					log.WithError(err).WithFields(log.Fields{
 						"id":       id,
 						"localID":  localID,
@@ -198,7 +198,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 				"name":     name,
 				"delta":    "create",
 			}).Info("Creating inode from delta.")
-			c.InsertChild(parentID, delta)
+			f.InsertChild(parentID, delta)
 			return nil
 		}
 	}
@@ -216,7 +216,7 @@ func (c *Cache) applyDelta(delta *Inode) error {
 		}).Info("Applying server-side rename")
 		oldParentID := local.ParentID()
 		// local rename only
-		c.MovePath(oldParentID, parentID, localName, name, c.auth)
+		f.MovePath(oldParentID, parentID, localName, name, f.auth)
 		// do not return, there may be additional changes
 	}
 

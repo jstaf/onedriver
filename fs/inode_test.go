@@ -87,7 +87,7 @@ func TestDoubleCreate(t *testing.T) {
 	t.Parallel()
 	fname := "double_create.txt"
 
-	parent, err := fsCache.GetPath("/onedriver_tests", auth)
+	parent, err := fs.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
 
 	fs.Create(
@@ -99,7 +99,7 @@ func TestDoubleCreate(t *testing.T) {
 		fname,
 		&fuse.CreateOut{},
 	)
-	child, err := fsCache.GetChild(parent.ID(), fname, auth)
+	child, err := fs.GetChild(parent.ID(), fname, auth)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
@@ -114,7 +114,7 @@ func TestDoubleCreate(t *testing.T) {
 		fname,
 		&fuse.CreateOut{},
 	)
-	child, err = fsCache.GetChild(parent.ID(), fname, auth)
+	child, err = fs.GetChild(parent.ID(), fname, auth)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}

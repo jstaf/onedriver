@@ -130,7 +130,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
-						err := u.fs.cache.MoveID(session.OldID, session.ID)
+						err := u.fs.MoveID(session.OldID, session.ID)
 						u.fs.setInodeID(session.NodeID, session.ID)
 						if err != nil {
 							log.WithFields(log.Fields{
@@ -144,7 +144,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 					// inode will exist at the new ID now, but we check if inode
 					// is nil to see if the item has been deleted since upload start
-					if inode := u.fs.cache.GetID(session.ID); inode != nil {
+					if inode := u.fs.GetID(session.ID); inode != nil {
 						inode.mutex.Lock()
 						inode.DriveItem.ETag = session.ETag
 						inode.mutex.Unlock()
@@ -161,7 +161,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 // QueueUpload queues an item for upload.
 func (u *UploadManager) QueueUpload(inode *Inode) error {
-	session, err := NewUploadSession(inode, u.fs.cache)
+	session, err := NewUploadSession(inode, u.fs)
 	if err == nil {
 		u.queue <- session
 	}

@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 
 	// reuses the cached data from the previous tests
 	server, _ := fuse.NewServer(
-		odfs.NewFilesystem(".", auth),
+		odfs.NewFilesystem(auth, "test.db"),
 		mountLoc,
 		&fuse.MountOptions{
 			Name:          "onedriver",

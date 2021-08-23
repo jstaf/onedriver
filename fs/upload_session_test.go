@@ -17,7 +17,7 @@ import (
 // TestUploadSession verifies that the basic functionality of uploads works correctly.
 func TestUploadSession(t *testing.T) {
 	t.Parallel()
-	testDir, err := fsCache.GetPath("/onedriver_tests", auth)
+	testDir, err := fs.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
@@ -37,7 +37,7 @@ func TestUploadSession(t *testing.T) {
 	}
 	mtime := inode.ModTime()
 
-	session, err := NewUploadSession(inode, fsCache)
+	session, err := NewUploadSession(inode, fs)
 	failOnErr(t, err)
 	err = session.Upload(auth)
 	failOnErr(t, err)
@@ -81,7 +81,7 @@ func TestUploadSession(t *testing.T) {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
 
-	session2, err := NewUploadSession(inode, fsCache)
+	session2, err := NewUploadSession(inode, fs)
 	failOnErr(t, err)
 	err = session2.Upload(auth)
 	failOnErr(t, err)

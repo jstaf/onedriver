@@ -9,23 +9,33 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 	log "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
-// Cache caches Inodes for a filesystem. This cache never expires so that local
-// changes can persist. Should be created using the NewCache() constructor.
-type Cache struct {
+// Filesystem is the actual FUSE filesystem and uses the go analogy of the
+// "low-level" FUSE API here:
+// https://github.com/libfuse/libfuse/blob/master/include/fuse_lowlevel.h
+type Filesystem struct {
+	fuse.RawFileSystem
+
 	metadata  sync.Map
 	db        *bolt.DB
+	auth      *graph.Auth
 	root      string // the id of the filesystem's root item
 	deltaLink string
 	uploads   *UploadManager
 
 	sync.RWMutex
-	auth    *graph.Auth
-	offline bool
+	offline    bool
+	lastNodeID uint64
+	inodes     []string
+
+	// tracks currently open directories
+	opendirsM sync.RWMutex
+	opendirs  map[uint64][]*Inode
 }
 
 // boltdb buckets
@@ -35,8 +45,8 @@ var (
 	bucketDelta    = []byte("delta")
 )
 
-// NewCache creates a new Cache
-func NewCache(auth *graph.Auth, dbpath string) *Cache {
+// NewFilesystem creates a new filesystem
+func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
@@ -47,9 +57,11 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 		tx.CreateBucketIfNotExists(bucketDelta)
 		return nil
 	})
-	cache := &Cache{
-		auth: auth,
-		db:   db,
+	fs := &Filesystem{
+		RawFileSystem: fuse.NewDefaultRawFileSystem(),
+		auth:          auth,
+		db:            db,
+		opendirs:      make(map[uint64][]*Inode),
 	}
 
 	rootItem, err := graph.GetItem("root", auth)
@@ -57,16 +69,16 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 	if err != nil {
 		if graph.IsOffline(err) {
 			// no network, load from db if possible and go to read-only state
-			cache.Lock()
-			cache.offline = true
-			cache.Unlock()
-			if root = cache.GetID("root"); root == nil {
+			fs.Lock()
+			fs.offline = true
+			fs.Unlock()
+			if root = fs.GetID("root"); root == nil {
 				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
 			}
 			// when offline, we load the cache deltaLink from disk
-			cache.db.View(func(tx *bolt.Tx) error {
+			fs.db.View(func(tx *bolt.Tx) error {
 				if link := tx.Bucket(bucketDelta).Get([]byte("deltaLink")); link != nil {
-					cache.deltaLink = string(link)
+					fs.deltaLink = string(link)
 				} else {
 					// Only reached if a previous online session never survived
 					// long enough to save its delta link. We explicitly disallow these
@@ -83,57 +95,52 @@ func NewCache(auth *graph.Auth, dbpath string) *Cache {
 			}).Fatal("Could not fetch root item of filesystem!")
 		}
 	}
-	cache.root = root.ID()
-	cache.InsertID(cache.root, root)
+	// root inode is inode 1
+	fs.root = root.ID()
+	fs.InsertID(fs.root, root)
+	fs.insertInode(fs.GetID(fs.root))
 
-	cache.uploads = NewUploadManager(2*time.Second, db, cache, auth)
+	fs.uploads = NewUploadManager(2*time.Second, db, fs, auth)
 
-	if !cache.IsOffline() {
+	if !fs.IsOffline() {
 		// .Trash-UID is used by "gio trash" for user trash, create it if it
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
-		if child, _ := cache.GetChild(cache.root, trash, auth); child == nil {
-			item, err := graph.Mkdir(trash, cache.root, auth)
+		if child, _ := fs.GetChild(fs.root, trash, auth); child == nil {
+			item, err := graph.Mkdir(trash, fs.root, auth)
 			if err != nil {
 				log.WithField("err", err).Error("Could not create trash folder. " +
 					"Trashing items through the file browser may result in errors.")
 			} else {
-				cache.InsertID(item.ID, NewInodeDriveItem(item))
+				fs.InsertID(item.ID, NewInodeDriveItem(item))
 			}
 		}
 
 		// using token=latest because we don't care about existing items - they'll
 		// be downloaded on-demand by the cache
-		cache.deltaLink = "/me/drive/root/delta?token=latest"
+		fs.deltaLink = "/me/drive/root/delta?token=latest"
 	}
 
 	// deltaloop is started manually
-	return cache
-}
-
-// GetAuth returns the current auth
-func (c *Cache) GetAuth() *graph.Auth {
-	c.RLock()
-	defer c.RUnlock()
-	return c.auth
+	return fs
 }
 
 // IsOffline returns whether or not the cache thinks its offline.
-func (c *Cache) IsOffline() bool {
-	c.RLock()
-	defer c.RUnlock()
-	return c.offline
+func (f *Filesystem) IsOffline() bool {
+	f.RLock()
+	defer f.RUnlock()
+	return f.offline
 }
 
 // GetID gets an inode from the cache by ID. No API fetching is performed.
 // Result is nil if no inode is found.
-func (c *Cache) GetID(id string) *Inode {
-	entry, exists := c.metadata.Load(id)
+func (f *Filesystem) GetID(id string) *Inode {
+	entry, exists := f.metadata.Load(id)
 	if !exists {
 		// we allow fetching from disk as a fallback while offline (and it's also
 		// necessary while transitioning from offline->online)
 		var found *Inode
-		c.db.View(func(tx *bolt.Tx) error {
+		f.db.View(func(tx *bolt.Tx) error {
 			data := tx.Bucket(bucketMetadata).Get([]byte(id))
 			var err error
 			if data != nil {
@@ -142,7 +149,7 @@ func (c *Cache) GetID(id string) *Inode {
 			return err
 		})
 		if found != nil {
-			c.metadata.Store(id, found) // move to memory for next time
+			f.metadata.Store(id, found) // move to memory for next time
 		}
 		return found
 	}
@@ -152,16 +159,16 @@ func (c *Cache) GetID(id string) *Inode {
 // InsertID inserts a single item into the cache by ID and sets its parent using
 // the Inode.Parent.ID, if set. Must be called after DeleteID, if being used to
 // rename/move an item.
-func (c *Cache) InsertID(id string, inode *Inode) {
+func (f *Filesystem) InsertID(id string, inode *Inode) {
 	// make sure the item knows about the cache itself, then insert
-	c.metadata.Store(id, inode)
+	f.metadata.Store(id, inode)
 
 	parentID := inode.ParentID()
 	if parentID == "" {
 		// root item, or parent not set
 		return
 	}
-	parent := c.GetID(parentID)
+	parent := f.GetID(parentID)
 	if parent == nil {
 		log.WithFields(log.Fields{
 			"parentID":  parentID,
@@ -191,20 +198,20 @@ func (c *Cache) InsertID(id string, inode *Inode) {
 }
 
 // InsertChild adds an item as a child of a specified parent ID.
-func (c *Cache) InsertChild(parentID string, child *Inode) {
+func (f *Filesystem) InsertChild(parentID string, child *Inode) {
 	child.mutex.Lock()
 	// should already be set, just double-checking here.
 	child.DriveItem.Parent.ID = parentID
 	id := child.DriveItem.ID
 	child.mutex.Unlock()
-	c.InsertID(id, child)
+	f.InsertID(id, child)
 }
 
 // DeleteID deletes an item from the cache, and removes it from its parent. Must
 // be called before InsertID if being used to rename/move an item.
-func (c *Cache) DeleteID(id string) {
-	if inode := c.GetID(id); inode != nil {
-		parent := c.GetID(inode.ParentID())
+func (f *Filesystem) DeleteID(id string) {
+	if inode := f.GetID(id); inode != nil {
+		parent := f.GetID(inode.ParentID())
 		parent.mutex.Lock()
 		for i, childID := range parent.children {
 			if childID == id {
@@ -217,13 +224,13 @@ func (c *Cache) DeleteID(id string) {
 		}
 		parent.mutex.Unlock()
 	}
-	c.metadata.Delete(id)
-	c.uploads.CancelUpload(id)
+	f.metadata.Delete(id)
+	f.uploads.CancelUpload(id)
 }
 
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
-func (c *Cache) GetChild(id string, name string, auth *graph.Auth) (*Inode, error) {
-	children, err := c.GetChildrenID(id, auth)
+func (f *Filesystem) GetChild(id string, name string, auth *graph.Auth) (*Inode, error) {
+	children, err := f.GetChildrenID(id, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +244,9 @@ func (c *Cache) GetChild(id string, name string, auth *graph.Auth) (*Inode, erro
 
 // GetChildrenID grabs all DriveItems that are the children of the given ID. If
 // items are not found, they are fetched.
-func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, error) {
+func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, error) {
 	// fetch item and catch common errors
-	inode := c.GetID(id)
+	inode := f.GetID(id)
 	children := make(map[string]*Inode)
 	if inode == nil {
 		log.WithFields(log.Fields{
@@ -264,7 +271,7 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 		// changes are disallowed while offline, the children will be back in sync after
 		// the first successful delta fetch (which also brings the fs back online)
 		for _, childID := range inode.children {
-			child := c.GetID(childID)
+			child := f.GetID(childID)
 			if child == nil {
 				// will be nil if deleted or never existed
 				continue
@@ -294,7 +301,7 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 	for _, item := range fetched {
 		// we will always have an id after fetching from the server
 		child := NewInodeDriveItem(item)
-		c.metadata.Store(child.DriveItem.ID, child)
+		f.metadata.Store(child.DriveItem.ID, child)
 
 		// store in result map
 		children[strings.ToLower(child.Name())] = child
@@ -312,20 +319,20 @@ func (c *Cache) GetChildrenID(id string, auth *graph.Auth) (map[string]*Inode, e
 
 // GetChildrenPath grabs all DriveItems that are the children of the resource at
 // the path. If items are not found, they are fetched.
-func (c *Cache) GetChildrenPath(path string, auth *graph.Auth) (map[string]*Inode, error) {
-	inode, err := c.GetPath(path, auth)
+func (f *Filesystem) GetChildrenPath(path string, auth *graph.Auth) (map[string]*Inode, error) {
+	inode, err := f.GetPath(path, auth)
 	if err != nil {
 		return make(map[string]*Inode), err
 	}
-	return c.GetChildrenID(inode.ID(), auth)
+	return f.GetChildrenID(inode.ID(), auth)
 }
 
 // GetPath fetches a given DriveItem in the cache, if any items along the way are
 // not found, they are fetched.
-func (c *Cache) GetPath(path string, auth *graph.Auth) (*Inode, error) {
-	lastID := c.root
+func (f *Filesystem) GetPath(path string, auth *graph.Auth) (*Inode, error) {
+	lastID := f.root
 	if path == "/" {
-		return c.GetID(lastID), nil
+		return f.GetID(lastID), nil
 	}
 
 	// from the root directory, traverse the chain of items till we reach our
@@ -335,7 +342,7 @@ func (c *Cache) GetPath(path string, auth *graph.Auth) (*Inode, error) {
 	var inode *Inode
 	for i := 0; i < len(split); i++ {
 		// fetches children
-		children, err := c.GetChildrenID(lastID, auth)
+		children, err := f.GetChildrenID(lastID, auth)
 		if err != nil {
 			return nil, err
 		}
@@ -355,22 +362,22 @@ func (c *Cache) GetPath(path string, auth *graph.Auth) (*Inode, error) {
 
 // DeletePath an item from the cache by path. Must be called before Insert if
 // being used to move/rename an item.
-func (c *Cache) DeletePath(key string) {
-	inode, _ := c.GetPath(strings.ToLower(key), nil)
+func (f *Filesystem) DeletePath(key string) {
+	inode, _ := f.GetPath(strings.ToLower(key), nil)
 	if inode != nil {
-		c.DeleteID(inode.ID())
+		f.DeleteID(inode.ID())
 	}
 }
 
 // InsertPath lets us manually insert an item to the cache (like if it was
 // created locally). Overwrites a cached item if present. Must be called after
 // delete if being used to move/rename an item.
-func (c *Cache) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
+func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
 	key = strings.ToLower(key)
 
 	// set the item.Parent.ID properly if the item hasn't been in the cache
 	// before or is being moved.
-	parent, err := c.GetPath(filepath.Dir(key), auth)
+	parent, err := f.GetPath(filepath.Dir(key), auth)
 	if err != nil {
 		return err
 	} else if parent == nil {
@@ -389,25 +396,25 @@ func (c *Cache) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
 	inode.DriveItem.Parent.ID = parentID
 	inode.mutex.Unlock()
 
-	c.InsertID(inode.ID(), inode)
+	f.InsertID(inode.ID(), inode)
 	return nil
 }
 
 // MoveID moves an item to a new ID name. Also responsible for handling the
 // actual overwrite of the item's IDInternal field
-func (c *Cache) MoveID(oldID string, newID string) error {
-	inode := c.GetID(oldID)
+func (f *Filesystem) MoveID(oldID string, newID string) error {
+	inode := f.GetID(oldID)
 	if inode == nil {
 		// It may have already been renamed. This is not an error. We assume
 		// that IDs will never collide. Re-perform the op if this is the case.
-		if inode = c.GetID(newID); inode == nil {
+		if inode = f.GetID(newID); inode == nil {
 			// nope, it just doesn't exist
 			return errors.New("Could not get item: " + oldID)
 		}
 	}
 
 	// need to rename the child under the parent
-	parent := c.GetID(inode.ParentID())
+	parent := f.GetID(inode.ParentID())
 	parent.mutex.Lock()
 	for i, child := range parent.children {
 		if child == oldID {
@@ -422,36 +429,36 @@ func (c *Cache) MoveID(oldID string, newID string) error {
 	inode.mutex.Unlock()
 
 	// now actually perform the metadata+content move
-	c.DeleteID(oldID)
-	c.InsertID(newID, inode)
+	f.DeleteID(oldID)
+	f.InsertID(newID, inode)
 	if inode.IsDir() {
 		return nil
 	}
-	return c.MoveContent(oldID, newID)
+	return f.MoveContent(oldID, newID)
 }
 
 // MovePath moves an item to a new position.
-func (c *Cache) MovePath(oldParent, newParent, oldName, newName string, auth *graph.Auth) error {
-	inode, err := c.GetChild(oldParent, oldName, auth)
+func (f *Filesystem) MovePath(oldParent, newParent, oldName, newName string, auth *graph.Auth) error {
+	inode, err := f.GetChild(oldParent, oldName, auth)
 	if err != nil {
 		return err
 	}
 
 	id := inode.ID()
-	c.DeleteID(id)
+	f.DeleteID(id)
 
 	// this is the actual move op
 	inode.SetName(newName)
-	parent := c.GetID(newParent)
+	parent := f.GetID(newParent)
 	inode.Parent.ID = parent.DriveItem.ID
-	c.InsertID(id, inode)
+	f.InsertID(id, inode)
 	return nil
 }
 
 // GetContent reads a file's content from disk.
-func (c *Cache) GetContent(id string) []byte {
+func (f *Filesystem) GetContent(id string) []byte {
 	var content []byte // nil
-	c.db.View(func(tx *bolt.Tx) error {
+	f.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		if tmp := b.Get([]byte(id)); tmp != nil {
 			content = make([]byte, len(tmp))
@@ -463,24 +470,24 @@ func (c *Cache) GetContent(id string) []byte {
 }
 
 // InsertContent writes file content to disk.
-func (c *Cache) InsertContent(id string, content []byte) error {
-	return c.db.Update(func(tx *bolt.Tx) error {
+func (f *Filesystem) InsertContent(id string, content []byte) error {
+	return f.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		return b.Put([]byte(id), content)
 	})
 }
 
 // DeleteContent deletes content from disk.
-func (c *Cache) DeleteContent(id string) error {
-	return c.db.Update(func(tx *bolt.Tx) error {
+func (f *Filesystem) DeleteContent(id string) error {
+	return f.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		return b.Delete([]byte(id))
 	})
 }
 
 // MoveContent moves content from one ID to another
-func (c *Cache) MoveContent(oldID string, newID string) error {
-	return c.db.Update(func(tx *bolt.Tx) error {
+func (f *Filesystem) MoveContent(oldID string, newID string) error {
+	return f.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		content := b.Get([]byte(oldID))
 		if content == nil {
@@ -496,15 +503,15 @@ func (c *Cache) MoveContent(oldID string, newID string) error {
 // metadata is only used later if an item could not be found in memory AND the
 // cache is offline. Old metadata is not removed, only overwritten (to avoid an
 // offline session from wiping all metadata on a subsequent serialization).
-func (c *Cache) SerializeAll() {
+func (f *Filesystem) SerializeAll() {
 	log.Debug("Serializing cache metadata to disk.")
-	c.metadata.Range(func(key interface{}, value interface{}) bool {
-		c.db.Batch(func(tx *bolt.Tx) error {
+	f.metadata.Range(func(key interface{}, value interface{}) bool {
+		f.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)
 			contents := value.(*Inode).AsJSON()
 			b := tx.Bucket(bucketMetadata)
 			b.Put([]byte(id), contents)
-			if id == c.root {
+			if id == f.root {
 				// root item must be updated manually (since there's actually
 				// two copies)
 				b.Put([]byte("root"), contents)

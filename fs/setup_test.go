@@ -28,9 +28,8 @@ const (
 )
 
 var (
-	auth    *graph.Auth
-	fs      *Filesystem
-	fsCache *Cache // used to inject bad content into the fs for some tests
+	auth *graph.Auth
+	fs   *Filesystem
 )
 
 // Tests are done in the main project directory with a mounted filesystem to
@@ -60,9 +59,7 @@ func TestMain(m *testing.M) {
 	defer f.Close()
 
 	auth = graph.Authenticate(".auth_tokens.json")
-	fs = NewFilesystem(".", auth)
-	fsCache = fs.cache
-
+	fs = NewFilesystem(auth, "test.db")
 	server, _ := fuse.NewServer(
 		fs,
 		mountLoc,
@@ -96,7 +93,7 @@ func TestMain(m *testing.M) {
 		os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
 		createPagingTestFiles()
 	}
-	go fsCache.DeltaLoop(5 * time.Second)
+	go fs.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business
 	os.Mkdir(mountLoc+"/Documents", 0755)

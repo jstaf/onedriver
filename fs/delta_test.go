@@ -166,7 +166,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	failOnErr(t, err)
 	newContent := []byte("because it has been changed remotely!")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, fsCache)
+	session, err := NewUploadSession(inode, fs)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -214,7 +214,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	inode := NewInodeDriveItem(item)
 	newContent := []byte("remote")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, fsCache)
+	session, err := NewUploadSession(inode, fs)
 	failOnErr(t, err)
 	failOnErr(t, session.Upload(auth))
 
@@ -254,7 +254,7 @@ func TestDeltaBadContentInCache(t *testing.T) {
 		}
 	}
 
-	fsCache.InsertContent(id, []byte("wrong contents"))
+	fs.InsertContent(id, []byte("wrong contents"))
 	contents, err := ioutil.ReadFile(filepath.Join(DeltaDir, "corrupted"))
 	failOnErr(t, err)
 	if bytes.HasPrefix(contents, []byte("wrong")) {
@@ -300,7 +300,7 @@ func TestDeltaFolderDeletion(t *testing.T) {
 // We should only perform a delta deletion of a folder if it was nonempty
 func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 	t.Parallel()
-	cache := NewCache(auth, "test_delta_folder_deletion_nonempty.db")
+	cache := NewFilesystem(auth, "test_delta_folder_deletion_nonempty.db")
 	dir := NewInode("folder", 0755|fuse.S_IFDIR, nil)
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, dir)
@@ -358,7 +358,7 @@ func TestDeltaNoModTimeUpdate(t *testing.T) {
 // https://github.com/jstaf/onedriver/issues/111
 func TestDeltaMissingHash(t *testing.T) {
 	t.Parallel()
-	cache := NewCache(auth, "test_delta_missing_hash.db")
+	cache := NewFilesystem(auth, "test_delta_missing_hash.db")
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, file)
 
