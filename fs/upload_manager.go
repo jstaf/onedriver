@@ -131,7 +131,6 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
 						err := u.fs.MoveID(session.OldID, session.ID)
-						u.fs.setInodeID(session.NodeID, session.ID)
 						if err != nil {
 							log.WithFields(log.Fields{
 								"id":    session.ID,

@@ -21,7 +21,7 @@ func TestUploadSession(t *testing.T) {
 	failOnErr(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
-	nodeID := fs.insertInode(inode)
+	nodeID, _ := fs.InsertPath("/onedriver_tests/uploadSessionSmall.txt", auth, inode)
 	data := []byte("our super special data")
 	_, errno := fs.Write(
 		context.Background().Done(),

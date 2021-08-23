@@ -98,7 +98,6 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	// root inode is inode 1
 	fs.root = root.ID()
 	fs.InsertID(fs.root, root)
-	fs.insertInode(fs.GetID(fs.root))
 
 	fs.uploads = NewUploadManager(2*time.Second, db, fs, auth)
 
@@ -132,6 +131,25 @@ func (f *Filesystem) IsOffline() bool {
 	return f.offline
 }
 
+// TranslateID returns the DriveItemID for a given NodeID
+func (f *Filesystem) TranslateID(nodeID uint64) string {
+	f.RLock()
+	defer f.RUnlock()
+	if nodeID > f.lastNodeID || nodeID == 0 {
+		return ""
+	}
+	return f.inodes[nodeID-1]
+}
+
+// GetNodeID fetches the inode for a particular inode ID.
+func (f *Filesystem) GetNodeID(nodeID uint64) *Inode {
+	id := f.TranslateID(nodeID)
+	if id == "" {
+		return nil
+	}
+	return f.GetID(id)
+}
+
 // GetID gets an inode from the cache by ID. No API fetching is performed.
 // Result is nil if no inode is found.
 func (f *Filesystem) GetID(id string) *Inode {
@@ -156,17 +174,50 @@ func (f *Filesystem) GetID(id string) *Inode {
 	return entry.(*Inode)
 }
 
-// InsertID inserts a single item into the cache by ID and sets its parent using
-// the Inode.Parent.ID, if set. Must be called after DeleteID, if being used to
-// rename/move an item.
-func (f *Filesystem) InsertID(id string, inode *Inode) {
+// InsertID inserts a single item into the filesystem by ID and sets its parent
+// using the Inode.Parent.ID, if set. Must be called after DeleteID, if being
+// used to rename/move an item. This is the main way new Inodes are added to the
+// filesystem. Returns the Inode's numeric NodeID.
+func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 	// make sure the item knows about the cache itself, then insert
 	f.metadata.Store(id, inode)
+
+	nodeID := inode.NodeID()
+	if nodeID == 0 {
+		// set an inode number if it has not been set before
+		f.Lock()
+		f.lastNodeID++
+		nodeID = f.lastNodeID
+
+		inode.mutex.Lock()
+		inode.nodeID = nodeID
+		inode.mutex.Unlock()
+
+		f.inodes = append(f.inodes, id)
+		f.Unlock()
+	}
+	if id != inode.ID() {
+		// we update the inode IDs here in case they do not match/changed
+		inode.mutex.Lock()
+		inode.DriveItem.ID = id
+		inode.mutex.Unlock()
+
+		f.Lock()
+		if nodeID < f.lastNodeID {
+			f.inodes[nodeID-1] = id
+		} else {
+			log.WithFields(log.Fields{
+				"nodeID":     nodeID,
+				"lastNodeID": f.lastNodeID,
+			}).Error("NodeID exceeded maximum node ID! Ignoring ID change.")
+		}
+		f.Unlock()
+	}
 
 	parentID := inode.ParentID()
 	if parentID == "" {
 		// root item, or parent not set
-		return
+		return nodeID
 	}
 	parent := f.GetID(parentID)
 	if parent == nil {
@@ -175,7 +226,7 @@ func (f *Filesystem) InsertID(id string, inode *Inode) {
 			"childID":   id,
 			"childName": inode.Name(),
 		}).Error("Parent item could not be found when setting parent.")
-		return
+		return nodeID
 	}
 
 	// check if the item has already been added to the parent
@@ -186,7 +237,7 @@ func (f *Filesystem) InsertID(id string, inode *Inode) {
 	for _, child := range parent.children {
 		if child == id {
 			// exit early, child cannot be added twice
-			return
+			return nodeID
 		}
 	}
 
@@ -194,17 +245,19 @@ func (f *Filesystem) InsertID(id string, inode *Inode) {
 	if inode.IsDir() {
 		parent.subdir++
 	}
-	parent.children = append(parent.children, inode.ID())
+	parent.children = append(parent.children, id)
+
+	return nodeID
 }
 
 // InsertChild adds an item as a child of a specified parent ID.
-func (f *Filesystem) InsertChild(parentID string, child *Inode) {
+func (f *Filesystem) InsertChild(parentID string, child *Inode) uint64 {
 	child.mutex.Lock()
 	// should already be set, just double-checking here.
 	child.DriveItem.Parent.ID = parentID
 	id := child.DriveItem.ID
 	child.mutex.Unlock()
-	f.InsertID(id, child)
+	return f.InsertID(id, child)
 }
 
 // DeleteID deletes an item from the cache, and removes it from its parent. Must
@@ -372,21 +425,21 @@ func (f *Filesystem) DeletePath(key string) {
 // InsertPath lets us manually insert an item to the cache (like if it was
 // created locally). Overwrites a cached item if present. Must be called after
 // delete if being used to move/rename an item.
-func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) error {
+func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) (uint64, error) {
 	key = strings.ToLower(key)
 
 	// set the item.Parent.ID properly if the item hasn't been in the cache
 	// before or is being moved.
 	parent, err := f.GetPath(filepath.Dir(key), auth)
 	if err != nil {
-		return err
+		return 0, err
 	} else if parent == nil {
 		const errMsg string = "parent of key was nil"
 		log.WithFields(log.Fields{
 			"key":  key,
 			"path": inode.Path(),
 		}).Error(errMsg)
-		return errors.New(errMsg)
+		return 0, errors.New(errMsg)
 	}
 
 	// Coded this way to make sure locks are in the same order for the deadlock
@@ -396,8 +449,7 @@ func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) erro
 	inode.DriveItem.Parent.ID = parentID
 	inode.mutex.Unlock()
 
-	f.InsertID(inode.ID(), inode)
-	return nil
+	return f.InsertID(inode.ID(), inode), nil
 }
 
 // MoveID moves an item to a new ID name. Also responsible for handling the

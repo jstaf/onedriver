@@ -15,51 +15,6 @@ import (
 
 const timeout = time.Second
 
-// insertInodeID assigns a session-specific inode ID to the item if not already
-// set. Does nothing if called on a pre-existing item. These IDs are reset
-// every time the filesystem restarts.
-func (f *Filesystem) insertInode(inode *Inode) uint64 {
-	if nid := inode.NodeID(); nid > 0 {
-		return nid
-	}
-
-	f.Lock()
-	defer f.Unlock()
-	f.lastNodeID++
-	inode.SetNodeID(f.lastNodeID)
-	f.inodes = append(f.inodes, inode.ID())
-	return f.lastNodeID
-}
-
-// getInodeID fetches the DriveItemID for a given inode ID
-func (f *Filesystem) getInodeID(nodeID uint64) string {
-	f.RLock()
-	defer f.RUnlock()
-	if nodeID > f.lastNodeID || nodeID == 0 {
-		return ""
-	}
-	return f.inodes[nodeID-1]
-}
-
-// getInode fetches the inode for a particular inode ID.
-func (f *Filesystem) getInode(nodeID uint64) *Inode {
-	id := f.getInodeID(nodeID)
-	if id == "" {
-		return nil
-	}
-	return f.GetID(id)
-}
-
-// setInodeID changes the OneDrive ID stored by the filesystem.
-func (f *Filesystem) setInodeID(nodeID uint64, newID string) {
-	f.Lock()
-	defer f.Unlock()
-	if nodeID > f.lastNodeID || nodeID == 0 {
-		return
-	}
-	f.inodes[nodeID-1] = newID
-}
-
 // remoteID uploads a file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded.
@@ -90,12 +45,10 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 		i.hasChanges = false
 		i.DriveItem.ETag = session.ETag
 		name := i.DriveItem.Name
-		nodeID := i.nodeID
 		i.mutex.Unlock()
 
 		// this is all we really wanted from this transaction
 		err = f.MoveID(originalID, session.ID)
-		f.setInodeID(nodeID, session.ID)
 		log.WithFields(log.Fields{
 			"name":     name,
 			"original": originalID,
@@ -140,7 +93,7 @@ func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse
 
 // Mkdir creates a directory.
 func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) fuse.Status {
-	inode := f.getInode(in.NodeId)
+	inode := f.GetNodeID(in.NodeId)
 	if inode == nil {
 		return fuse.ENOENT
 	}
@@ -166,9 +119,8 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 
 	newInode := NewInodeDriveItem(item)
 	newInode.mode = in.Mode | fuse.S_IFDIR
-	f.InsertChild(id, newInode)
 
-	out.NodeId = f.insertInode(newInode)
+	out.NodeId = f.InsertChild(id, newInode)
 	out.Attr = newInode.makeAttr()
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
@@ -177,7 +129,7 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 
 // Rmdir removes a directory if it's empty.
 func (f *Filesystem) Rmdir(cancel <-chan struct{}, in *fuse.InHeader, name string) fuse.Status {
-	parentID := f.getInodeID(in.NodeId)
+	parentID := f.TranslateID(in.NodeId)
 	if parentID == "" {
 		return fuse.ENOENT
 	}
@@ -193,7 +145,7 @@ func (f *Filesystem) Rmdir(cancel <-chan struct{}, in *fuse.InHeader, name strin
 
 // ReadDir provides a list of all the entries in the directory
 func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) fuse.Status {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	dir := f.GetID(id)
 	if dir == nil {
 		return fuse.ENOENT
@@ -233,7 +185,6 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.
 	entries[1] = parent
 
 	for _, child := range children {
-		f.insertInode(child)
 		entries = append(entries, child)
 	}
 	f.opendirsM.Lock()
@@ -323,7 +274,7 @@ func (f *Filesystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.
 // Lookup is called by the kernel when the VFS wants to know about a file inside
 // a directory.
 func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name string, out *fuse.EntryOut) fuse.Status {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	log.WithFields(log.Fields{
 		"nodeID": in.NodeId,
 		"id":     id,
@@ -344,7 +295,7 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 // Mknod creates a regular file. The server doesn't have this yet.
 func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) fuse.Status {
-	parentID := f.getInodeID(in.NodeId)
+	parentID := f.TranslateID(in.NodeId)
 	if parentID == "" {
 		return fuse.EBADF
 	}
@@ -375,8 +326,7 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 		"path":    path,
 		"mode":    Octal(in.Mode),
 	}).Debug("Creating inode.")
-	f.InsertChild(parentID, inode)
-	out.NodeId = f.insertInode(inode)
+	out.NodeId = f.InsertChild(parentID, inode)
 	out.Attr = inode.makeAttr()
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
@@ -399,7 +349,7 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 	if result == fuse.Status(syscall.EEXIST) {
 		// if the inode already exists, we should truncate the existing file and
 		// return the existing file inode as per "man creat"
-		parentID := f.getInodeID(in.NodeId)
+		parentID := f.TranslateID(in.NodeId)
 		child, _ := f.GetChild(parentID, name, f.auth)
 		log.WithFields(log.Fields{
 			"id":      parentID,
@@ -420,7 +370,7 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 // data from the server. Data is loaded into memory on Open, and persisted to
 // disk on Flush.
 func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) fuse.Status {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.ENOENT
@@ -530,7 +480,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 // Unlink deletes a child file.
 func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name string) fuse.Status {
-	parentID := f.getInodeID(in.NodeId)
+	parentID := f.TranslateID(in.NodeId)
 	child, _ := f.GetChild(parentID, name, nil)
 	if child == nil {
 		// the file we are unlinking never existed
@@ -570,7 +520,7 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 // Read an inode's data like a file.
 func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
-	inode := f.getInode(in.NodeId)
+	inode := f.GetNodeID(in.NodeId)
 	if inode == nil {
 		return fuse.ReadResultData(make([]byte, 0)), fuse.EBADF
 	}
@@ -623,7 +573,7 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 // Flush() is called. Returns the number of bytes written and the status of the
 // op.
 func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (uint32, fuse.Status) {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return 0, fuse.EBADF
@@ -666,7 +616,7 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
 // storage. This method is used to trigger uploads of file content.
 func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.EBADF
@@ -706,7 +656,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 // Flush is called when a file descriptor is closed. Uses Fsync() to perform file
 // uploads. (Release not implemented because all cleanup is already done here).
 func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status {
-	inode := f.getInode(in.NodeId)
+	inode := f.GetNodeID(in.NodeId)
 	if inode == nil {
 		return fuse.EBADF
 	}
@@ -731,7 +681,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 // Getattr returns a the Inode as a UNIX stat. Holds the read mutex for all of
 // the "metadata fetch" operations.
 func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) fuse.Status {
-	id := f.getInodeID(in.NodeId)
+	id := f.TranslateID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.ENOENT
@@ -751,7 +701,7 @@ func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fu
 // operations like utimens, chmod, chown (not implemented, FUSE is single-user),
 // and truncate.
 func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) fuse.Status {
-	i := f.getInode(in.NodeId)
+	i := f.GetNodeID(in.NodeId)
 	if i == nil {
 		return fuse.ENOENT
 	}
@@ -799,8 +749,8 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 
 // Rename renames and/or moves an inode.
 func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name string, newName string) fuse.Status {
-	oldParentID := f.getInodeID(in.NodeId)
-	oldParentItem := f.getInode(in.NodeId)
+	oldParentID := f.TranslateID(in.NodeId)
+	oldParentItem := f.GetNodeID(in.NodeId)
 	if oldParentID == "" || oldParentItem == nil {
 		return fuse.EBADF
 	}
@@ -809,7 +759,7 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 	// we'll have the metadata for the dest inode already so it is not necessary
 	// to use GetPath() to prefetch it. In order for the fs to know about this
 	// inode, it has already fetched all of the inodes up to the new destination.
-	newParentItem := f.getInode(in.Newdir)
+	newParentItem := f.GetNodeID(in.Newdir)
 	if newParentItem == nil {
 		return fuse.ENOENT
 	}
