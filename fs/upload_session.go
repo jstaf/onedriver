@@ -43,6 +43,7 @@ type UploadSession struct {
 	ID                 string    `json:"id"`
 	OldID              string    `json:"oldID"`
 	ParentID           string    `json:"parentID"`
+	NodeID             uint64    `json:"nodeID"`
 	Name               string    `json:"name"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
@@ -107,6 +108,7 @@ func NewUploadSession(inode *Inode, cache *Cache) (*UploadSession, error) {
 		ID:       inode.DriveItem.ID,
 		OldID:    inode.DriveItem.ID,
 		ParentID: inode.DriveItem.Parent.ID,
+		NodeID:   inode.nodeID,
 		Name:     inode.DriveItem.Name,
 		Size:     inode.DriveItem.Size,
 		Data:     nil,

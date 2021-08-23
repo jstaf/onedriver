@@ -20,19 +20,19 @@ type UploadManager struct {
 	sessions      map[string]*UploadSession
 	inFlight      uint8 // number of sessions in flight
 	auth          *graph.Auth
-	cache         *Cache
+	fs            *Filesystem
 	db            *bolt.DB
 }
 
 // NewUploadManager creates a new queue/thread for uploads
-func NewUploadManager(duration time.Duration, db *bolt.DB, cache *Cache, auth *graph.Auth) *UploadManager {
+func NewUploadManager(duration time.Duration, db *bolt.DB, fs *Filesystem, auth *graph.Auth) *UploadManager {
 	manager := UploadManager{
 		queue:         make(chan *UploadSession),
 		deletionQueue: make(chan string, 1000), // FIXME - why does this chan need to be buffered now???
 		sessions:      make(map[string]*UploadSession),
 		auth:          auth,
 		db:            db,
-		cache:         cache,
+		fs:            fs,
 	}
 	db.View(func(tx *bolt.Tx) error {
 		// Add any incomplete sessions from disk - any sessions here were never
@@ -130,7 +130,8 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
-						err := u.cache.MoveID(session.OldID, session.ID)
+						err := u.fs.cache.MoveID(session.OldID, session.ID)
+						u.fs.setInodeID(session.NodeID, session.ID)
 						if err != nil {
 							log.WithFields(log.Fields{
 								"id":    session.ID,
@@ -143,7 +144,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 					// inode will exist at the new ID now, but we check if inode
 					// is nil to see if the item has been deleted since upload start
-					if inode := u.cache.GetID(session.ID); inode != nil {
+					if inode := u.fs.cache.GetID(session.ID); inode != nil {
 						inode.mutex.Lock()
 						inode.DriveItem.ETag = session.ETag
 						inode.mutex.Unlock()
@@ -160,7 +161,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 // QueueUpload queues an item for upload.
 func (u *UploadManager) QueueUpload(inode *Inode) error {
-	session, err := NewUploadSession(inode, u.cache)
+	session, err := NewUploadSession(inode, u.fs.cache)
 	if err == nil {
 		u.queue <- session
 	}

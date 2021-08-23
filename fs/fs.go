@@ -663,7 +663,7 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 	nWrite := len(data)
 	offset := int(in.Offset)
 	log.WithFields(log.Fields{
-		"id":      inode.ID(),
+		"id":      id,
 		"nodeID":  in.NodeId,
 		"path":    inode.Path(),
 		"bufsize": nWrite,
@@ -672,7 +672,7 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 
 	if !inode.HasContent() {
 		log.WithFields(log.Fields{
-			"id":     inode.ID(),
+			"id":     id,
 			"nodeID": in.NodeId,
 			"path":   inode.Path(),
 		}).Warn("Write called on a closed file descriptor! Reopening file for write op.")

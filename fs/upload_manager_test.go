@@ -61,7 +61,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 		return b.Put([]byte(session.ID), payload)
 	})
 
-	NewUploadManager(time.Second, db, fsCache, auth)
+	NewUploadManager(time.Second, db, fs, auth)
 	time.Sleep(45 * time.Second)
 	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
 	if err != nil || driveItem == nil {
