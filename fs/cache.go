@@ -150,6 +150,25 @@ func (f *Filesystem) GetNodeID(nodeID uint64) *Inode {
 	return f.GetID(id)
 }
 
+// InsertNodeID assigns a numeric inode ID used by the kernel if one is not
+// already assigned.
+func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
+	nodeID := inode.NodeID()
+	if nodeID == 0 {
+		f.Lock()
+		f.lastNodeID++
+
+		inode.mutex.Lock()
+		f.inodes = append(f.inodes, inode.DriveItem.ID)
+		nodeID = f.lastNodeID
+		inode.nodeID = nodeID
+		inode.mutex.Unlock()
+
+		f.Unlock()
+	}
+	return nodeID
+}
+
 // GetID gets an inode from the cache by ID. No API fetching is performed.
 // Result is nil if no inode is found.
 func (f *Filesystem) GetID(id string) *Inode {
@@ -167,6 +186,7 @@ func (f *Filesystem) GetID(id string) *Inode {
 			return err
 		})
 		if found != nil {
+			f.InsertNodeID(found)
 			f.metadata.Store(id, found) // move to memory for next time
 		}
 		return found
@@ -181,21 +201,8 @@ func (f *Filesystem) GetID(id string) *Inode {
 func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 	// make sure the item knows about the cache itself, then insert
 	f.metadata.Store(id, inode)
+	nodeID := f.InsertNodeID(inode)
 
-	nodeID := inode.NodeID()
-	if nodeID == 0 {
-		// set an inode number if it has not been set before
-		f.Lock()
-		f.lastNodeID++
-		nodeID = f.lastNodeID
-
-		inode.mutex.Lock()
-		inode.nodeID = nodeID
-		inode.mutex.Unlock()
-
-		f.inodes = append(f.inodes, id)
-		f.Unlock()
-	}
 	if id != inode.ID() {
 		// we update the inode IDs here in case they do not match/changed
 		inode.mutex.Lock()
@@ -354,6 +361,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 	for _, item := range fetched {
 		// we will always have an id after fetching from the server
 		child := NewInodeDriveItem(item)
+		f.InsertNodeID(child)
 		f.metadata.Store(child.DriveItem.ID, child)
 
 		// store in result map
