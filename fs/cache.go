@@ -455,9 +455,10 @@ func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) (uin
 	parentID := parent.ID()
 	inode.mutex.Lock()
 	inode.DriveItem.Parent.ID = parentID
+	id := inode.DriveItem.ID
 	inode.mutex.Unlock()
 
-	return f.InsertID(inode.ID(), inode), nil
+	return f.InsertID(id, inode), nil
 }
 
 // MoveID moves an item to a new ID name. Also responsible for handling the
@@ -483,10 +484,6 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 		}
 	}
 	parent.mutex.Unlock()
-
-	inode.mutex.Lock()
-	inode.DriveItem.ID = newID
-	inode.mutex.Unlock()
 
 	// now actually perform the metadata+content move
 	f.DeleteID(oldID)
