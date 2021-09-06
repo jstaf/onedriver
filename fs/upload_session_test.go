@@ -66,6 +66,10 @@ func TestUploadSession(t *testing.T) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, resp)
 	}
 
+	// item now has a new id following the upload. We just change the ID here
+	// because thats part of the UploadManager functionality and gets tested elsewhere.
+	inode.DriveItem.ID = session.ID
+
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
 	_, errno = fs.Write(
@@ -75,7 +79,7 @@ func TestUploadSession(t *testing.T) {
 			Offset:   0,
 			Size:     uint32(len(newData)),
 		},
-		data,
+		newData,
 	)
 	if errno != fuse.OK {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
