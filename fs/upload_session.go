@@ -99,7 +99,11 @@ func (u *UploadSession) setState(state int, err error) error {
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(inode *Inode, fs *Filesystem) (*UploadSession, error) {
+func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
+	if data == nil {
+		return nil, errors.New("data to upload cannot be nil")
+	}
+
 	inode.mutex.RLock()
 	defer inode.mutex.RUnlock()
 
@@ -110,32 +114,14 @@ func NewUploadSession(inode *Inode, fs *Filesystem) (*UploadSession, error) {
 		ParentID: inode.DriveItem.Parent.ID,
 		NodeID:   inode.nodeID,
 		Name:     inode.DriveItem.Name,
-		Size:     inode.DriveItem.Size,
-		Data:     nil,
+		Size:     uint64(len(*data)), // just in case it somehow differs
+		Data:     *data,
 		ModTime:  *inode.DriveItem.ModTime,
 	}
-	if inode.data == nil {
-		session.Data = fs.GetContent(inode.DriveItem.ID)
-		if session.Data == nil {
-			log.WithFields(log.Fields{
-				"id":   inode.DriveItem.ID,
-				"name": inode.DriveItem.Name,
-			}).Error("Tried to load file data from disk but could not find any!")
-			return nil, errors.New("inode data was nil")
-		}
-	} else {
-		session.Data = make([]byte, inode.DriveItem.Size)
-		copy(session.Data, *inode.data)
-	}
 
-	if inode.DriveItem.File != nil {
-		session.SHA1Hash = inode.DriveItem.File.Hashes.SHA1Hash
-		session.QuickXORHash = inode.DriveItem.File.Hashes.QuickXorHash
-	} else {
-		// compute both hashes for now, session does not know the drivetype
-		session.SHA1Hash = graph.SHA1Hash(&session.Data)
-		session.QuickXORHash = graph.QuickXORHash(&session.Data)
-	}
+	// compute both hashes for now, session does not know the drivetype
+	session.SHA1Hash = graph.SHA1Hash(data)
+	session.QuickXORHash = graph.QuickXORHash(data)
 	return &session, nil
 }
 

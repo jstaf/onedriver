@@ -15,6 +15,20 @@ import (
 
 const timeout = time.Second
 
+// getInodeContent returns a copy of the inode's content. Ensures that data is non-nil.
+func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+
+	if i.data != nil {
+		data := make([]byte, i.DriveItem.Size)
+		copy(data, *i.data)
+		return &data
+	}
+	data := f.GetContent(i.DriveItem.ID)
+	return &data
+}
+
 // remoteID uploads a file to obtain a Onedrive ID if it doesn't already
 // have one. This is necessary to avoid race conditions against uploads if the
 // file has not already been uploaded.
@@ -28,7 +42,8 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 	originalID := i.ID()
 	if isLocalID(originalID) && f.auth.AccessToken != "" {
 		// perform a blocking upload of the item
-		session, err := NewUploadSession(i, f)
+		data := f.getInodeContent(i)
+		session, err := NewUploadSession(i, data)
 		if err != nil {
 			return originalID, err
 		}

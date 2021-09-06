@@ -37,7 +37,7 @@ func TestUploadSession(t *testing.T) {
 	}
 	mtime := inode.ModTime()
 
-	session, err := NewUploadSession(inode, fs)
+	session, err := NewUploadSession(inode, inode.data)
 	failOnErr(t, err)
 	err = session.Upload(auth)
 	failOnErr(t, err)
@@ -85,7 +85,7 @@ func TestUploadSession(t *testing.T) {
 		t.Fatalf("Could not write to inode, errno: %d\n", errno)
 	}
 
-	session2, err := NewUploadSession(inode, fs)
+	session2, err := NewUploadSession(inode, inode.data)
 	failOnErr(t, err)
 	err = session2.Upload(auth)
 	failOnErr(t, err)
