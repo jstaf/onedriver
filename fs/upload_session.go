@@ -224,7 +224,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
 		}
 		if err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored, fmt.Errorf("small upload failed: %w", err))
 		}
 	} else {
 		if isLocalID(u.ID) {
@@ -247,7 +247,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		})
 		resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
 		if err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored, fmt.Errorf("failed to create upload session: %w", err))
 		}
 
 		// populate UploadURL/expiration - we unmarshal into a fresh session here
@@ -255,7 +255,8 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// a field it shouldn't.
 		tmp := UploadSession{}
 		if err = json.Unmarshal(resp, &tmp); err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored,
+				fmt.Errorf("could not unmarshal upload session post response: %w", err))
 		}
 		u.mutex.Lock()
 		u.UploadURL = tmp.UploadURL
@@ -268,14 +269,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		for i := 0; i < nchunks; i++ {
 			resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"id":      u.ID,
-					"name":    u.Name,
-					"chunk":   i,
-					"nchunks": nchunks,
-					"err":     err,
-				}).Error("Error during chunk upload.")
-				return u.setState(uploadErrored, err)
+				return u.setState(uploadErrored, fmt.Errorf("failed to perform chunk upload: %w", err))
 			}
 
 			// retry server-side failures with an exponential back-off strategy. Will not
@@ -291,19 +285,13 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				time.Sleep(time.Duration(backoff) * time.Second)
 				resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
 				if err != nil { // a serious, non 4xx/5xx error
-					log.WithFields(log.Fields{
-						"id":     u.ID,
-						"name":   u.Name,
-						"err":    err,
-						"status": status,
-					}).Error("Failed while retrying chunk upload after server-side error.")
-					return u.setState(uploadErrored, err)
+					return u.setState(uploadErrored, fmt.Errorf("failed to perform chunk upload: %w", err))
 				}
 			}
 
 			// handle client-side errors
 			if status >= 400 {
-				return u.setState(uploadErrored, errors.New(string(resp)))
+				return u.setState(uploadErrored, fmt.Errorf("error uploading chunk - HTTP %d: %s", status, string(resp)))
 			}
 		}
 	}
@@ -312,7 +300,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	// checksum is what it's supposed to be.
 	remote := graph.DriveItem{}
 	if err := json.Unmarshal(resp, &remote); err != nil {
-		return u.setState(uploadErrored, err)
+		return u.setState(uploadErrored,
+			fmt.Errorf("could not unmarshal response: %w: %s", err, string(resp)),
+		)
 	}
 	if remote.File == nil && remote.Size != u.Size {
 		// if we are absolutely pounding the microsoft API, a remote item may sometimes
