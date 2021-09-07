@@ -491,7 +491,8 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 	if inode.IsDir() {
 		return nil
 	}
-	return f.MoveContent(oldID, newID)
+	f.MoveContent(oldID, newID)
+	return nil
 }
 
 // MovePath moves an item to a new position.
@@ -543,12 +544,13 @@ func (f *Filesystem) DeleteContent(id string) error {
 }
 
 // MoveContent moves content from one ID to another
-func (f *Filesystem) MoveContent(oldID string, newID string) error {
-	return f.db.Update(func(tx *bolt.Tx) error {
+func (f *Filesystem) MoveContent(oldID string, newID string) {
+	f.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		content := b.Get([]byte(oldID))
 		if content == nil {
-			return errors.New("Content not found for ID: " + oldID)
+			// already moved, or content never existed - nothing more for us to do
+			return nil
 		}
 		b.Put([]byte(newID), content)
 		b.Delete([]byte(oldID))
