@@ -110,20 +110,17 @@ func main() {
 		).Fatal("Mountpoint must be empty.")
 	}
 
-	// create a new filesystem and mount it
-	server, err := fuse.NewServer(
-		odfs.NewFilesystem(
-			graph.Authenticate(authPath),
-			filepath.Join(dir, "onedriver.db"),
-		),
-		mountpoint,
-		&fuse.MountOptions{
-			Name:          "onedriver",
-			FsName:        "onedriver",
-			DisableXAttrs: true,
-			MaxBackground: 1024,
-		},
-	)
+	// create the filesystem
+	auth := graph.Authenticate(authPath)
+	fs := odfs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
+	xdgVolumeInfo(fs, auth)
+
+	server, err := fuse.NewServer(fs, mountpoint, &fuse.MountOptions{
+		Name:          "onedriver",
+		FsName:        "onedriver",
+		DisableXAttrs: true,
+		MaxBackground: 1024,
+	})
 	if err != nil {
 		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
 			"(Try running \"fusermount -uz %s\")\n", mountpoint)

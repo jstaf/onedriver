@@ -684,7 +684,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		"path":   inode.Path(),
 		"nodeID": in.NodeId,
 		"id":     inode.ID(),
-	}).Debug("Flushing file contents from memory.")
+	}).Debug()
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
 	// wipe data from memory to avoid mem bloat over time
@@ -729,7 +729,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	i.mutex.Lock()
 	log.WithFields(log.Fields{
 		"nodeID": in.NodeId,
-		"id":     i.ID,
+		"id":     i.DriveItem.ID,
 		"path":   path,
 	}).Debug()
 
