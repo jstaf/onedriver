@@ -24,7 +24,6 @@ var auth *graph.Auth
 
 // Like the graph package, but designed for running tests offline.
 func TestMain(m *testing.M) {
-	//os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
 	exec.Command("fusermount", "-uz", mountLoc).Run()
