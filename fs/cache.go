@@ -210,7 +210,7 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 		inode.mutex.Unlock()
 
 		f.Lock()
-		if nodeID < f.lastNodeID {
+		if nodeID <= f.lastNodeID {
 			f.inodes[nodeID-1] = id
 		} else {
 			log.WithFields(log.Fields{

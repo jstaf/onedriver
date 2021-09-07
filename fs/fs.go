@@ -464,7 +464,11 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	}
 
 	if isLocalID(id) {
-		// it's a local ID, and we failed to find the cached local content
+		log.WithFields(log.Fields{
+			"id":     id,
+			"nodeID": in.NodeId,
+			"path":   path,
+		}).Error("Item has a local ID, and we failed to find the cached local content!")
 		return fuse.ENODATA
 	}
 
