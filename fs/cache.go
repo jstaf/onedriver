@@ -155,16 +155,17 @@ func (f *Filesystem) GetNodeID(nodeID uint64) *Inode {
 func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
 	nodeID := inode.NodeID()
 	if nodeID == 0 {
-		f.Lock()
-		f.lastNodeID++
-
+		// lock ordering is to satisfy deadlock detector
 		inode.mutex.Lock()
+		f.Lock()
+
+		f.lastNodeID++
 		f.inodes = append(f.inodes, inode.DriveItem.ID)
 		nodeID = f.lastNodeID
 		inode.nodeID = nodeID
-		inode.mutex.Unlock()
 
 		f.Unlock()
+		inode.mutex.Unlock()
 	}
 	return nodeID
 }
