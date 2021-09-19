@@ -688,12 +688,12 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
 	// wipe data from memory to avoid mem bloat over time
-	inode.mutex.Lock()
-	if inode.data != nil {
+	if inode.HasContent() {
+		inode.mutex.Lock()
 		f.InsertContent(inode.DriveItem.ID, *inode.data)
 		inode.data = nil
+		inode.mutex.Unlock()
 	}
-	inode.mutex.Unlock()
 	return 0
 }
 
