@@ -22,6 +22,8 @@ func TestUploadSession(t *testing.T) {
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
 	nodeID, _ := fs.InsertPath("/onedriver_tests/uploadSessionSmall.txt", auth, inode)
+	defer fs.DeletePath("/onedriver_tests/uploadSessionSmall.txt") // cleanup for offline tests
+
 	data := []byte("our super special data")
 	_, errno := fs.Write(
 		context.Background().Done(),

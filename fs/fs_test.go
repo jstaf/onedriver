@@ -18,7 +18,24 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
-// does ls work and can we find the Documents/Pictures folders
+// Does Go's internal ReadDir function work? This is mostly here to compare against
+// the offline versions of this test.
+func TestReaddir(t *testing.T) {
+	t.Parallel()
+	files, err := ioutil.ReadDir("mount")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		if file.Name() == "Documents" {
+			return
+		}
+	}
+	t.Fatal("Could not find \"Documents\" folder.")
+}
+
+// does ls work and can we find the Documents folder?
 func TestLs(t *testing.T) {
 	t.Parallel()
 	stdout, err := exec.Command("ls", "mount").Output()
@@ -27,12 +44,9 @@ func TestLs(t *testing.T) {
 	if !strings.Contains(sout, "Documents") {
 		t.Fatal("Could not find \"Documents\" folder.")
 	}
-	if !strings.Contains(sout, "Documents") {
-		t.Fatal("Could not find \"Pictures\" folder.")
-	}
 }
 
-// can touch create an empty file
+// can touch create an empty file?
 func TestTouchCreate(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "empty")

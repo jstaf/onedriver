@@ -147,9 +147,12 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 // irrespective of HTTP status (errors are reserved for stuff that prevented
 // the HTTP request at all).
 func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
+	u.mutex.Lock()
 	if u.UploadURL == "" {
+		u.mutex.Unlock()
 		return nil, -1, errors.New("UploadSession UploadURL cannot be empty")
 	}
+	u.mutex.Unlock()
 
 	// how much of the file are we going to upload?
 	end := offset + uploadChunkSize

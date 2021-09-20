@@ -25,6 +25,11 @@ var auth *graph.Auth
 
 // Like the graph package, but designed for running tests offline.
 func TestMain(m *testing.M) {
+	if wd, _ := os.Getwd(); strings.HasSuffix(wd, "/offline") {
+		// depending on how this test gets launched, the working directory can be wrong
+		os.Chdir("../..")
+	}
+
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
 	exec.Command("fusermount", "-uz", mountLoc).Run()
@@ -35,12 +40,6 @@ func TestMain(m *testing.M) {
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")
 		os.Exit(1)
-	}
-
-	wd, _ := os.Getwd()
-	if strings.HasSuffix(wd, "/offline") {
-		// go test is super dumb sometimes
-		os.Chdir("../..")
 	}
 
 	f := logger.LogTestSetup()

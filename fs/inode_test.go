@@ -100,6 +100,9 @@ func TestDoubleCreate(t *testing.T) {
 		&fuse.CreateOut{},
 	)
 	child, err := fs.GetChild(parent.ID(), fname, auth)
+
+	// we clean up after ourselves to prevent failing some of the offline tests
+	defer fs.Unlink(context.Background().Done(), &fuse.InHeader{NodeId: parent.nodeID}, fname)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
