@@ -566,9 +566,11 @@ func (f *Filesystem) MoveContent(oldID string, newID string) {
 func (f *Filesystem) SerializeAll() {
 	log.Debug("Serializing cache metadata to disk.")
 	f.metadata.Range(func(key interface{}, value interface{}) bool {
+		// cannot occur within bolt transaction because acquiring the inode lock
+		// with AsJSON locks out other boltdb transactions
+		contents := value.(*Inode).AsJSON()
 		f.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)
-			contents := value.(*Inode).AsJSON()
 			b := tx.Bucket(bucketMetadata)
 			b.Put([]byte(id), contents)
 			if id == f.root {

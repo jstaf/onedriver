@@ -689,13 +689,9 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 
 	// wipe data from memory to avoid mem bloat over time
 	if inode.HasContent() {
-		inode.mutex.RLock()
-		// can only be called in an RLock because db write transactions are exclusive
-		// (boltdb does not support parallel writes)
-		f.InsertContent(inode.DriveItem.ID, *inode.data)
-		inode.mutex.RUnlock()
-
 		inode.mutex.Lock()
+		// danger, will robinson! (acquires both boltdb and inode locks!)
+		f.InsertContent(inode.DriveItem.ID, *inode.data)
 		inode.data = nil
 		inode.mutex.Unlock()
 	}
