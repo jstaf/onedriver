@@ -106,7 +106,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	err := ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	failOnErr(t, err)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	item, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
 	if err != nil || item == nil {
 		t.Fatal(err)

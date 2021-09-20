@@ -120,6 +120,7 @@ func main() {
 		FsName:        "onedriver",
 		DisableXAttrs: true,
 		MaxBackground: 1024,
+		Debug:         *debugOn,
 	})
 	if err != nil {
 		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
@@ -132,7 +133,6 @@ func main() {
 	go odfs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
-	server.SetDebug(*debugOn)
 	server.Serve()
 }
 

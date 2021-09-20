@@ -354,7 +354,9 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(
 		filepath.Join(TestDir, "CASE-check.txt"), []byte("yep"), 0644))
 	stdout, err := exec.Command("ls", TestDir).Output()
-	failOnErr(t, err)
+	if err != nil {
+		t.Fatalf("%s: %s", err, stdout)
+	}
 	if !strings.Contains(string(stdout), "CASE-check.txt") {
 		t.Fatalf("Upper case filenames were not honored, "+
 			"expected \"CASE-check.txt\" in output, got %s\n", string(stdout))
