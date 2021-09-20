@@ -62,13 +62,15 @@ func TestUploadDiskSerialization(t *testing.T) {
 	})
 
 	NewUploadManager(time.Second, db, fs, auth)
-	time.Sleep(45 * time.Second)
-	driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
+	for i := 0; i < 20; i++ {
+		driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
+		if driveItem != nil && err == nil {
+			return
+		}
+		time.Sleep(5 * time.Second)
+	}
 	if err != nil || driveItem == nil {
 		t.Fatalf("Could not find uploaded file after unserializing from disk and resuming upload. Err: %s", err)
-	}
-	if driveItem.Size == 0 {
-		t.Fatal("Size was 0 - the upload was never completed.")
 	}
 }
 

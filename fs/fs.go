@@ -557,11 +557,15 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	// we are locked for the remainder of this op
 	inode.mutex.RLock()
 	defer inode.mutex.RUnlock()
+	if inode.data == nil {
+		// file got flushed somehow in between here and when this function was called
+		return fuse.ReadResultData(make([]byte, 0)), fuse.EAGAIN
+	}
 
 	off := in.Offset
 	end := int(off) + int(len(buf))
 	oend := end
-	size := len(*inode.data) // worse than using i.size(), but some edge cases require it
+	size := len(*inode.data) // worse than using i.Size(), but some edge cases require it
 	if int(off) > size {
 		log.WithFields(log.Fields{
 			"id":        inode.DriveItem.ID,
@@ -688,13 +692,12 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
 	// wipe data from memory to avoid mem bloat over time
-	if inode.HasContent() {
-		inode.mutex.Lock()
-		// danger, will robinson! (acquires both boltdb and inode locks!)
+	inode.mutex.Lock()
+	if inode.data != nil {
 		f.InsertContent(inode.DriveItem.ID, *inode.data)
 		inode.data = nil
-		inode.mutex.Unlock()
 	}
+	inode.mutex.Unlock()
 	return 0
 }
 
