@@ -244,8 +244,18 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *f
 	default:
 		entry.Name = inode.Name()
 	}
-
 	entryOut := out.AddDirLookupEntry(entry)
+	if entryOut == nil {
+		//FIXME probably need to handle this better using the "overflow stuff"
+		log.WithFields(log.Fields{
+			"nodeID":      in.NodeId,
+			"offset":      in.Offset,
+			"entryName":   entry.Name,
+			"entryNodeID": entry.Ino,
+		}).Error("Exceeded DirLookupEntry bounds!")
+		return fuse.EIO
+	}
+	entryOut.NodeId = entry.Ino
 	entryOut.Attr = inode.makeAttr()
 	entryOut.SetAttrTimeout(timeout)
 	entryOut.SetEntryTimeout(timeout)

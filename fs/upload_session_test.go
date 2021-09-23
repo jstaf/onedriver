@@ -2,7 +2,6 @@ package fs
 
 import (
 	"bytes"
-	"context"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
@@ -21,22 +19,9 @@ func TestUploadSession(t *testing.T) {
 	failOnErr(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
-	nodeID, _ := fs.InsertPath("/onedriver_tests/uploadSessionSmall.txt", auth, inode)
-	defer fs.DeletePath("/onedriver_tests/uploadSessionSmall.txt") // cleanup for offline tests
-
 	data := []byte("our super special data")
-	_, errno := fs.Write(
-		context.Background().Done(),
-		&fuse.WriteIn{
-			InHeader: fuse.InHeader{NodeId: nodeID},
-			Offset:   0,
-			Size:     uint32(len(data)),
-		},
-		data,
-	)
-	if errno != fuse.OK {
-		t.Fatalf("Could not write to inode, errno: %d\n", errno)
-	}
+	inode.data = &data
+	inode.DriveItem.Size = uint64(len(data))
 	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode, inode.data)
@@ -51,17 +36,6 @@ func TestUploadSession(t *testing.T) {
 		t.Errorf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
 
-	/*
-		The fact that this doesn't work is a server-side failure on Microsoft's part.
-		I guess we can't trust Microsoft's modification times, which is why we use etags
-		now.
-
-		item, err := graph.GetItem(session.ID, auth)
-		if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
-			t.Errorf("remote item modtime changed - before: %d - after: %d", mtime, mtimeItem)
-		}
-	*/
-
 	resp, err := graph.GetItemContent(session.ID, auth)
 	failOnErr(t, err)
 	if !bytes.Equal(data, resp) {
@@ -74,18 +48,8 @@ func TestUploadSession(t *testing.T) {
 
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
-	_, errno = fs.Write(
-		context.Background().Done(),
-		&fuse.WriteIn{
-			InHeader: fuse.InHeader{NodeId: nodeID},
-			Offset:   0,
-			Size:     uint32(len(newData)),
-		},
-		newData,
-	)
-	if errno != fuse.OK {
-		t.Fatalf("Could not write to inode, errno: %d\n", errno)
-	}
+	inode.data = &newData
+	inode.DriveItem.Size = uint64(len(newData))
 
 	session2, err := NewUploadSession(inode, inode.data)
 	failOnErr(t, err)
