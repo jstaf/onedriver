@@ -6,11 +6,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	sync "github.com/sasha-s/go-deadlock"
 )
 
 // Inode represents a file or folder fetched from the Graph API. All struct
