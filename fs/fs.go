@@ -222,7 +222,14 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *f
 	entries, ok := f.opendirs[in.NodeId]
 	f.opendirsM.RUnlock()
 	if !ok {
-		return fuse.EBADF
+		// readdir can sometimes arrive before the corresponding opendir, so we force it
+		f.OpenDir(cancel, &fuse.OpenIn{InHeader: in.InHeader}, nil)
+		f.opendirsM.RLock()
+		entries, ok = f.opendirs[in.NodeId]
+		f.opendirsM.RUnlock()
+		if !ok {
+			return fuse.EBADF
+		}
 	}
 
 	if in.Offset >= uint64(len(entries)) {
@@ -269,7 +276,14 @@ func (f *Filesystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.
 	entries, ok := f.opendirs[in.NodeId]
 	f.opendirsM.RUnlock()
 	if !ok {
-		return fuse.EBADF
+		// readdir can sometimes arrive before the corresponding opendir, so we force it
+		f.OpenDir(cancel, &fuse.OpenIn{InHeader: in.InHeader}, nil)
+		f.opendirsM.RLock()
+		entries, ok = f.opendirs[in.NodeId]
+		f.opendirsM.RUnlock()
+		if !ok {
+			return fuse.EBADF
+		}
 	}
 
 	if in.Offset >= uint64(len(entries)) {
