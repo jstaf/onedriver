@@ -457,14 +457,14 @@ func TestListChildrenPaging(t *testing.T) {
 	// the delta thread
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
 	failOnErr(t, err)
-	if len(files) < 225 {
+	if len(files) < 201 {
 		items, err := graph.GetItemChildrenPath("/onedriver_tests/paging", auth)
 		failOnErr(t, err)
-		if len(items) < 225 {
-			t.Log("Skipping test, number of paging files in the API were also less than 225.")
+		if len(items) < 201 {
+			t.Log("Skipping test, number of paging files from the API were also less than 201.")
 			t.SkipNow()
 		}
-		t.Fatalf("Paging limit failed. Got %d files, wanted at least 225.\n", len(files))
+		t.Fatalf("Paging limit failed. Got %d files, wanted at least 201.\n", len(files))
 	}
 }
 
