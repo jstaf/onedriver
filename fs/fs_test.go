@@ -455,6 +455,7 @@ func TestListChildrenPaging(t *testing.T) {
 	t.Parallel()
 	// files have been prepopulated during test setup to avoid being picked up by
 	// the delta thread
+	time.Sleep(10 * time.Second)
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
 	failOnErr(t, err)
 	if len(files) < 201 {
