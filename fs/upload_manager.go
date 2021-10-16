@@ -74,10 +74,10 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 			if old, exists := u.sessions[session.ID]; exists {
 				old.cancel(u.auth)
 			}
-			u.db.Update(func(tx *bolt.Tx) error {
+			contents, _ := json.Marshal(session)
+			u.db.Batch(func(tx *bolt.Tx) error {
 				// persist to disk in case the user shuts off their computer or
 				// kills onedriver prematurely
-				contents, _ := json.Marshal(session)
 				b, _ := tx.CreateBucketIfNotExists(bucketUploads)
 				return b.Put([]byte(session.ID), contents)
 			})
@@ -180,7 +180,7 @@ func (u *UploadManager) finishUpload(id string) {
 	if session, exists := u.sessions[id]; exists {
 		session.cancel(u.auth)
 	}
-	u.db.Update(func(tx *bolt.Tx) error {
+	u.db.Batch(func(tx *bolt.Tx) error {
 		if b := tx.Bucket(bucketUploads); b != nil {
 			b.Delete([]byte(id))
 		}

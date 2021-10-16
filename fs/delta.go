@@ -72,7 +72,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			f.offline = false
 			f.Unlock()
 
-			f.db.Update(func(tx *bolt.Tx) error {
+			f.db.Batch(func(tx *bolt.Tx) error {
 				return tx.Bucket(bucketDelta).Put([]byte("deltaLink"), []byte(f.deltaLink))
 			})
 

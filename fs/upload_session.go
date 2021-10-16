@@ -53,7 +53,7 @@ type UploadSession struct {
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
-	mutex     sync.Mutex
+	sync.Mutex
 	UploadURL string `json:"uploadUrl"`
 	ETag      string `json:"eTag,omitempty"`
 	state     int
@@ -62,8 +62,8 @@ type UploadSession struct {
 
 // MarshalJSON implements a custom JSON marshaler to avoid race conditions
 func (u *UploadSession) MarshalJSON() ([]byte, error) {
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	type SerializeableUploadSession UploadSession
 	return json.Marshal((*SerializeableUploadSession)(u))
@@ -82,18 +82,18 @@ type FileSystemInfo struct {
 }
 
 func (u *UploadSession) getState() int {
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
+	u.Lock()
+	defer u.Unlock()
 	return u.state
 }
 
 // setState is just a helper method to set the UploadSession state and make error checking
 // a little more straightforwards.
 func (u *UploadSession) setState(state int, err error) error {
-	u.mutex.Lock()
+	u.Lock()
 	u.state = state
 	u.error = err
-	u.mutex.Unlock()
+	u.Unlock()
 	return err
 }
 
@@ -127,11 +127,11 @@ func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
 
 // cancel the upload session by deleting the temp file at the endpoint.
 func (u *UploadSession) cancel(auth *graph.Auth) {
-	u.mutex.Lock()
+	u.Lock()
 	// small upload sessions will also have an empty UploadURL in addition to
 	// uninitialized large file uploads.
 	nonemptyURL := u.UploadURL != ""
-	u.mutex.Unlock()
+	u.Unlock()
 	if nonemptyURL {
 		state := u.getState()
 		if state == uploadStarted || state == uploadErrored {
@@ -147,12 +147,12 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 // irrespective of HTTP status (errors are reserved for stuff that prevented
 // the HTTP request at all).
 func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
-	u.mutex.Lock()
+	u.Lock()
 	if u.UploadURL == "" {
-		u.mutex.Unlock()
+		u.Unlock()
 		return nil, -1, errors.New("UploadSession UploadURL cannot be empty")
 	}
-	u.mutex.Unlock()
+	u.Unlock()
 
 	// how much of the file are we going to upload?
 	end := offset + uploadChunkSize
@@ -168,11 +168,13 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	auth.Refresh()
 
 	client := &http.Client{}
+	u.Lock()
 	request, _ := http.NewRequest(
 		"PUT",
 		u.UploadURL,
 		bytes.NewReader((u.Data)[offset:end]),
 	)
+	u.Unlock()
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
@@ -261,10 +263,10 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			return u.setState(uploadErrored,
 				fmt.Errorf("could not unmarshal upload session post response: %w", err))
 		}
-		u.mutex.Lock()
+		u.Lock()
 		u.UploadURL = tmp.UploadURL
 		u.ExpirationDateTime = tmp.ExpirationDateTime
-		u.mutex.Unlock()
+		u.Unlock()
 
 		// api upload session created successfully, now do actual content upload
 		var status int
@@ -315,9 +317,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID
-	u.mutex.Lock()
+	u.Lock()
 	u.ID = remote.ID
 	u.ETag = remote.ETag
-	u.mutex.Unlock()
+	u.Unlock()
 	return u.setState(uploadComplete, nil)
 }

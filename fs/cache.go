@@ -529,7 +529,7 @@ func (f *Filesystem) GetContent(id string) []byte {
 
 // InsertContent writes file content to disk.
 func (f *Filesystem) InsertContent(id string, content []byte) error {
-	return f.db.Update(func(tx *bolt.Tx) error {
+	return f.db.Batch(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		return b.Put([]byte(id), content)
 	})
@@ -537,7 +537,7 @@ func (f *Filesystem) InsertContent(id string, content []byte) error {
 
 // DeleteContent deletes content from disk.
 func (f *Filesystem) DeleteContent(id string) error {
-	return f.db.Update(func(tx *bolt.Tx) error {
+	return f.db.Batch(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		return b.Delete([]byte(id))
 	})
@@ -545,16 +545,16 @@ func (f *Filesystem) DeleteContent(id string) error {
 
 // MoveContent moves content from one ID to another
 func (f *Filesystem) MoveContent(oldID string, newID string) {
-	f.db.Update(func(tx *bolt.Tx) error {
+	f.db.Batch(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketContent)
 		content := b.Get([]byte(oldID))
 		if content == nil {
 			// already moved, or content never existed - nothing more for us to do
 			return nil
 		}
-		b.Put([]byte(newID), content)
+		err := b.Put([]byte(newID), content)
 		b.Delete([]byte(oldID))
-		return nil
+		return err
 	})
 }
 
