@@ -109,7 +109,13 @@ func TestRepeatedUploads(t *testing.T) {
 		failOnErr(t, err)
 
 		if !bytes.Equal(content, uploadme) {
-			t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)
+			// wait and retry once
+			time.Sleep(5 * time.Second)
+			content, err := graph.GetItemContent(item.ID, auth)
+			failOnErr(t, err)
+			if !bytes.Equal(content, uploadme) {
+				t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)
+			}
 		}
 	}
 }

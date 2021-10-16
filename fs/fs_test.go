@@ -479,6 +479,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(fname, content, 0644))
 
 	out, err := exec.Command(
+		"strace", // more informative than just "exit status 1" if it fails
 		"libreoffice",
 		"--headless",
 		"--convert-to", "docx",
