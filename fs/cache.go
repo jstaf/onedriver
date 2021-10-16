@@ -564,21 +564,32 @@ func (f *Filesystem) MoveContent(oldID string, newID string) {
 // offline session from wiping all metadata on a subsequent serialization).
 func (f *Filesystem) SerializeAll() {
 	log.Debug("Serializing cache metadata to disk.")
-	f.metadata.Range(func(key interface{}, value interface{}) bool {
+
+	allItems := make(map[string][]byte)
+	f.metadata.Range(func(k interface{}, v interface{}) bool {
 		// cannot occur within bolt transaction because acquiring the inode lock
 		// with AsJSON locks out other boltdb transactions
-		contents := value.(*Inode).AsJSON()
-		f.db.Batch(func(tx *bolt.Tx) error {
-			id := fmt.Sprint(key)
-			b := tx.Bucket(bucketMetadata)
-			b.Put([]byte(id), contents)
-			if id == f.root {
+		id := fmt.Sprint(k)
+		allItems[id] = v.(*Inode).AsJSON()
+		return true
+	})
+
+	/*
+		One transaction to serialize them all,
+		One transaction to find them,
+		One transaction to bring them all
+		and in the darkness write them.
+	*/
+	f.db.Batch(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketMetadata)
+		for k, v := range allItems {
+			b.Put([]byte(k), v)
+			if k == f.root {
 				// root item must be updated manually (since there's actually
 				// two copies)
-				b.Put([]byte("root"), contents)
+				b.Put([]byte("root"), v)
 			}
-			return nil
-		})
-		return true
+		}
+		return nil
 	})
 }

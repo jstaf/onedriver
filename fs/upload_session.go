@@ -64,7 +64,6 @@ type UploadSession struct {
 func (u *UploadSession) MarshalJSON() ([]byte, error) {
 	u.Lock()
 	defer u.Unlock()
-
 	type SerializeableUploadSession UploadSession
 	return json.Marshal((*SerializeableUploadSession)(u))
 }
@@ -148,7 +147,8 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 // the HTTP request at all).
 func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
 	u.Lock()
-	if u.UploadURL == "" {
+	url := u.UploadURL
+	if url == "" {
 		u.Unlock()
 		return nil, -1, errors.New("UploadSession UploadURL cannot be empty")
 	}
@@ -168,13 +168,11 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	auth.Refresh()
 
 	client := &http.Client{}
-	u.Lock()
 	request, _ := http.NewRequest(
 		"PUT",
-		u.UploadURL,
+		url,
 		bytes.NewReader((u.Data)[offset:end]),
 	)
-	u.Unlock()
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)

@@ -352,7 +352,7 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(thirdName, []byte("this rename should work"), 0644))
 	err = os.Rename(thirdName, filepath.Join(TestDir, "original_name.txt"))
 	if err != nil {
-		t.Fatal("Rename failed.")
+		t.Fatal("Rename failed:", err)
 	}
 
 	_, err = os.Stat(fname)
