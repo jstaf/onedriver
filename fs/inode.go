@@ -22,7 +22,7 @@ import (
 // implementing something like the fs.FileHandle to minimize the complexity of
 // operations like Flush.
 type Inode struct {
-	mutex sync.RWMutex
+	sync.RWMutex
 	graph.DriveItem
 	nodeID     uint64   // filesystem node id
 	children   []string // a slice of ids, nil when uninitialized
@@ -46,11 +46,11 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	itemParent := &graph.DriveItemParent{ID: "", Path: ""}
 	if parent != nil {
 		itemParent.Path = parent.Path()
-		parent.mutex.RLock()
+		parent.RLock()
 		itemParent.ID = parent.DriveItem.ID
 		itemParent.DriveID = parent.DriveItem.Parent.DriveID
 		itemParent.DriveType = parent.DriveItem.Parent.DriveType
-		parent.mutex.RUnlock()
+		parent.RUnlock()
 	}
 
 	var empty []byte
@@ -72,8 +72,8 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 // the API. FIXME: If implemented as MarshalJSON, this will break delta syncs
 // for business accounts. Don't ask me why.
 func (i *Inode) AsJSON() []byte {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	data, _ := json.Marshal(SerializeableInode{
 		DriveItem: i.DriveItem,
 		Children:  i.children,
@@ -116,30 +116,30 @@ func (i *Inode) String() string {
 
 // Name is used to ensure thread-safe access to the NameInternal field.
 func (i *Inode) Name() string {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.DriveItem.Name
 }
 
 // SetName sets the name of the item in a thread-safe manner.
 func (i *Inode) SetName(name string) {
-	i.mutex.Lock()
+	i.Lock()
 	i.DriveItem.Name = name
-	i.mutex.Unlock()
+	i.Unlock()
 }
 
 // NodeID returns the inodes ID in the filesystem
 func (i *Inode) NodeID() uint64 {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.nodeID
 }
 
 // SetNodeID sets the inode ID for an inode if not already set. Does nothing if
 // the Inode already has an ID.
 func (i *Inode) SetNodeID(id uint64) uint64 {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	i.Lock()
+	defer i.Unlock()
 	if i.nodeID == 0 {
 		i.nodeID = id
 	}
@@ -166,15 +166,15 @@ func isLocalID(id string) bool {
 
 // ID returns the internal ID of the item
 func (i *Inode) ID() string {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.DriveItem.ID
 }
 
 // ParentID returns the ID of this item's parent.
 func (i *Inode) ParentID() string {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	if i.DriveItem.Parent == nil {
 		return ""
 	}
@@ -190,8 +190,8 @@ func (i *Inode) Path() string {
 	}
 
 	// all paths come prefixed with "/drive/root:"
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	if i.DriveItem.Parent == nil {
 		return name
 	}
@@ -201,23 +201,23 @@ func (i *Inode) Path() string {
 
 // HasContent returns whether the file has been populated with data
 func (i *Inode) HasContent() bool {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.data != nil
 }
 
 // HasChanges returns true if the file has local changes that haven't been
 // uploaded yet.
 func (i *Inode) HasChanges() bool {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.hasChanges
 }
 
 // HasChildren returns true if the item has more than 0 children
 func (i *Inode) HasChildren() bool {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return len(i.children) > 0
 }
 
@@ -249,8 +249,8 @@ func (i *Inode) IsDir() bool {
 
 // Mode returns the permissions/mode of the file.
 func (i *Inode) Mode() uint32 {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	if i.mode == 0 { // only 0 if fetched from Graph API
 		if i.Folder != nil {
 			return fuse.S_IFDIR | 0755
@@ -263,8 +263,8 @@ func (i *Inode) Mode() uint32 {
 // ModTime returns the Unix timestamp of last modification (to get a time.Time
 // struct, use time.Unix(int64(d.ModTime()), 0))
 func (i *Inode) ModTime() uint64 {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return uint64(i.DriveItem.ModTime.Unix())
 }
 

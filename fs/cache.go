@@ -156,7 +156,7 @@ func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
 	nodeID := inode.NodeID()
 	if nodeID == 0 {
 		// lock ordering is to satisfy deadlock detector
-		inode.mutex.Lock()
+		inode.Lock()
 		f.Lock()
 
 		f.lastNodeID++
@@ -165,7 +165,7 @@ func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
 		inode.nodeID = nodeID
 
 		f.Unlock()
-		inode.mutex.Unlock()
+		inode.Unlock()
 	}
 	return nodeID
 }
@@ -200,15 +200,14 @@ func (f *Filesystem) GetID(id string) *Inode {
 // used to rename/move an item. This is the main way new Inodes are added to the
 // filesystem. Returns the Inode's numeric NodeID.
 func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
-	// make sure the item knows about the cache itself, then insert
 	f.metadata.Store(id, inode)
 	nodeID := f.InsertNodeID(inode)
 
 	if id != inode.ID() {
 		// we update the inode IDs here in case they do not match/changed
-		inode.mutex.Lock()
+		inode.Lock()
 		inode.DriveItem.ID = id
-		inode.mutex.Unlock()
+		inode.Unlock()
 
 		f.Lock()
 		if nodeID <= f.lastNodeID {
@@ -240,8 +239,8 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 	// check if the item has already been added to the parent
 	// Lock order is super key here, must go parent->child or the deadlock
 	// detector screams at us.
-	parent.mutex.Lock()
-	defer parent.mutex.Unlock()
+	parent.Lock()
+	defer parent.Unlock()
 	for _, child := range parent.children {
 		if child == id {
 			// exit early, child cannot be added twice
@@ -260,11 +259,11 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 
 // InsertChild adds an item as a child of a specified parent ID.
 func (f *Filesystem) InsertChild(parentID string, child *Inode) uint64 {
-	child.mutex.Lock()
+	child.Lock()
 	// should already be set, just double-checking here.
 	child.DriveItem.Parent.ID = parentID
 	id := child.DriveItem.ID
-	child.mutex.Unlock()
+	child.Unlock()
 	return f.InsertID(id, child)
 }
 
@@ -273,7 +272,7 @@ func (f *Filesystem) InsertChild(parentID string, child *Inode) uint64 {
 func (f *Filesystem) DeleteID(id string) {
 	if inode := f.GetID(id); inode != nil {
 		parent := f.GetID(inode.ParentID())
-		parent.mutex.Lock()
+		parent.Lock()
 		for i, childID := range parent.children {
 			if childID == id {
 				parent.children = append(parent.children[:i], parent.children[i+1:]...)
@@ -283,7 +282,7 @@ func (f *Filesystem) DeleteID(id string) {
 				break
 			}
 		}
-		parent.mutex.Unlock()
+		parent.Unlock()
 	}
 	f.metadata.Delete(id)
 	f.uploads.CancelUpload(id)
@@ -326,7 +325,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 
 	// If item.children is not nil, it means we have the item's children
 	// already and can fetch them directly from the cache
-	inode.mutex.RLock()
+	inode.RLock()
 	if inode.children != nil {
 		// can potentially have out-of-date child metadata if started offline, but since
 		// changes are disallowed while offline, the children will be back in sync after
@@ -339,10 +338,10 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 			}
 			children[strings.ToLower(child.Name())] = child
 		}
-		inode.mutex.RUnlock()
+		inode.RUnlock()
 		return children, nil
 	}
-	inode.mutex.RUnlock()
+	inode.RUnlock()
 
 	// We haven't fetched the children for this item yet, get them from the server.
 	fetched, err := graph.GetItemChildren(id, auth)
@@ -357,7 +356,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 		return nil, err
 	}
 
-	inode.mutex.Lock()
+	inode.Lock()
 	inode.children = make([]string, 0)
 	for _, item := range fetched {
 		// we will always have an id after fetching from the server
@@ -374,7 +373,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 			inode.subdir++
 		}
 	}
-	inode.mutex.Unlock()
+	inode.Unlock()
 
 	return children, nil
 }
@@ -454,10 +453,10 @@ func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) (uin
 	// Coded this way to make sure locks are in the same order for the deadlock
 	// detector (lock ordering needs to be the same as InsertID: Parent->Child).
 	parentID := parent.ID()
-	inode.mutex.Lock()
+	inode.Lock()
 	inode.DriveItem.Parent.ID = parentID
 	id := inode.DriveItem.ID
-	inode.mutex.Unlock()
+	inode.Unlock()
 
 	return f.InsertID(id, inode), nil
 }
@@ -477,14 +476,14 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 
 	// need to rename the child under the parent
 	parent := f.GetID(inode.ParentID())
-	parent.mutex.Lock()
+	parent.Lock()
 	for i, child := range parent.children {
 		if child == oldID {
 			parent.children[i] = newID
 			break
 		}
 	}
-	parent.mutex.Unlock()
+	parent.Unlock()
 
 	// now actually perform the metadata+content move
 	f.DeleteID(oldID)

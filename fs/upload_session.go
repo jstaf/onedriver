@@ -104,8 +104,8 @@ func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
 		return nil, errors.New("data to upload cannot be nil")
 	}
 
-	inode.mutex.RLock()
-	defer inode.mutex.RUnlock()
+	inode.RLock()
+	defer inode.RUnlock()
 
 	// create a generic session for all files
 	session := UploadSession{

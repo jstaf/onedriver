@@ -144,9 +144,9 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 					// inode will exist at the new ID now, but we check if inode
 					// is nil to see if the item has been deleted since upload start
 					if inode := u.fs.GetID(session.ID); inode != nil {
-						inode.mutex.Lock()
+						inode.Lock()
 						inode.DriveItem.ETag = session.ETag
-						inode.mutex.Unlock()
+						inode.Unlock()
 					}
 
 					// the old ID is the one that was used to add it to the queue.

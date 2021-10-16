@@ -17,8 +17,8 @@ const timeout = time.Second
 
 // getInodeContent returns a copy of the inode's content. Ensures that data is non-nil.
 func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 
 	if i.data != nil {
 		data := make([]byte, i.DriveItem.Size)
@@ -47,12 +47,12 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 		if err != nil {
 			return originalID, err
 		}
-		i.mutex.Lock()
+		i.Lock()
 
 		err = session.Upload(f.auth)
 		if err != nil {
 			// failed to obtain an ID, return whatever it was beforehand
-			i.mutex.Unlock()
+			i.Unlock()
 			return originalID, err
 		}
 
@@ -60,7 +60,7 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 		i.hasChanges = false
 		i.DriveItem.ETag = session.ETag
 		name := i.DriveItem.Name
-		i.mutex.Unlock()
+		i.Unlock()
 
 		// this is all we really wanted from this transaction
 		err = f.MoveID(originalID, session.ID)
@@ -443,7 +443,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	if content := f.GetContent(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashMatch bool
-		inode.mutex.RLock()
+		inode.RLock()
 		driveType := inode.DriveItem.Parent.DriveType
 		if isLocalID(id) && inode.DriveItem.File == nil {
 			// only check hashes if the file has been uploaded before, otherwise
@@ -462,7 +462,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 				"path":      path,
 			}).Warn("Could not determine drive type, not checking hashes.")
 		}
-		inode.mutex.RUnlock()
+		inode.RUnlock()
 
 		if hashMatch {
 			// disk content is only used if the checksums match
@@ -472,8 +472,8 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 				"path":   path,
 			}).Info("Found content in cache.")
 
-			inode.mutex.Lock()
-			defer inode.mutex.Unlock()
+			inode.Lock()
+			defer inode.Unlock()
 			// this check is here in case the API file sizes are WRONG (it happens)
 			inode.DriveItem.Size = uint64(len(content))
 			inode.data = &content
@@ -513,8 +513,8 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		return fuse.EREMOTEIO
 	}
 
-	inode.mutex.Lock()
-	defer inode.mutex.Unlock()
+	inode.Lock()
+	defer inode.Unlock()
 	// this check is here in case the API file sizes are WRONG (it happens)
 	inode.DriveItem.Size = uint64(len(body))
 	inode.data = &body
@@ -579,8 +579,8 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	}
 
 	// we are locked for the remainder of this op
-	inode.mutex.RLock()
-	defer inode.mutex.RUnlock()
+	inode.RLock()
+	defer inode.RUnlock()
 	if inode.data == nil {
 		// file got flushed somehow in between here and when this function was called
 		return fuse.ReadResultData(make([]byte, 0)), fuse.EAGAIN
@@ -645,8 +645,8 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader, Flags: in.WriteFlags}, &fuse.OpenOut{})
 	}
 
-	inode.mutex.Lock()
-	defer inode.mutex.Unlock()
+	inode.Lock()
+	defer inode.Unlock()
 	if offset+nWrite > int(inode.DriveItem.Size)-1 {
 		// we've exceeded the file size, overwrite via append
 		*inode.data = append((*inode.data)[:offset], data...)
@@ -675,7 +675,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		"path": path,
 	}).Debug()
 	if inode.HasChanges() {
-		inode.mutex.Lock()
+		inode.Lock()
 		inode.hasChanges = false
 
 		// recompute hashes when saving new content
@@ -685,7 +685,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		} else {
 			inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
 		}
-		inode.mutex.Unlock()
+		inode.Unlock()
 
 		if err := f.uploads.QueueUpload(inode); err != nil {
 			log.WithFields(log.Fields{
@@ -716,12 +716,12 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
 	// wipe data from memory to avoid mem bloat over time
-	inode.mutex.Lock()
+	inode.Lock()
 	if inode.data != nil {
 		f.InsertContent(inode.DriveItem.ID, *inode.data)
 		inode.data = nil
 	}
-	inode.mutex.Unlock()
+	inode.Unlock()
 	return 0
 }
 

@@ -229,13 +229,13 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 	if delta.ModTime() > local.ModTime() && !delta.ETagIsMatch(local.ETag) {
 		sameContent := false
 		if !delta.IsDir() && delta.File != nil {
-			local.mutex.RLock()
+			local.RLock()
 			if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
 			} else {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
 			}
-			local.mutex.RUnlock()
+			local.RUnlock()
 		}
 
 		if !sameContent {
@@ -246,8 +246,8 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 				"delta": "overwrite",
 			}).Info("Overwriting local item, no local changes to preserve.")
 			// update modtime, hashes, purge any local content in memory
-			local.mutex.Lock()
-			defer local.mutex.Unlock()
+			local.Lock()
+			defer local.Unlock()
 			local.DriveItem.ModTime = delta.DriveItem.ModTime
 			local.DriveItem.Size = delta.DriveItem.Size
 			local.DriveItem.ETag = delta.DriveItem.ETag
