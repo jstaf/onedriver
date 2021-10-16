@@ -754,7 +754,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	}
 	path := i.Path()
 	isDir := i.IsDir() // holds an rlock
-	i.mutex.Lock()
+	i.Lock()
 	log.WithFields(log.Fields{
 		"nodeID": in.NodeId,
 		"id":     i.DriveItem.ID,
@@ -788,7 +788,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 		i.hasChanges = true
 	}
 
-	i.mutex.Unlock()
+	i.Unlock()
 	out.Attr = i.makeAttr()
 	out.SetTimeout(timeout)
 	return fuse.OK
