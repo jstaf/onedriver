@@ -272,8 +272,8 @@ func (i *Inode) ModTime() uint64 {
 // directory)
 func (i *Inode) NLink() uint32 {
 	if i.IsDir() {
-		i.mutex.RLock()
-		defer i.mutex.RUnlock()
+		i.RLock()
+		defer i.RUnlock()
 		// we precompute subdir due to mutex lock contention between NLink and
 		// other ops. subdir is modified by cache Insert/Delete and GetChildren.
 		return 2 + i.subdir
@@ -287,8 +287,8 @@ func (i *Inode) Size() uint64 {
 	if i.IsDir() {
 		return 4096
 	}
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.DriveItem.Size
 }
 
