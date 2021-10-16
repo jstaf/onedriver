@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -174,25 +175,25 @@ func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
 // Result is nil if no inode is found.
 func (f *Filesystem) GetID(id string) *Inode {
 	entry, exists := f.metadata.Load(id)
-	if !exists {
-		// we allow fetching from disk as a fallback while offline (and it's also
-		// necessary while transitioning from offline->online)
-		var found *Inode
-		f.db.View(func(tx *bolt.Tx) error {
-			data := tx.Bucket(bucketMetadata).Get([]byte(id))
-			var err error
-			if data != nil {
-				found, err = NewInodeJSON(data)
-			}
-			return err
-		})
-		if found != nil {
-			f.InsertNodeID(found)
-			f.metadata.Store(id, found) // move to memory for next time
-		}
-		return found
+	if exists {
+		return entry.(*Inode)
 	}
-	return entry.(*Inode)
+
+	// we allow fetching from disk as a fallback while offline (and it's also
+	// necessary while transitioning from offline->online)
+	var found *Inode
+	f.db.View(func(tx *bolt.Tx) error {
+		data := tx.Bucket(bucketMetadata).Get([]byte(id))
+		if data != nil {
+			return json.Unmarshal(data, found)
+		}
+		return nil
+	})
+	if found != nil {
+		f.InsertNodeID(found)
+		f.metadata.Store(id, found) // move to memory for next time
+	}
+	return found
 }
 
 // InsertID inserts a single item into the filesystem by ID and sets its parent
@@ -566,8 +567,8 @@ func (f *Filesystem) SerializeAll() {
 	log.Debug("Serializing cache metadata to disk.")
 	f.metadata.Range(func(key interface{}, value interface{}) bool {
 		// cannot occur within bolt transaction because acquiring the inode lock
-		// with AsJSON locks out other boltdb transactions
-		contents := value.(*Inode).AsJSON()
+		// with json.Marshal locks out other boltdb transactions
+		contents, _ := json.Marshal(value.(*Inode))
 		f.db.Batch(func(tx *bolt.Tx) error {
 			id := fmt.Sprint(key)
 			b := tx.Bucket(bucketMetadata)

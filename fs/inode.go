@@ -68,10 +68,9 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	}
 }
 
-// AsJSON converts a DriveItem to JSON for use with local storage. Not used with
-// the API. FIXME: If implemented as MarshalJSON, this will break delta syncs
-// for business accounts. Don't ask me why.
-func (i *Inode) AsJSON() []byte {
+// MarshalJSON converts a DriveItem to JSON for use with local storage. Not used with
+// the API.
+func (i *Inode) MarshalJSON() ([]byte, error) {
 	i.RLock()
 	defer i.RUnlock()
 	data, _ := json.Marshal(SerializeableInode{
@@ -80,23 +79,24 @@ func (i *Inode) AsJSON() []byte {
 		Subdir:    i.subdir,
 		Mode:      i.mode,
 	})
-	return data
+	return data, nil
 }
 
-// NewInodeJSON converts JSON to a *DriveItem when loading from local storage. Not
-// used with the API. FIXME: If implemented as UnmarshalJSON, this will break
-// delta syncs for business accounts. Don't ask me why.
-func NewInodeJSON(data []byte) (*Inode, error) {
+// UnmarshalJSON converts JSON to an Inode when loading from local storage. Not
+// used with the API.
+func (i *Inode) UnmarshalJSON(data []byte) error {
 	var raw SerializeableInode
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return err
 	}
-	return &Inode{
-		DriveItem: raw.DriveItem,
-		children:  raw.Children,
-		mode:      raw.Mode,
-		subdir:    raw.Subdir,
-	}, nil
+
+	i.Lock()
+	defer i.Unlock()
+	i.DriveItem = raw.DriveItem
+	i.children = raw.Children
+	i.mode = raw.Mode
+	i.subdir = raw.Subdir
+	return nil
 }
 
 // NewInodeDriveItem creates a new Inode from a DriveItem
@@ -272,8 +272,8 @@ func (i *Inode) ModTime() uint64 {
 // directory)
 func (i *Inode) NLink() uint32 {
 	if i.IsDir() {
-		i.mutex.RLock()
-		defer i.mutex.RUnlock()
+		i.RLock()
+		defer i.RUnlock()
 		// we precompute subdir due to mutex lock contention between NLink and
 		// other ops. subdir is modified by cache Insert/Delete and GetChildren.
 		return 2 + i.subdir
@@ -287,8 +287,8 @@ func (i *Inode) Size() uint64 {
 	if i.IsDir() {
 		return 4096
 	}
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
+	i.RLock()
+	defer i.RUnlock()
 	return i.DriveItem.Size
 }
 
