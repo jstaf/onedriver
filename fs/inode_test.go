@@ -67,15 +67,16 @@ func TestFilenameEscape(t *testing.T) {
 	fname := `.~lock.libreoffice-test.docx#`
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
 
-	time.Sleep(5 * time.Second)
-
 	// make sure it made it to the server
-	children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
-	failOnErr(t, err)
-	for _, child := range children {
-		if child.Name == fname {
-			return
+	for i := 0; i < 10; i++ {
+		children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
+		failOnErr(t, err)
+		for _, child := range children {
+			if child.Name == fname {
+				return
+			}
 		}
+		time.Sleep(5 * time.Second)
 	}
 	t.Fatalf("Could not find file: \"%s\"", fname)
 }
