@@ -490,14 +490,17 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(5 * time.Second)
-	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
-	if err != nil || item == nil {
-		t.Fatal(err)
+	for i := 0; i < 10; i++ {
+		time.Sleep(3 * time.Second)
+		item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
+		if err == nil && item != nil {
+			if item.Size == 0 {
+				t.Fatal("Item size was 0!")
+			}
+			return // success
+		}
 	}
-	if item.Size == 0 {
-		t.Fatal("Item size was 0!")
-	}
+	t.Fatal("Could not find /onedriver_tests/libreoffice.docx post-upload!")
 }
 
 // We need to test the LibreOffice save behavior for files above the the small
@@ -521,12 +524,15 @@ func TestLibreOfficeSavePatternLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(30 * time.Second)
-	item, err := graph.GetItemPath("/onedriver_tests/libreoffice_large.docx", auth)
-	if err != nil || item == nil {
-		t.Fatal(err)
+	for i := 0; i < 10; i++ {
+		time.Sleep(3 * time.Second)
+		item, err := graph.GetItemPath("/onedriver_tests/libreoffice_large.docx", auth)
+		if err == nil && item != nil {
+			if item.Size == 0 {
+				t.Fatal("Item size was 0!")
+			}
+			return // success
+		}
 	}
-	if item.Size == 0 {
-		t.Fatal("Item size was 0!")
-	}
+	t.Fatal("Could not find /onedriver_tests/libreoffice_large.docx post-upload!")
 }
