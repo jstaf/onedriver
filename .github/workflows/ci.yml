@@ -71,7 +71,9 @@ jobs:
           sudo unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
 
       - name: Copy new auth tokens to S3
-        run: /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+        run: |
+          /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+          /usr/bin/aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
