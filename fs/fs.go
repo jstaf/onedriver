@@ -47,19 +47,39 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 		if err != nil {
 			return originalID, err
 		}
-		i.Lock()
 
+		i.Lock()
+		name := i.DriveItem.Name
 		err = session.Upload(f.auth)
 		if err != nil {
-			// failed to obtain an ID, return whatever it was beforehand
 			i.Unlock()
+
+			if strings.Contains(err.Error(), "nameAlreadyExists") {
+				// A file with this name already exists on the server, get its ID and
+				// use that. This is probably the same file, but just got uploaded
+				// earlier.
+				children, err := graph.GetItemChildren(i.ParentID(), f.auth)
+				if err != nil {
+					return originalID, err
+				}
+				for _, child := range children {
+					if child.Name == name {
+						log.WithFields(log.Fields{
+							"name":     name,
+							"original": originalID,
+							"new":      child.ID,
+						}).Info("Exchanged ID.")
+						return child.ID, f.MoveID(originalID, child.ID)
+					}
+				}
+			}
+			// failed to obtain an ID, return whatever it was beforehand
 			return originalID, err
 		}
 
 		// we just successfully uploaded a copy, no need to do it again
 		i.hasChanges = false
 		i.DriveItem.ETag = session.ETag
-		name := i.DriveItem.Name
 		i.Unlock()
 
 		// this is all we really wanted from this transaction
@@ -829,7 +849,7 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 			"path": path,
 			"err":  err,
 		}).Error("ID of item to move cannot be local and we failed to obtain an ID.")
-		return fuse.EBADF
+		return fuse.EREMOTEIO
 	}
 
 	// perform remote rename
