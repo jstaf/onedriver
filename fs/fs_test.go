@@ -18,7 +18,24 @@ import (
 	"github.com/jstaf/onedriver/fs/graph"
 )
 
-// does ls work and can we find the Documents/Pictures folders
+// Does Go's internal ReadDir function work? This is mostly here to compare against
+// the offline versions of this test.
+func TestReaddir(t *testing.T) {
+	t.Parallel()
+	files, err := ioutil.ReadDir("mount")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		if file.Name() == "Documents" {
+			return
+		}
+	}
+	t.Fatal("Could not find \"Documents\" folder.")
+}
+
+// does ls work and can we find the Documents folder?
 func TestLs(t *testing.T) {
 	t.Parallel()
 	stdout, err := exec.Command("ls", "mount").Output()
@@ -27,12 +44,9 @@ func TestLs(t *testing.T) {
 	if !strings.Contains(sout, "Documents") {
 		t.Fatal("Could not find \"Documents\" folder.")
 	}
-	if !strings.Contains(sout, "Documents") {
-		t.Fatal("Could not find \"Pictures\" folder.")
-	}
 }
 
-// can touch create an empty file
+// can touch create an empty file?
 func TestTouchCreate(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "empty")
@@ -87,9 +101,9 @@ func TestChmod(t *testing.T) {
 func TestMkdirRmdir(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "folder1")
-	failOnErr(t, exec.Command("mkdir", fname).Run())
-	failOnErr(t, exec.Command("rmdir", fname).Run())
-	failOnErr(t, exec.Command("mkdir", fname).Run())
+	failOnErr(t, os.Mkdir(fname, 0755))
+	failOnErr(t, os.Remove(fname))
+	failOnErr(t, os.Mkdir(fname, 0755))
 }
 
 // We shouldn't be able to rmdir nonempty directories
@@ -338,7 +352,7 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(thirdName, []byte("this rename should work"), 0644))
 	err = os.Rename(thirdName, filepath.Join(TestDir, "original_name.txt"))
 	if err != nil {
-		t.Fatal("Rename failed.")
+		t.Fatal("Rename failed:", err)
 	}
 
 	_, err = os.Stat(fname)
@@ -354,7 +368,9 @@ func TestChildrenAreCasedProperly(t *testing.T) {
 	failOnErr(t, ioutil.WriteFile(
 		filepath.Join(TestDir, "CASE-check.txt"), []byte("yep"), 0644))
 	stdout, err := exec.Command("ls", TestDir).Output()
-	failOnErr(t, err)
+	if err != nil {
+		t.Fatalf("%s: %s", err, stdout)
+	}
 	if !strings.Contains(string(stdout), "CASE-check.txt") {
 		t.Fatalf("Upper case filenames were not honored, "+
 			"expected \"CASE-check.txt\" in output, got %s\n", string(stdout))
@@ -439,10 +455,18 @@ func TestListChildrenPaging(t *testing.T) {
 	t.Parallel()
 	// files have been prepopulated during test setup to avoid being picked up by
 	// the delta thread
+	items, err := graph.GetItemChildrenPath("/onedriver_tests/paging", auth)
+	failOnErr(t, err)
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
 	failOnErr(t, err)
-	if len(files) < 225 {
-		t.Fatalf("Paging limit failed. Got %d files, wanted at least 225.\n", len(files))
+	if len(files) < 201 {
+		if len(items) < 201 {
+			t.Logf("Skipping test, number of paging files from the API were also less than 201.\nAPI: %d\nFS: %d\n",
+				len(items), len(files),
+			)
+			t.SkipNow()
+		}
+		t.Fatalf("Paging limit failed. Got %d files, wanted at least 201.\n", len(files))
 	}
 }
 
@@ -466,14 +490,17 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(5 * time.Second)
-	item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
-	if err != nil || item == nil {
-		t.Fatal(err)
+	for i := 0; i < 10; i++ {
+		time.Sleep(3 * time.Second)
+		item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
+		if err == nil && item != nil {
+			if item.Size == 0 {
+				t.Fatal("Item size was 0!")
+			}
+			return // success
+		}
 	}
-	if item.Size == 0 {
-		t.Fatal("Item size was 0!")
-	}
+	t.Fatal("Could not find /onedriver_tests/libreoffice.docx post-upload!")
 }
 
 // We need to test the LibreOffice save behavior for files above the the small
@@ -497,12 +524,15 @@ func TestLibreOfficeSavePatternLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(30 * time.Second)
-	item, err := graph.GetItemPath("/onedriver_tests/libreoffice_large.docx", auth)
-	if err != nil || item == nil {
-		t.Fatal(err)
+	for i := 0; i < 10; i++ {
+		time.Sleep(3 * time.Second)
+		item, err := graph.GetItemPath("/onedriver_tests/libreoffice_large.docx", auth)
+		if err == nil && item != nil {
+			if item.Size == 0 {
+				t.Fatal("Item size was 0!")
+			}
+			return // success
+		}
 	}
-	if item.Size == 0 {
-		t.Fatal("Item size was 0!")
-	}
+	t.Fatal("Could not find /onedriver_tests/libreoffice_large.docx post-upload!")
 }

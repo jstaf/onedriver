@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
@@ -112,24 +110,17 @@ func main() {
 		).Fatal("Mountpoint must be empty.")
 	}
 
-	// create a new filesystem and mount it
+	// create the filesystem
 	auth := graph.Authenticate(authPath)
-	cache := odfs.NewCache(auth, filepath.Join(dir, "onedriver.db"))
-	root, _ := cache.GetPath("/", auth)
-	go cache.DeltaLoop(30 * time.Second)
+	fs := odfs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
+	xdgVolumeInfo(fs, auth)
 
-	xdgVolumeInfo(cache, auth)
-
-	second := time.Second
-	server, err := fs.Mount(mountpoint, root, &fs.Options{
-		EntryTimeout: &second,
-		AttrTimeout:  &second,
-		MountOptions: fuse.MountOptions{
-			Name:          "onedriver",
-			FsName:        "onedriver",
-			DisableXAttrs: true,
-			MaxBackground: 1024,
-		},
+	server, err := fuse.NewServer(fs, mountpoint, &fuse.MountOptions{
+		Name:          "onedriver",
+		FsName:        "onedriver",
+		DisableXAttrs: true,
+		MaxBackground: 1024,
+		Debug:         *debugOn,
 	})
 	if err != nil {
 		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
@@ -142,14 +133,13 @@ func main() {
 	go odfs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
-	server.SetDebug(*debugOn)
-	server.Wait()
+	server.Serve()
 }
 
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
 // corner of the mountpoint and shows the account name in the nautilus sidebar
-func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
-	if child, _ := cache.GetPath("/.xdg-volume-info", auth); child != nil {
+func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
+	if child, _ := fs.GetPath("/.xdg-volume-info", auth); child != nil {
 		return
 	}
 	log.Info("Creating .xdg-volume-info")
@@ -174,9 +164,9 @@ func xdgVolumeInfo(cache *odfs.Cache, auth *graph.Auth) {
 	if err != nil {
 		log.Error(err)
 	}
-	root, _ := cache.GetPath("/", auth) // cannot fail
+	root, _ := fs.GetPath("/", auth) // cannot fail
 	inode := odfs.NewInode(".xdg-volume-info", 0644, root)
 	if json.Unmarshal(resp, &inode) == nil {
-		cache.InsertID(inode.ID(), inode)
+		fs.InsertID(inode.ID(), inode)
 	}
 }

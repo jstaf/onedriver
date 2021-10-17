@@ -2,7 +2,6 @@ package fs
 
 import (
 	"bytes"
-	"context"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -16,17 +15,16 @@ import (
 // TestUploadSession verifies that the basic functionality of uploads works correctly.
 func TestUploadSession(t *testing.T) {
 	t.Parallel()
-	testDir, err := fsCache.GetPath("/onedriver_tests", auth)
+	testDir, err := fs.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
 	data := []byte("our super special data")
-	if _, errno := inode.Write(context.Background(), nil, data, 0); errno != 0 {
-		t.Fatalf("Could not write to inode, errno: %d\n", errno)
-	}
+	inode.data = &data
+	inode.DriveItem.Size = uint64(len(data))
 	mtime := inode.ModTime()
 
-	session, err := NewUploadSession(inode)
+	session, err := NewUploadSession(inode, inode.data)
 	failOnErr(t, err)
 	err = session.Upload(auth)
 	failOnErr(t, err)
@@ -38,30 +36,22 @@ func TestUploadSession(t *testing.T) {
 		t.Errorf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
 
-	/*
-		The fact that this doesn't work is a server-side failure on Microsoft's part.
-		I guess we can't trust Microsoft's modification times, which is why we use etags
-		now.
-
-		item, err := graph.GetItem(session.ID, auth)
-		if mtimeItem := uint64(item.ModTime.Unix()); mtimeItem != mtime {
-			t.Errorf("remote item modtime changed - before: %d - after: %d", mtime, mtimeItem)
-		}
-	*/
-
 	resp, err := graph.GetItemContent(session.ID, auth)
 	failOnErr(t, err)
 	if !bytes.Equal(data, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, resp)
 	}
 
+	// item now has a new id following the upload. We just change the ID here
+	// because thats part of the UploadManager functionality and gets tested elsewhere.
+	inode.DriveItem.ID = session.ID
+
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
-	if _, errno := inode.Write(context.Background(), nil, newData, 0); errno != 0 {
-		t.Fatalf("Could not write to inode, errno: %d\n", errno)
-	}
+	inode.data = &newData
+	inode.DriveItem.Size = uint64(len(newData))
 
-	session2, err := NewUploadSession(inode)
+	session2, err := NewUploadSession(inode, inode.data)
 	failOnErr(t, err)
 	err = session2.Upload(auth)
 	failOnErr(t, err)
@@ -82,7 +72,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	err := ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	failOnErr(t, err)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	item, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
 	if err != nil || item == nil {
 		t.Fatal(err)

@@ -36,11 +36,6 @@ onedriver-headless: $(shell find fs/ -type f) logger/*.go main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
 
 
-# run all tests, build all artifacts, compute checksums for release
-checksums.txt: test onedriver-headless onedriver-$(VERSION).tar.gz onedriver-$(RPM_FULL_VERSION).x86_64.rpm onedriver_$(VERSION)-$(RELEASE)_amd64.deb
-	sha256sum $^ > checksums.txt
-
-
 install: onedriver onedriver-launcher
 	cp onedriver /usr/bin/
 	cp onedriver-launcher /usr/bin/

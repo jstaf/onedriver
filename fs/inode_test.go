@@ -67,15 +67,16 @@ func TestFilenameEscape(t *testing.T) {
 	fname := `.~lock.libreoffice-test.docx#`
 	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
 
-	time.Sleep(5 * time.Second)
-
 	// make sure it made it to the server
-	children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
-	failOnErr(t, err)
-	for _, child := range children {
-		if child.Name == fname {
-			return
+	for i := 0; i < 10; i++ {
+		children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
+		failOnErr(t, err)
+		for _, child := range children {
+			if child.Name == fname {
+				return
+			}
 		}
+		time.Sleep(5 * time.Second)
 	}
 	t.Fatalf("Could not find file: \"%s\"", fname)
 }
@@ -87,23 +88,43 @@ func TestDoubleCreate(t *testing.T) {
 	t.Parallel()
 	fname := "double_create.txt"
 
-	parent, err := fsCache.GetPath("/onedriver_tests", auth)
+	parent, err := fs.GetPath("/onedriver_tests", auth)
 	failOnErr(t, err)
 
-	parent.Create(context.Background(), fname, 0, 0644, nil)
-	child, err := fsCache.GetChild(parent.ID(), fname, auth)
+	fs.Create(
+		context.Background().Done(),
+		&fuse.CreateIn{
+			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
+			Mode:     0644,
+		},
+		fname,
+		&fuse.CreateOut{},
+	)
+	child, err := fs.GetChild(parent.ID(), fname, auth)
+
+	// we clean up after ourselves to prevent failing some of the offline tests
+	defer fs.Unlink(context.Background().Done(), &fuse.InHeader{NodeId: parent.nodeID}, fname)
+
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
 	childID := child.ID()
 
-	parent.Create(context.Background(), fname, 0, 0644, nil)
-	child, err = fsCache.GetChild(parent.ID(), fname, auth)
+	fs.Create(
+		context.Background().Done(),
+		&fuse.CreateIn{
+			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
+			Mode:     0644,
+		},
+		fname,
+		&fuse.CreateOut{},
+	)
+	child, err = fs.GetChild(parent.ID(), fname, auth)
 	if err != nil || child == nil {
 		t.Fatal("Could not find child post-create")
 	}
 	if childID != child.ID() {
-		t.Fatalf(
+		t.Errorf(
 			"IDs did not match when create run twice on same file.\nOriginal: %s\nNew: %s",
 			childID, child.ID(),
 		)

@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/jstaf/onedriver/logger"
@@ -28,8 +27,10 @@ const (
 	retrySeconds = 60
 )
 
-var auth *graph.Auth
-var fsCache *Cache // used to inject bad content into the fs for some tests
+var (
+	auth *graph.Auth
+	fs   *Filesystem
+)
 
 // Tests are done in the main project directory with a mounted filesystem to
 // avoid having to repeatedly recreate auth_tokens.json and juggle multiple auth
@@ -58,20 +59,17 @@ func TestMain(m *testing.M) {
 	defer f.Close()
 
 	auth = graph.Authenticate(".auth_tokens.json")
-	fsCache = NewCache(auth, "test.db")
-
-	second := time.Second
-	root, _ := fsCache.GetPath("/", auth)
-	server, _ := fs.Mount(mountLoc, root, &fs.Options{
-		EntryTimeout: &second,
-		AttrTimeout:  &second,
-		MountOptions: fuse.MountOptions{
+	fs = NewFilesystem(auth, "test.db")
+	server, _ := fuse.NewServer(
+		fs,
+		mountLoc,
+		&fuse.MountOptions{
 			Name:          "onedriver",
 			FsName:        "onedriver",
 			DisableXAttrs: true,
 			MaxBackground: 1024,
 		},
-	})
+	)
 
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
@@ -95,7 +93,7 @@ func TestMain(m *testing.M) {
 		os.Mkdir(filepath.Join(TestDir, "paging"), 0755)
 		createPagingTestFiles()
 	}
-	go fsCache.DeltaLoop(5 * time.Second)
+	go fs.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business
 	os.Mkdir(mountLoc+"/Documents", 0755)

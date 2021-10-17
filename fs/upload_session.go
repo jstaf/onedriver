@@ -43,6 +43,7 @@ type UploadSession struct {
 	ID                 string    `json:"id"`
 	OldID              string    `json:"oldID"`
 	ParentID           string    `json:"parentID"`
+	NodeID             uint64    `json:"nodeID"`
 	Name               string    `json:"name"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
@@ -52,7 +53,7 @@ type UploadSession struct {
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
 
-	mutex     sync.Mutex
+	sync.Mutex
 	UploadURL string `json:"uploadUrl"`
 	ETag      string `json:"eTag,omitempty"`
 	state     int
@@ -61,9 +62,8 @@ type UploadSession struct {
 
 // MarshalJSON implements a custom JSON marshaler to avoid race conditions
 func (u *UploadSession) MarshalJSON() ([]byte, error) {
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
-
+	u.Lock()
+	defer u.Unlock()
 	type SerializeableUploadSession UploadSession
 	return json.Marshal((*SerializeableUploadSession)(u))
 }
@@ -81,69 +81,56 @@ type FileSystemInfo struct {
 }
 
 func (u *UploadSession) getState() int {
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
+	u.Lock()
+	defer u.Unlock()
 	return u.state
 }
 
 // setState is just a helper method to set the UploadSession state and make error checking
 // a little more straightforwards.
 func (u *UploadSession) setState(state int, err error) error {
-	u.mutex.Lock()
+	u.Lock()
 	u.state = state
 	u.error = err
-	u.mutex.Unlock()
+	u.Unlock()
 	return err
 }
 
 // NewUploadSession wraps an upload of a file into an UploadSession struct
 // responsible for performing uploads for a file.
-func NewUploadSession(inode *Inode) (*UploadSession, error) {
-	inode.mutex.RLock()
-	defer inode.mutex.RUnlock()
+func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
+	if data == nil {
+		return nil, errors.New("data to upload cannot be nil")
+	}
+
+	inode.RLock()
+	defer inode.RUnlock()
 
 	// create a generic session for all files
 	session := UploadSession{
 		ID:       inode.DriveItem.ID,
 		OldID:    inode.DriveItem.ID,
 		ParentID: inode.DriveItem.Parent.ID,
+		NodeID:   inode.nodeID,
 		Name:     inode.DriveItem.Name,
-		Size:     inode.DriveItem.Size,
-		Data:     nil,
+		Size:     uint64(len(*data)), // just in case it somehow differs
+		Data:     *data,
 		ModTime:  *inode.DriveItem.ModTime,
 	}
-	if inode.data == nil {
-		session.Data = inode.cache.GetContent(inode.DriveItem.ID)
-		if session.Data == nil {
-			log.WithFields(log.Fields{
-				"id":   inode.DriveItem.ID,
-				"name": inode.DriveItem.Name,
-			}).Error("Tried to load file data from disk but could not find any!")
-			return nil, errors.New("inode data was nil")
-		}
-	} else {
-		session.Data = make([]byte, inode.DriveItem.Size)
-		copy(session.Data, *inode.data)
-	}
 
-	if inode.DriveItem.File != nil {
-		session.SHA1Hash = inode.DriveItem.File.Hashes.SHA1Hash
-		session.QuickXORHash = inode.DriveItem.File.Hashes.QuickXorHash
-	} else {
-		// compute both hashes for now, session does not know the drivetype
-		session.SHA1Hash = graph.SHA1Hash(&session.Data)
-		session.QuickXORHash = graph.QuickXORHash(&session.Data)
-	}
+	// compute both hashes for now, session does not know the drivetype
+	session.SHA1Hash = graph.SHA1Hash(data)
+	session.QuickXORHash = graph.QuickXORHash(data)
 	return &session, nil
 }
 
 // cancel the upload session by deleting the temp file at the endpoint.
 func (u *UploadSession) cancel(auth *graph.Auth) {
-	u.mutex.Lock()
+	u.Lock()
 	// small upload sessions will also have an empty UploadURL in addition to
 	// uninitialized large file uploads.
 	nonemptyURL := u.UploadURL != ""
-	u.mutex.Unlock()
+	u.Unlock()
 	if nonemptyURL {
 		state := u.getState()
 		if state == uploadStarted || state == uploadErrored {
@@ -159,9 +146,13 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 // irrespective of HTTP status (errors are reserved for stuff that prevented
 // the HTTP request at all).
 func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
-	if u.UploadURL == "" {
+	u.Lock()
+	url := u.UploadURL
+	if url == "" {
+		u.Unlock()
 		return nil, -1, errors.New("UploadSession UploadURL cannot be empty")
 	}
+	u.Unlock()
 
 	// how much of the file are we going to upload?
 	end := offset + uploadChunkSize
@@ -179,7 +170,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	client := &http.Client{}
 	request, _ := http.NewRequest(
 		"PUT",
-		u.UploadURL,
+		url,
 		bytes.NewReader((u.Data)[offset:end]),
 	)
 	// no Authorization header - it will throw a 401 if present
@@ -236,7 +227,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			resp, err = graph.Put(uploadPath, auth, bytes.NewReader(u.Data))
 		}
 		if err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored, fmt.Errorf("small upload failed: %w", err))
 		}
 	} else {
 		if isLocalID(u.ID) {
@@ -259,7 +250,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		})
 		resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
 		if err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored, fmt.Errorf("failed to create upload session: %w", err))
 		}
 
 		// populate UploadURL/expiration - we unmarshal into a fresh session here
@@ -267,12 +258,13 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// a field it shouldn't.
 		tmp := UploadSession{}
 		if err = json.Unmarshal(resp, &tmp); err != nil {
-			return u.setState(uploadErrored, err)
+			return u.setState(uploadErrored,
+				fmt.Errorf("could not unmarshal upload session post response: %w", err))
 		}
-		u.mutex.Lock()
+		u.Lock()
 		u.UploadURL = tmp.UploadURL
 		u.ExpirationDateTime = tmp.ExpirationDateTime
-		u.mutex.Unlock()
+		u.Unlock()
 
 		// api upload session created successfully, now do actual content upload
 		var status int
@@ -280,14 +272,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		for i := 0; i < nchunks; i++ {
 			resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"id":      u.ID,
-					"name":    u.Name,
-					"chunk":   i,
-					"nchunks": nchunks,
-					"err":     err,
-				}).Error("Error during chunk upload.")
-				return u.setState(uploadErrored, err)
+				return u.setState(uploadErrored, fmt.Errorf("failed to perform chunk upload: %w", err))
 			}
 
 			// retry server-side failures with an exponential back-off strategy. Will not
@@ -303,19 +288,13 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				time.Sleep(time.Duration(backoff) * time.Second)
 				resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
 				if err != nil { // a serious, non 4xx/5xx error
-					log.WithFields(log.Fields{
-						"id":     u.ID,
-						"name":   u.Name,
-						"err":    err,
-						"status": status,
-					}).Error("Failed while retrying chunk upload after server-side error.")
-					return u.setState(uploadErrored, err)
+					return u.setState(uploadErrored, fmt.Errorf("failed to perform chunk upload: %w", err))
 				}
 			}
 
 			// handle client-side errors
 			if status >= 400 {
-				return u.setState(uploadErrored, errors.New(string(resp)))
+				return u.setState(uploadErrored, fmt.Errorf("error uploading chunk - HTTP %d: %s", status, string(resp)))
 			}
 		}
 	}
@@ -324,7 +303,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	// checksum is what it's supposed to be.
 	remote := graph.DriveItem{}
 	if err := json.Unmarshal(resp, &remote); err != nil {
-		return u.setState(uploadErrored, err)
+		return u.setState(uploadErrored,
+			fmt.Errorf("could not unmarshal response: %w: %s", err, string(resp)),
+		)
 	}
 	if remote.File == nil && remote.Size != u.Size {
 		// if we are absolutely pounding the microsoft API, a remote item may sometimes
@@ -334,9 +315,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID
-	u.mutex.Lock()
+	u.Lock()
 	u.ID = remote.ID
 	u.ETag = remote.ETag
-	u.mutex.Unlock()
+	u.Unlock()
 	return u.setState(uploadComplete, nil)
 }

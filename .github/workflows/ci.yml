@@ -26,15 +26,11 @@ jobs:
             pkg-config \
             libwebkit2gtk-4.0-dev \
             libjson-glib-dev \
-            dbus \
-            dbus-x11 \
             make \
             wget \
             rpm \
             awscli \
-            libreoffice \
-            gdb \
-            systemd-coredump
+            libreoffice
           sudo rm /usr/local/bin/aws  # whyyy
 
       - uses: actions/cache@v2
@@ -66,26 +62,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           ACCOUNT_TYPE: ${{ matrix.account_type }}
 
-      - name: Run c tests
-        run: |
-          sudo cp resources/onedriver@.service /etc/systemd/user
-          sudo cp onedriver /usr/bin
-          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-          sudo mkdir -p -m 0700 $XDG_RUNTIME_DIR
-          sudo chown $(whoami). $XDG_RUNTIME_DIR
-          sudo systemctl start user@$(id -u).service
-          make build/c-test
-          if ! dbus-launch build/c-test ; then
-            sleep 5
-            coredumpctl dump > c-test.core
-            printf 'bt\nq\n' > backtrace.gdb
-            gdb -batch -x backtrace.gdb build/c-test c-test.core
-          fi
-        env:
-          CFLAGS: -g
-        continue-on-error: true
-
       - name: Run tests
         run: |
           go get -u github.com/rakyll/gotest 
@@ -95,7 +71,9 @@ jobs:
           sudo unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
 
       - name: Copy new auth tokens to S3
-        run: /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+        run: |
+          /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+          /usr/bin/aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -106,9 +84,11 @@ jobs:
         run: |
           go get github.com/wadey/gocovmerge
           gocovmerge *.coverage > coverage.out
+        if: always()
 
       - name: Convert coverage to lcov
         uses: jandelgado/gcov2lcov-action@v1.0.5
+        if: always()
           
       - name: Send test coverage to Coveralls
         uses: coverallsapp/github-action@v1.1.2
@@ -117,6 +97,7 @@ jobs:
           path-to-lcov: coverage.lcov
           flag-name: ${{ matrix.account_type }}
           parallel: true
+        if: always()
   finish:
     name: Complete Coveralls run
     needs: test

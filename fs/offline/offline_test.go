@@ -19,7 +19,7 @@ func TestOfflineReaddir(t *testing.T) {
 	}
 
 	if len(files) == 0 {
-		t.Fatal("Expected more than 0 files in the test mount directory.")
+		t.Fatal("Expected more than 0 files in the test directory.")
 	}
 }
 
@@ -32,7 +32,10 @@ func TestOfflineBagelDetection(t *testing.T) {
 	}
 
 	found := false
+	allFiles := make([]string, 0)
 	for _, f := range files {
+		allFiles = append(allFiles, f.Name())
+
 		if f.Name() == "bagels" {
 			found = true
 			if f.IsDir() {
@@ -48,7 +51,8 @@ func TestOfflineBagelDetection(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("\"bagels\" not found! Expected file not present.")
+		t.Error("\"bagels\" not found! Expected file not present.")
+		t.Errorf("Got: %+v", allFiles)
 	}
 }
 
