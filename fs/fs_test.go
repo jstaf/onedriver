@@ -135,6 +135,20 @@ func TestReadWrite(t *testing.T) {
 	}
 }
 
+// ld can crash the filesystem because it starts writing output at byte 64 in previously
+// empty file
+func TestWriteOffset(t *testing.T) {
+	t.Parallel()
+	fname := filepath.Join(TestDir, "main.c")
+	failOnErr(t, ioutil.WriteFile(fname,
+		[]byte(`#include <stdio.h>
+
+int main(int argc, char **argv) {
+	printf("ld writes files in a funny manner!");
+}`), 0644))
+	failOnErr(t, exec.Command("gcc", "-o", filepath.Join(TestDir, "main.o"), fname).Run())
+}
+
 // test that we can create a file and rename it
 //TODO this can fail if a server-side rename undoes the second local rename
 func TestRenameMove(t *testing.T) {

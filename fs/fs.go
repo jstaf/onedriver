@@ -667,7 +667,14 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 
 	inode.Lock()
 	defer inode.Unlock()
-	if offset+nWrite > int(inode.DriveItem.Size)-1 {
+	currentSize := int(inode.DriveItem.Size) - 1
+	if offset > currentSize {
+		// the start of our write actually begins AFTER the current file ending...
+		// fill the gap with 0s
+		*inode.data = append(*inode.data, make([]byte, offset-currentSize)...)
+	}
+
+	if offset+nWrite > currentSize {
 		// we've exceeded the file size, overwrite via append
 		*inode.data = append((*inode.data)[:offset], data...)
 	} else {
