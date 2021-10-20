@@ -8,26 +8,27 @@ onedriver
 **onedriver is a native Linux filesystem for Microsoft OneDrive.**
 
 onedriver is a network filesystem that gives your computer direct access to your
-files on Microsoft OneDrive. To your computer, there is no difference between
-using files on OneDrive and files on your local hard disk. onedriver isn't a 
-sync client, but it comes with all of the best features of one.
+files on Microsoft OneDrive. This is not a sync client. Instead of syncing files, 
+onedriver performs an on-demand download of files when your computer attempts to
+use them. onedriver allows you to use files on OneDrive as if they were files on
+your local computer.
 
 onedriver is extremely straightforwards to use:
 
 * Install onedriver using your favorite installation method.
-* Add one or more OneDrive accounts and select a mountpoint using the GUI 
-  (or via the command-line, I don't discriminate!).
+* Click the "+" button in the app to setup one or more OneDrive accounts.
+  (There's a command-line workflow for those who prefer doing things that way too!)
 * Just start using your files on OneDrive as if they were normal files.
 
 I've spent a lot of time trying to make onedriver fast, convenient, and easy to
 use. Though you can use it on servers, the goal here is to make it easy to work
-with OneDrive files on your Linux desktop. You can easily sync files between
-Windows and Linux computers. You can setup your phone to auto-upload photos to
-OneDrive and edit and view them on your Linux computer. You can switch between
-LibreOffice on your local computer and the Microsoft 365 online apps as needed
-when working. Want to migrate from Windows to Linux? Just throw all your Windows
-files into OneDrive, add your OneDrive account to Linux with onedriver, and call
-it a day.
+with OneDrive files on your Linux desktop. This allows you to easily sync files
+between any number of Windows, Mac, and Linux computers. You can setup your phone to
+auto-upload photos to OneDrive and edit and view them on your Linux computer.
+You can switch between LibreOffice on your local computer and the Microsoft 365
+online apps as needed when working. Want to migrate from Windows to Linux? Just
+throw all your Windows files into OneDrive, add your OneDrive account to Linux
+with onedriver, and call it a day.
 
 **Microsoft OneDrive works on Linux.**
 
@@ -39,11 +40,11 @@ Getting started with your files on OneDrive is as easy as running:
 onedriver has several nice features that make it significantly more useful than
 other OneDrive clients:
 
-* **Files are downloaded only when you use them.** onedriver will only download
+* **Files are only downloaded when you use them.** onedriver will only download
   a file if you (or a program on your computer) uses that file. You don't need
   to wait hours for a sync client to sync your entire OneDrive account to your local 
   computer or try to guess which files and folders you might need later while
-  setting up a "selective sync". onedriver gives you instant access to *all* your
+  setting up a "selective sync". onedriver gives you instant access to *all* of your
   files and only downloads the ones you use.
 
 * **Bidirectional sync.** Although onedriver doesn't actually "sync" any files,
@@ -109,8 +110,6 @@ if you're using the GUI. It's honestly easier.
 To start onedriver automatically and ensure you always have access to your files,
 you can start onedriver as a systemd user service. In this example, `$MOUNTPOINT`
 refers to where we want OneDrive to be mounted at (for instance, `~/OneDrive`).
-Mounting OneDrive via systemd allows multiple drives to be mounted at the same 
-time (as long as they use different mountpoints).
 
 ```bash
 # create the mountpoint and determine the service name
@@ -195,28 +194,31 @@ make deb
 
 ## Troubleshooting
 
-Most errors can be solved by simply restarting the program. onedriver is
-designed to recover cleanly from errors with no extra effort.
+During your OneDrive travels, you might hit a bug that I haven't squashed yet.
+Don't panic! In most cases, the filesystem will report what happened to whatever
+program you're using. (As an example, an error mentioning a "read-only
+filesystem" indicates that your computer is currently offline.)
 
-It's possible that there may be a deadlock or segfault that I haven't caught in 
-my tests. If this happens, the onedriver filesystem and subsequent ops may hang
-indefinitely (ops will hang while the kernel waits for the dead onedriver 
-process to respond). When this happens, you can cleanly unmount the filesystem 
-with the following:
+If the filesystem appears to hang or "freeze" indefinitely, its possible the 
+fileystem has crashed. To resolve this, just restart the program by unmounting and 
+remounting things via the GUI or by running `fusermount -uz $MOUNTPOINT` on the 
+command-line. 
 
-```bash
-# in new terminal window
-fusermount -uz $MOUNTPOINT
-killall make  # if running tests via make
-```
-
-onedriver can be completely reset (delete all cached local data) with 
+If you really want to go back to a clean slate, onedriver can be completely
+reset (delete all cached local data) by deleting mounts in the GUI or running
 `onedriver -w`.
+
+If you encounter a bug or have a feature request, open an issue in the "Issues"
+tab here on GitHub. The two most informative things you can put in a bug report
+are the logs from the bug/just before encountering the bug 
+(get logs via `journalctl --user -u $SERVICE_NAME --since today` ... see docs
+for correct value of `$SERVICE_NAME`) and/or instructions on how to reproduce
+the issue. Otherwise I have to guess what the problem is :disappointed:
 
 ## Known issues & disclaimer
 
-Many file browsers (like GNOME's Nautilus - see 
-[bug report](https://gitlab.gnome.org/GNOME/nautilus/-/issues/1209)) 
+Many file browsers (like 
+[GNOME's Nautilus](https://gitlab.gnome.org/GNOME/nautilus/-/issues/1209)) 
 will attempt to automatically download all files within a directory in order to
 create thumbnail images. This is somewhat annoying, but only needs to happen
 once - after the initial thumbnail images have been created, thumbnails will
