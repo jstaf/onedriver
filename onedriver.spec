@@ -7,7 +7,11 @@ License:       GPLv3
 URL:           https://github.com/jstaf/onedriver
 Source0:       https://github.com/jstaf/onedriver/archive/refs/tags/v%{version}.tar.gz
 
+%if 0%{?suse_version}
+BuildRequires: go >= 1.12
+%else
 BuildRequires: golang >= 1.12.0
+%endif
 BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
