@@ -31,6 +31,10 @@ break.
 %autosetup
 
 %build
+%if 0%{?suse_version} > 1500
+# done via sed because #cgo flags appear to ignore #ifdef
+sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
+%endif
 GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
 make onedriver-launcher
 gzip resources/onedriver.1
