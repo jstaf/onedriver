@@ -17,10 +17,24 @@ BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
 BuildRequires: json-glib-devel
-Requires:      fuse
-Requires:      webkit2gtk3
-Requires:      json-glib
-Suggests:      systemd
+
+%if 0%{?suse_version}
+%if 0%{?suse_version} > 1500
+# tumbleweed
+Requires: libwebkit2gtk-4_1-0
+Requires: libjson-glib-1_0-0
+%else
+# leap 15.3
+Requires: libwebkit2gtk-4_0-37
+Requires: libjson-glib-1_0-0
+%endif
+# other EL distros
+%else
+Requires: webkit2gtk3
+Requires: json-glib
+%endif
+Requires: fuse
+Suggests: systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
