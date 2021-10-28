@@ -3,6 +3,8 @@ package graph
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -65,13 +67,8 @@ type DriveItem struct {
 	ETag             string           `json:"eTag,omitempty"`
 }
 
-// GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
-func GetItem(id string, auth *Auth) (*DriveItem, error) {
-	path := "/me/drive/items/" + id
-	if id == "root" {
-		path = "/me/drive/root"
-	}
-
+// getItem is the internal method used to lookup items
+func getItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(path, auth)
 	if err != nil {
 		return nil, err
@@ -86,21 +83,23 @@ func GetItem(id string, auth *Auth) (*DriveItem, error) {
 	return item, err
 }
 
+// GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
+func GetItem(id string, auth *Auth) (*DriveItem, error) {
+	return getItem(IDPath(id), auth)
+}
+
+// GetItemChild fetches the named child of an item.
+func GetItemChild(id string, name string, auth *Auth) (*DriveItem, error) {
+	return getItem(
+		fmt.Sprintf("%s:/%s", IDPath(id), url.PathEscape(name)),
+		auth,
+	)
+}
+
 // GetItemPath fetches a DriveItem by path. Only used in special cases, like for the
 // root item.
 func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
-	body, err := Get(ResourcePath(path), auth)
-	item := &DriveItem{}
-	if err != nil {
-		return item, err
-	}
-	err = json.Unmarshal(body, item)
-	if err != nil && bytes.Contains(body, []byte("\"size\":-")) {
-		// onedrive for business directories can sometimes have negative sizes,
-		// ignore this error
-		err = nil
-	}
-	return item, err
+	return getItem(ResourcePath(path), auth)
 }
 
 // GetItemContent retrieves an item's content from the Graph endpoint.

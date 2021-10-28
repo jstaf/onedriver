@@ -34,7 +34,18 @@ func TestMode(t *testing.T) {
 
 	fname := "/onedriver_tests/test_mode.txt"
 	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
-	item, _ = graph.GetItemPath(fname, auth)
+
+	var err error
+	for i := 0; i < 10; i++ {
+		item, err = graph.GetItemPath(fname, auth)
+		if err == nil && item != nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if item == nil {
+		t.Fatal("item cannot be nil, err:", err)
+	}
 	inode = NewInodeDriveItem(item)
 	if inode.Mode() != uint32(0644|fuse.S_IFREG) {
 		t.Fatalf("mode of file wrong: %o != %o",
@@ -53,7 +64,18 @@ func TestIsDir(t *testing.T) {
 
 	fname := "/onedriver_tests/test_is_dir.txt"
 	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
-	item, _ = graph.GetItemPath(fname, auth)
+
+	var err error
+	for i := 0; i < 10; i++ {
+		item, err = graph.GetItemPath(fname, auth)
+		if err == nil && item != nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if item == nil {
+		t.Fatal("item cannot be nil, err:", err)
+	}
 	inode = NewInodeDriveItem(item)
 	if inode.IsDir() {
 		t.Fatal("file created with mode 644 not detected as a file")

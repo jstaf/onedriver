@@ -303,9 +303,26 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	// checksum is what it's supposed to be.
 	remote := graph.DriveItem{}
 	if err := json.Unmarshal(resp, &remote); err != nil {
-		return u.setState(uploadErrored,
-			fmt.Errorf("could not unmarshal response: %w: %s", err, string(resp)),
-		)
+		if len(resp) == 0 {
+			// the API frequently just returns a 0-byte response for completed
+			// multipart uploads, so we manually fetch the newly updated item
+			var remotePtr *graph.DriveItem
+			if isLocalID(u.ID) {
+				remotePtr, err = graph.GetItemChild(u.ParentID, u.Name, auth)
+			} else {
+				remotePtr, err = graph.GetItem(u.ID, auth)
+			}
+			if err == nil {
+				remote = *remotePtr
+			} else {
+				return u.setState(uploadErrored,
+					fmt.Errorf("failed to get item post-upload: %w", err))
+			}
+		} else {
+			return u.setState(uploadErrored,
+				fmt.Errorf("could not unmarshal response: %w: %s", err, string(resp)),
+			)
+		}
 	}
 	if remote.File == nil && remote.Size != u.Size {
 		// if we are absolutely pounding the microsoft API, a remote item may sometimes

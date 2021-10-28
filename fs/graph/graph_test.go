@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+func TestResourcePath(t *testing.T) {
+	t.Parallel()
+	escaped := ResourcePath("/some path/here!")
+	wanted := `/me/drive/root:%2Fsome%20path%2Fhere%21`
+	if escaped != wanted {
+		t.Fatalf("Escaped path was wrong - got: \"%s\", wanted \"%s\"", escaped, wanted)
+	}
+}
+
 func TestRequestUnauthenticated(t *testing.T) {
 	t.Parallel()
 	badAuth := &Auth{

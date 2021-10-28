@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -124,12 +125,20 @@ func Delete(resource string, auth *Auth) error {
 	return err
 }
 
+// IDPath computes the resource path for an item by ID
+func IDPath(id string) string {
+	if id == "root" {
+		return "/me/drive/root"
+	}
+	return "/me/drive/items/" + url.PathEscape(id)
+}
+
 // ResourcePath translates an item's path to the proper path used by Graph
 func ResourcePath(path string) string {
 	if path == "/" {
 		return "/me/drive/root"
 	}
-	return "/me/drive/root:" + path
+	return "/me/drive/root:" + url.PathEscape(path)
 }
 
 // ChildrenPath returns the path to an item's children
@@ -142,7 +151,7 @@ func childrenPath(path string) string {
 
 // ChildrenPathID returns the API resource path of an item's children
 func childrenPathID(id string) string {
-	return "/me/drive/items/" + id + "/children"
+	return fmt.Sprintf("/me/drive/items/%s/children", url.PathEscape(id))
 }
 
 // User represents the user. Currently only used to fetch the account email so
