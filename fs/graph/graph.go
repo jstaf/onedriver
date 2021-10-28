@@ -151,7 +151,7 @@ func childrenPath(path string) string {
 
 // ChildrenPathID returns the API resource path of an item's children
 func childrenPathID(id string) string {
-	return "/me/drive/items/" + url.PathEscape(id) + "/children"
+	return fmt.Sprintf("/me/drive/items/%s/children", url.PathEscape(id))
 }
 
 // User represents the user. Currently only used to fetch the account email so
