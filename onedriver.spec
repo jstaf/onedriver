@@ -58,7 +58,6 @@ break.
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
 go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
-export CFLAGS=-std=gnu11
 make onedriver-launcher
 gzip resources/onedriver.1
 
