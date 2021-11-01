@@ -98,6 +98,21 @@ you can purge the old PPA from your system via:
 Arch/Manjaro/EndeavourOS users can install onedriver from the 
 [AUR](https://aur.archlinux.org/packages/onedriver/).
 
+OpenSUSE users need to add COPR repo either for Leap or Tumbleweed
+
+Leap 15.3
+```bash
+sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-leap-15.3/jstaf-onedriver-opensuse-leap-15.3.repo onedriver
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install onedriver
+```
+Tumbleweed 
+```bash
+sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-tumbleweed/jstaf-onedriver-opensuse-tumbleweed.repo onedriver
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install onedriver
+```
+
 Post-installation, you can start onedriver either via the `onedriver-launcher` 
 desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
