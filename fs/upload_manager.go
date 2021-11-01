@@ -126,7 +126,7 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 						"id":    session.ID,
 						"oldID": session.OldID,
 						"name":  session.Name,
-					}).Debug("Upload completed!")
+					}).Info("Upload completed!")
 
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
