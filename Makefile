@@ -16,7 +16,7 @@ SRCS := $(shell find launcher/ -name *.c | grep -v _test)
 OBJS := $(SRCS:%.c=build/%.o)
 INC_DIRS := $(shell find launcher/ -type d | grep -v _test)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
-CFLAGS := ${CFLAGS} $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
+CFLAGS := -std=gnu11 ${CFLAGS} $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
 LDFLAGS := $(shell pkg-config --libs $(DEPS))
 
 # c test variables
