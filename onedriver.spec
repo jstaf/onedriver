@@ -12,15 +12,10 @@ BuildRequires: go >= 1.12
 %else
 BuildRequires: golang >= 1.12.0
 %endif
-%if 0%{?centos_ver} == 7 || 0%{?rhel_ver} == 7
-BuildRequires: pkgconfig
-BuildRequires: webkitgtk4-devel
-%else
-BuildRequires: pkg-config
-BuildRequires: webkit2gtk3-devel
-%endif
 BuildRequires: git
 BuildRequires: gcc
+BuildRequires: pkg-config
+BuildRequires: webkit2gtk3-devel
 BuildRequires: json-glib-devel
 
 %if 0%{?suse_version}
@@ -35,14 +30,11 @@ Requires: libjson-glib-1_0-0
 %endif
 # other EL distros
 %else
-%if 0%{?centos_ver} == 7 || 0%{?rhel_ver} == 7
-Requires: webkitgtk4
-%else
 Requires: webkit2gtk3
-%endif
 Requires: json-glib
 %endif
 Requires: fuse
+Suggests: systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
@@ -57,7 +49,7 @@ break.
 # done via sed because #cgo flags appear to ignore #ifdef
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
-go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
+GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
 make onedriver-launcher
 gzip resources/onedriver.1
 
