@@ -465,7 +465,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		var hashMatch bool
 		inode.RLock()
 		driveType := inode.DriveItem.Parent.DriveType
-		if isLocalID(id) && inode.DriveItem.File == nil {
+		if isLocalID(id) {
 			// only check hashes if the file has been uploaded before, otherwise
 			// we just accept the cached content.
 			hashMatch = true
@@ -663,6 +663,14 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 			"path":   inode.Path(),
 		}).Warn("Write called on a closed file descriptor! Reopening file for write op.")
 		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader, Flags: in.WriteFlags}, &fuse.OpenOut{})
+		if !inode.HasContent() {
+			log.WithFields(log.Fields{
+				"id":     id,
+				"nodeID": in.NodeId,
+				"path":   inode.Path(),
+			}).Error("Open() failed, cannot write to uninitialized file!")
+			return 0, fuse.EIO
+		}
 	}
 
 	inode.Lock()

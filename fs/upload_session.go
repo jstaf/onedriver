@@ -196,7 +196,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	log.WithFields(log.Fields{
 		"id":   u.ID,
 		"name": u.Name,
-	}).Debug("Uploading file.")
+	}).Info("Uploading file.")
 	u.setState(uploadStarted, nil)
 
 	var uploadPath string
