@@ -17,7 +17,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 	log.Trace().Msg("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		log.Debug().Msg("Fetching deltas from server.")
+		log.Trace().Msg("Fetching deltas from server.")
 		pollSuccess := false
 		deltas := make(map[string]*Inode)
 		for {
