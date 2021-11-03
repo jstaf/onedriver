@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.11.2
+Version:       0.12.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -82,6 +82,14 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Tue Nov 2 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.12.0
+- Major internal rewrite - onedriver now talks directly to the kernel instead of using
+  go-fuse/fs as an intermediary. This makes metadata operations a bit faster.
+- onedriver better handles completion of multipart uploads and does not repeatedly
+  upload files on success. This significantly improves upload speed.
+- Fixes a crash when writes begin at an offset beyond maximum file length. This fixes a
+  bug where running ld inside the filesystem would cause it to crash.
+
 * Tue Aug 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.2
 - onedriver now disallows rmdir on nonempty directories.
 - The filesystem now detects if it is offline more reliably.
