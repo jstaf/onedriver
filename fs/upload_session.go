@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -176,7 +176,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
-	log.WithField("id", u.ID).Info("Uploading ", frags)
+	log.Info().Str("id", u.ID).Msg("Uploading " + frags)
 	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)
@@ -193,10 +193,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 // goroutine, or it can potentially block for a very long time. The uploadSession.error
 // field contains errors to be handled if called as a goroutine.
 func (u *UploadSession) Upload(auth *graph.Auth) error {
-	log.WithFields(log.Fields{
-		"id":   u.ID,
-		"name": u.Name,
-	}).Info("Uploading file.")
+	log.Info().Str("id", u.ID).Str("name", u.Name).Msg("Uploading file.")
 	u.setState(uploadStarted, nil)
 
 	var uploadPath string
@@ -278,13 +275,13 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			// retry server-side failures with an exponential back-off strategy. Will not
 			// exit this loop unless it receives a non 5xx error or serious failure
 			for backoff := 1; status >= 500; backoff *= 2 {
-				log.WithFields(log.Fields{
-					"id":      u.ID,
-					"name":    u.Name,
-					"chunk":   i,
-					"nchunks": nchunks,
-					"status":  status,
-				}).Errorf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
+				log.Error().
+					Str("id", u.ID).
+					Str("name", u.Name).
+					Int("chunk", i).
+					Int("nchunks", nchunks).
+					Int("status", status).
+					Msgf("The OneDrive server is having issues, retrying chunk upload in %ds.", backoff)
 				time.Sleep(time.Duration(backoff) * time.Second)
 				resp, status, err = u.uploadChunk(auth, uint64(i)*uploadChunkSize)
 				if err != nil { // a serious, non 4xx/5xx error

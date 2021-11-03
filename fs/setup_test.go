@@ -16,8 +16,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	"github.com/jstaf/onedriver/logger"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -55,7 +55,9 @@ func TestMain(m *testing.M) {
 		os.Remove(db)
 	}
 
-	f := logger.LogTestSetup()
+	f, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f})
 	defer f.Close()
 
 	auth = graph.Authenticate(".auth_tokens.json")
@@ -80,7 +82,7 @@ func TestMain(m *testing.M) {
 	go server.Serve()
 
 	// cleanup from last run
-	log.Info("Setup test environment ---------------------------------")
+	log.Info().Msg("Setup test environment ---------------------------------")
 	if err := os.RemoveAll(TestDir); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -100,12 +102,12 @@ func TestMain(m *testing.M) {
 
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
-	log.Info("Test session start ---------------------------------")
+	log.Info().Msg("Test session start ---------------------------------")
 
 	// run tests
 	code := m.Run()
 
-	log.Info("Test session end -----------------------------------")
+	log.Info().Msg("Test session end -----------------------------------")
 	fmt.Printf("Waiting 5 seconds for any remaining uploads to complete")
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second)
@@ -115,7 +117,7 @@ func TestMain(m *testing.M) {
 
 	// unmount
 	if server.Unmount() != nil {
-		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
+		log.Error().Msg("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}
 	fmt.Println("Successfully unmounted fuse server!")
@@ -146,13 +148,13 @@ func createPagingTestFiles() {
 				strings.NewReader("test\n"),
 			)
 			if err != nil {
-				log.WithField("err", err).Error("Paging upload fail.")
+				log.Error().Err(err).Msg("Paging upload fail.")
 				atomic.AddInt64(&errCounter, 1)
 			}
 			wg.Done()
 		}(i, &group)
 	}
 	group.Wait()
-	log.Infof("%d failed paging uploads.\n", errCounter)
+	log.Info().Msgf("%d failed paging uploads.\n", errCounter)
 	fmt.Println("Finished with paging test setup.")
 }

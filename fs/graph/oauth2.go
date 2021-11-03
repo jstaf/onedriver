@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -77,16 +78,14 @@ func (a *Auth) Refresh() {
 		var reauth bool
 		if err != nil {
 			if IsOffline(err) || resp == nil {
-				log.WithField("err", err).Trace(
-					"Network unreachable during token renewal, ignoring.")
+				log.Trace().Err(err).Msg("Network unreachable during token renewal, ignoring.")
 				return
 			}
-			log.WithField("err", err).Error(
-				"Could not POST to renew tokens, forcing reauth.")
+			log.Error().Err(err).Msg("Could not POST to renew tokens, forcing reauth.")
 			reauth = true
 		} else {
 			// put here so as to avoid spamming the log when offline
-			log.Info("Auth tokens expired, attempting renewal.")
+			log.Info().Msg("Auth tokens expired, attempting renewal.")
 		}
 		defer resp.Body.Close()
 
@@ -97,10 +96,10 @@ func (a *Auth) Refresh() {
 		}
 
 		if reauth || a.AccessToken == "" || a.RefreshToken == "" {
-			log.WithFields(log.Fields{
-				"response":  string(body),
-				"http_code": resp.StatusCode,
-			}).Error("Failed to renew access tokens. Attempting to reauthenticate.")
+			log.Error().
+				Bytes("response", body).
+				Int("http_code", resp.StatusCode).
+				Msg("Failed to renew access tokens. Attempting to reauthenticate.")
 			a = newAuth(a.path)
 		} else {
 			a.ToFile(a.path)
@@ -138,7 +137,7 @@ func getAuthTokens(authCode string) *Auth {
 		"application/x-www-form-urlencoded",
 		postData)
 	if err != nil {
-		log.WithField("error", err).Fatalf("Could not POST to obtain auth tokens.")
+		log.Fatal().Err(err).Msg("Could not POST to obtain auth tokens.")
 	}
 	defer resp.Body.Close()
 
@@ -150,25 +149,26 @@ func getAuthTokens(authCode string) *Auth {
 	}
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
 		var authErr AuthError
-		var fields log.Fields
+		var fields zerolog.Logger
 		if err := json.Unmarshal(body, &authErr); err == nil {
 			// we got a parseable error message out of microsoft's servers
-			fields = log.Fields{
-				"http_code":         resp.StatusCode,
-				"error":             authErr.Error,
-				"error_description": authErr.ErrorDescription,
-				"help_url":          authErr.ErrorURI,
-			}
+			fields = log.With().
+				Int("status", resp.StatusCode).
+				Str("error", authErr.Error).
+				Str("errorDescription", authErr.ErrorDescription).
+				Str("helpUrl", authErr.ErrorURI).
+				Logger()
 		} else {
 			// things are extra broken and this is an error type we haven't seen before
-			fields = log.Fields{
-				"http_code":          resp.StatusCode,
-				"response":           string(body),
-				"response_parse_err": err,
-			}
+			fields = log.With().
+				Int("status", resp.StatusCode).
+				Bytes("response", body).
+				Err(err).
+				Logger()
 		}
-		log.WithFields(fields).Fatalf(
-			"Failed to retrieve access tokens. Authentication cannot continue.")
+		fields.Fatal().Msg(
+			"Failed to retrieve access tokens. Authentication cannot continue.",
+		)
 	}
 	return &auth
 }

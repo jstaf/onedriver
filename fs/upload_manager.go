@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -47,9 +47,7 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, fs *Filesystem, auth 
 			session := &UploadSession{}
 			err := json.Unmarshal(val, session)
 			if err != nil {
-				log.WithField(
-					"err", err,
-				).Error("Error while restoring upload sessions from disk.")
+				log.Error().Err(err).Msg("Failure restoring upload sessions from disk.")
 				return err
 			}
 			if session.getState() != uploadNotStarted {
@@ -101,43 +99,40 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 				case uploadErrored:
 					session.retries++
 					if session.retries > 5 {
-						log.WithFields(log.Fields{
-							"id":      session.ID,
-							"name":    session.Name,
-							"err":     session.Error(),
-							"retries": session.retries,
-						}).Error(
-							"Upload session failed too many times, cancelling session. " +
-								"This is a bug - please file a bug report!",
-						)
+						log.Error().
+							Str("id", session.ID).
+							Str("name", session.Name).
+							Err(session).
+							Int("retries", session.retries).
+							Msg("Upload session failed too many times, cancelling session.")
 						u.finishUpload(session.ID)
 					}
 
-					log.WithFields(log.Fields{
-						"id":   session.ID,
-						"name": session.Name,
-						"err":  session.Error(),
-					}).Warning("Upload session failed, will retry from beginning.")
+					log.Warn().
+						Str("id", session.ID).
+						Str("name", session.Name).
+						Err(session).
+						Msg("Upload session failed, will retry from beginning.")
 					session.cancel(u.auth) // cancel large sessions
 					session.setState(uploadNotStarted, nil)
 
 				case uploadComplete:
-					log.WithFields(log.Fields{
-						"id":    session.ID,
-						"oldID": session.OldID,
-						"name":  session.Name,
-					}).Info("Upload completed!")
+					log.Info().
+						Str("id", session.ID).
+						Str("oldID", session.OldID).
+						Str("name", session.Name).
+						Msg("Upload completed!")
 
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
 						err := u.fs.MoveID(session.OldID, session.ID)
 						if err != nil {
-							log.WithFields(log.Fields{
-								"id":    session.ID,
-								"oldID": session.OldID,
-								"name":  session.Name,
-								"err":   err,
-							}).Error("Could not move inode to new ID!")
+							log.Error().
+								Str("id", session.ID).
+								Str("oldID", session.OldID).
+								Str("name", session.Name).
+								Err(err).
+								Msg("Could not move inode to new ID!")
 						}
 					}
 

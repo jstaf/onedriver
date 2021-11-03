@@ -28,11 +28,11 @@ TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
 all: onedriver onedriver-launcher
 
 
-onedriver: $(shell find fs/ -type f) logger/*.go main.go
+onedriver: $(shell find fs/ -type f) main.go
 	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
 
 
-onedriver-headless: $(shell find fs/ -type f) logger/*.go main.go
+onedriver-headless: $(shell find fs/ -type f) main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
 
 

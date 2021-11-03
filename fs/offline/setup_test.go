@@ -12,8 +12,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
-	"github.com/jstaf/onedriver/logger"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -42,9 +42,11 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	f := logger.LogTestSetup()
+	f, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f})
 	defer f.Close()
-	log.Info("Setup offline tests ------------------------------")
+	log.Info().Msg("Setup offline tests ------------------------------")
 
 	// reuses the cached data from the previous tests
 	server, _ := fuse.NewServer(
@@ -66,12 +68,12 @@ func TestMain(m *testing.M) {
 	// mount fs in background thread
 	go server.Serve()
 
-	log.Info("Start offline tests ------------------------------")
+	log.Info().Msg("Start offline tests ------------------------------")
 	code := m.Run()
-	log.Info("Finish offline tests ------------------------------")
+	log.Info().Msg("Finish offline tests ------------------------------")
 
 	if server.Unmount() != nil {
-		log.Error("Failed to unmount test fuse server, attempting lazy unmount")
+		log.Error().Msg("Failed to unmount test fuse server, attempting lazy unmount")
 		exec.Command("fusermount", "-zu", "mount").Run()
 	}
 	fmt.Println("Successfully unmounted fuse server!")

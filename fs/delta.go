@@ -7,17 +7,17 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
 )
 
 // DeltaLoop creates a new thread to poll the server for changes and should be
 // called as a goroutine
 func (f *Filesystem) DeltaLoop(interval time.Duration) {
-	log.Trace("Starting delta goroutine.")
+	log.Trace().Msg("Starting delta goroutine.")
 	for { // eva
 		// get deltas
-		log.Debug("Fetching deltas from server.")
+		log.Debug().Msg("Fetching deltas from server.")
 		pollSuccess := false
 		deltas := make(map[string]*Inode)
 		for {
@@ -25,9 +25,8 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			if err != nil {
 				// the only thing that should be able to bring the FS out
 				// of a read-only state is a successful delta call
-				log.WithField("err", err).Error(
-					"Error during delta fetch, marking fs as offline.",
-				)
+				log.Error().Err(err).
+					Msg("Error during delta fetch, marking fs as offline.")
 				f.Lock()
 				f.offline = true
 				f.Unlock()
@@ -40,7 +39,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 				deltas[delta.ID()] = delta
 			}
 			if !cont {
-				log.Infof("Fetched %d deltas.", len(deltas))
+				log.Info().Msgf("Fetched %d deltas.", len(deltas))
 				pollSuccess = true
 				break
 			}
@@ -67,7 +66,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 		if pollSuccess {
 			f.Lock()
 			if f.offline {
-				log.Info("Delta fetch success, marking fs as online.")
+				log.Info().Msg("Delta fetch success, marking fs as online.")
 			}
 			f.offline = false
 			f.Unlock()
@@ -124,24 +123,23 @@ func (f *Filesystem) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
 func (f *Filesystem) applyDelta(delta *Inode) error {
 	id := delta.ID()
 	name := delta.Name()
-	log.WithFields(log.Fields{
-		"id":   id,
-		"name": name,
-	}).Debug("Applying delta")
+	parentID := delta.ParentID()
+	ctx := log.With().
+		Str("id", id).
+		Str("parentID", parentID).
+		Str("name", name).
+		Logger()
+	ctx.Debug().Msg("Applying delta")
 
 	// diagnose and act on what type of delta we're dealing with
 
 	// do we have it at all?
-	parentID := delta.ParentID()
 	if parent := f.GetID(parentID); parent == nil {
 		// Nothing needs to be applied, item not in cache, so latest copy will
 		// be pulled down next time it's accessed.
-		log.WithFields(log.Fields{
-			"id":       id,
-			"parentID": parentID,
-			"name":     name,
-			"delta":    "skip",
-		}).Trace("Skipping delta, item's parent not in cache.")
+		ctx.Trace().
+			Str("delta", "skip").
+			Msg("Skipping delta, item's parent not in cache.")
 		return nil
 	}
 
@@ -152,18 +150,12 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 		if delta.IsDir() && local != nil && local.HasChildren() {
 			// from docs: you should only delete a folder locally if it is empty
 			// after syncing all the changes.
-			log.WithFields(log.Fields{
-				"id":    id,
-				"name":  name,
-				"delta": "delete",
-			}).Warn("Refusing delta deletion of non-empty folder as per API docs.")
+			ctx.Warn().Str("delta", "delete").
+				Msg("Refusing delta deletion of non-empty folder as per API docs.")
 			return errors.New("directory is non-empty")
 		}
-		log.WithFields(log.Fields{
-			"id":    id,
-			"name":  name,
-			"delta": "delete",
-		}).Info("Applying server-side deletion of item.")
+		ctx.Info().Str("delta", "delete").
+			Msg("Applying server-side deletion of item.")
 		f.DeleteID(id)
 		return nil
 	}
@@ -175,29 +167,20 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 		local, _ = f.GetChild(parentID, name, nil)
 		if local != nil {
 			localID := local.ID()
-			log.WithFields(log.Fields{
-				"id":       id,
-				"localID":  localID,
-				"parentID": parentID,
-				"name":     name,
-			}).Info("Local item already exists under different ID.")
+			ctx.Info().
+				Str("localID", localID).
+				Msg("Local item already exists under different ID.")
 			if isLocalID(localID) {
 				if err := f.MoveID(localID, id); err != nil {
-					log.WithError(err).WithFields(log.Fields{
-						"id":       id,
-						"localID":  localID,
-						"parentID": parentID,
-						"name":     name,
-					}).Error("Could not move item to new, nonlocal ID!")
+					ctx.Error().
+						Str("localID", localID).
+						Err(err).
+						Msg("Could not move item to new, nonlocal ID!")
 				}
 			}
 		} else {
-			log.WithFields(log.Fields{
-				"id":       id,
-				"parentID": parentID,
-				"name":     name,
-				"delta":    "create",
-			}).Info("Creating inode from delta.")
+			ctx.Info().Str("delta", "create").
+				Msg("Creating inode from delta.")
 			f.InsertChild(parentID, delta)
 			return nil
 		}
@@ -206,14 +189,14 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 	// was the item moved?
 	localName := local.Name()
 	if local.ParentID() != parentID || local.Name() != name {
-		log.WithFields(log.Fields{
-			"parent":    local.ParentID(),
-			"name":      localName,
-			"newParent": parentID,
-			"newName":   name,
-			"id":        id,
-			"delta":     "rename",
-		}).Info("Applying server-side rename")
+		log.Info().
+			Str("parent", local.ParentID()).
+			Str("name", localName).
+			Str("newParent", parentID).
+			Str("newName", name).
+			Str("id", id).
+			Str("delta", "rename").
+			Msg("Applying server-side rename")
 		oldParentID := local.ParentID()
 		// local rename only
 		f.MovePath(oldParentID, parentID, localName, name, f.auth)
@@ -240,11 +223,8 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 
 		if !sameContent {
 			//TODO check if local has changes and rename the server copy if so
-			log.WithFields(log.Fields{
-				"id":    id,
-				"name":  name,
-				"delta": "overwrite",
-			}).Info("Overwriting local item, no local changes to preserve.")
+			ctx.Info().Str("delta", "overwrite").
+				Msg("Overwriting local item, no local changes to preserve.")
 			// update modtime, hashes, purge any local content in memory
 			local.Lock()
 			defer local.Unlock()
@@ -260,10 +240,6 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 		}
 	}
 
-	log.WithFields(log.Fields{
-		"id":    id,
-		"name":  name,
-		"delta": "skip",
-	}).Trace("Skipping, no changes relative to local state.")
+	ctx.Trace().Str("delta", "skip").Msg("Skipping, no changes relative to local state.")
 	return nil
 }

@@ -13,8 +13,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
-	"github.com/jstaf/onedriver/logger"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 )
 
@@ -85,29 +85,25 @@ func main() {
 		os.Exit(0)
 	}
 
-	log.SetLevel(logger.StringToLevel(*logLevel))
-	log.SetReportCaller(true)
-	log.SetFormatter(logger.LogrusFormatter())
+	zerolog.SetGlobalLevel(StringToLevel(*logLevel))
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
 		flag.Usage()
-		fmt.Printf("\nNo mountpoint provided, exiting.\n")
-		os.Exit(1)
+		log.Fatal().Msg("No mountpoint provided, exiting.")
 	}
 
-	log.Infof("onedriver v%s %s", version, commit[:clen])
+	log.Info().Msgf("onedriver v%s %s", version, commit[:clen])
 	mountpoint := flag.Arg(0)
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
-		log.WithField(
-			"mountpoint", mountpoint,
-		).Fatal("Mountpoint did not exist or was not a directory.")
+		log.Fatal().
+			Str("mountpoint", mountpoint).
+			Msg("Mountpoint did not exist or was not a directory.")
 	}
 	if res, _ := ioutil.ReadDir(mountpoint); len(res) > 0 {
-		log.WithField(
-			"mountpoint", mountpoint,
-		).Fatal("Mountpoint must be empty.")
+		log.Fatal().Str("mountpoint", mountpoint).Msg("Mountpoint must be empty.")
 	}
 
 	// create the filesystem
@@ -123,7 +119,7 @@ func main() {
 		Debug:         *debugOn,
 	})
 	if err != nil {
-		log.WithField("err", err).Fatalf("Mount failed. Is the mountpoint already in use? "+
+		log.Fatal().Err(err).Msgf("Mount failed. Is the mountpoint already in use? "+
 			"(Try running \"fusermount -uz %s\")\n", mountpoint)
 	}
 
@@ -136,16 +132,38 @@ func main() {
 	server.Serve()
 }
 
+// StringToLevel converts a string to a LogLevel in a case-insensitive manner.
+func StringToLevel(level string) zerolog.Level {
+	level = strings.ToLower(level)
+	switch level {
+	case "fatal":
+		return zerolog.FatalLevel
+	case "error":
+		return zerolog.ErrorLevel
+	case "warn":
+		return zerolog.WarnLevel
+	case "info":
+		return zerolog.InfoLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "trace":
+		return zerolog.TraceLevel
+	default:
+		log.Error().Msgf("Unrecognized log level \"%s\", defaulting to \"trace\".\n", level)
+		return zerolog.TraceLevel
+	}
+}
+
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
 // corner of the mountpoint and shows the account name in the nautilus sidebar
 func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
 	if child, _ := fs.GetPath("/.xdg-volume-info", auth); child != nil {
 		return
 	}
-	log.Info("Creating .xdg-volume-info")
+	log.Info().Msg("Creating .xdg-volume-info")
 	user, err := graph.GetUser(auth)
 	if err != nil {
-		log.WithField("err", err).Error("Could not create .xdg-volume-info")
+		log.Error().Err(err).Msg("Could not create .xdg-volume-info")
 		return
 	}
 
@@ -162,7 +180,7 @@ func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
 		strings.NewReader(xdgVolumeInfo),
 	)
 	if err != nil {
-		log.Error(err)
+		log.Error().Err(err).Msg("Failed to write .xdg-volume-info")
 	}
 	root, _ := fs.GetPath("/", auth) // cannot fail
 	inode := odfs.NewInode(".xdg-volume-info", 0644, root)

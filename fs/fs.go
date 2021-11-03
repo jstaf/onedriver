@@ -10,7 +10,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 const timeout = time.Second
@@ -64,11 +64,11 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 				}
 				for _, child := range children {
 					if child.Name == name {
-						log.WithFields(log.Fields{
-							"name":     name,
-							"original": originalID,
-							"new":      child.ID,
-						}).Info("Exchanged ID.")
+						log.Info().
+							Str("name", name).
+							Str("originalID", originalID).
+							Str("newID", child.ID).
+							Msg("Exchanged ID.")
 						return child.ID, f.MoveID(originalID, child.ID)
 					}
 				}
@@ -84,11 +84,11 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 
 		// this is all we really wanted from this transaction
 		err = f.MoveID(originalID, session.ID)
-		log.WithFields(log.Fields{
-			"name":     name,
-			"original": originalID,
-			"new":      session.ID,
-		}).Info("Exchanged ID.")
+		log.Info().
+			Str("name", name).
+			Str("originalID", originalID).
+			Str("newID", session.ID).
+			Msg("Exchanged ID.")
 		return session.ID, err
 	}
 	return originalID, nil
@@ -97,17 +97,18 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) fuse.Status {
-	log.Debug("Statfs")
+	ctx := log.With().Str("op", "StatFs").Logger()
+	ctx.Debug().Msg("")
 	drive, err := graph.GetDrive(f.auth)
 	if err != nil {
 		return fuse.EREMOTEIO
 	}
 
 	if drive.DriveType == graph.DriveTypePersonal {
-		log.Warn("Personal OneDrive accounts do not show number of files, " +
+		ctx.Warn().Msg("Personal OneDrive accounts do not show number of files, " +
 			"inode counts reported by onedriver will be bogus.")
 	} else if drive.Quota.Total == 0 { // <-- check for if microsoft ever fixes their API
-		log.Warn("OneDrive for Business accounts do not report quotas, " +
+		ctx.Warn().Msg("OneDrive for Business accounts do not report quotas, " +
 			"pretending the quota is 5TB and it's all unused.")
 		drive.Quota.Total = 5 * uint64(math.Pow(1024, 4))
 		drive.Quota.Remaining = 5 * uint64(math.Pow(1024, 4))
@@ -134,21 +135,19 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 	}
 	id := inode.ID()
 	path := filepath.Join(inode.Path(), name)
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     id,
-		"path":   path,
-		"mode":   in.Mode,
-	}).Debug()
+	ctx := log.With().
+		Str("op", "Mkdir").
+		Uint64("nodeID", in.NodeId).
+		Str("id", id).
+		Str("path", path).
+		Str("mode", Octal(in.Mode)).
+		Logger()
+	ctx.Debug().Msg("")
 
 	// create the new directory on the server
 	item, err := graph.Mkdir(name, id, f.auth)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"nodeID": in.NodeId,
-			"id":     id,
-			"path":   path,
-		}).Error("Error during remote directory creation.")
+		ctx.Error().Err(err).Msg("Could not create remote directory!")
 		return fuse.EREMOTEIO
 	}
 
@@ -189,21 +188,18 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.
 		return fuse.ENOTDIR
 	}
 	path := dir.Path()
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     id,
-		"path":   path,
-	}).Debug()
+	ctx := log.With().
+		Str("op", "OpenDir").
+		Uint64("nodeID", in.NodeId).
+		Str("id", id).
+		Str("path", path).Logger()
+	ctx.Debug().Msg("")
 
 	children, err := f.GetChildrenID(id, f.auth)
 	if err != nil {
 		// not an item not found error (Lookup/Getattr will always be called
 		// before Readdir()), something has happened to our connection
-		log.WithError(err).WithFields(log.Fields{
-			"nodeID": in.NodeId,
-			"id":     id,
-			"path":   path,
-		}).Error("Could not fetch children")
+		ctx.Error().Err(err).Msg("Could not fetch children")
 		return fuse.EREMOTEIO
 	}
 
@@ -274,12 +270,13 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *f
 	entryOut := out.AddDirLookupEntry(entry)
 	if entryOut == nil {
 		//FIXME probably need to handle this better using the "overflow stuff"
-		log.WithFields(log.Fields{
-			"nodeID":      in.NodeId,
-			"offset":      in.Offset,
-			"entryName":   entry.Name,
-			"entryNodeID": entry.Ino,
-		}).Error("Exceeded DirLookupEntry bounds!")
+		log.Error().
+			Str("op", "ReadDirPlus").
+			Uint64("nodeID", in.NodeId).
+			Uint64("offset", in.Offset).
+			Str("entryName", entry.Name).
+			Uint64("entryNodeID", entry.Ino).
+			Msg("Exceeded DirLookupEntry bounds!")
 		return fuse.EIO
 	}
 	entryOut.NodeId = entry.Ino
@@ -334,11 +331,12 @@ func (f *Filesystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.
 // a directory.
 func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name string, out *fuse.EntryOut) fuse.Status {
 	id := f.TranslateID(in.NodeId)
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     id,
-		"name":   name,
-	}).Trace()
+	log.Trace().
+		Str("op", "Lookup").
+		Uint64("nodeID", in.NodeId).
+		Str("id", id).
+		Str("name", name).
+		Msg("")
 
 	child, _ := f.GetChild(id, strings.ToLower(name), f.auth)
 	if child == nil {
@@ -365,12 +363,13 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 	}
 
 	path := filepath.Join(parent.Path(), name)
+	ctx := log.With().
+		Str("op", "Mknod").
+		Uint64("nodeID", in.NodeId).
+		Str("path", path).
+		Logger()
 	if f.IsOffline() {
-		log.WithFields(log.Fields{
-			"id":     parentID,
-			"nodeID": in.NodeId,
-			"path":   path,
-		}).Warn("We are offline. Refusing Mknod() to avoid data loss later.")
+		ctx.Warn().Msg("We are offline. Refusing Mknod() to avoid data loss later.")
 		return fuse.EROFS
 	}
 
@@ -379,12 +378,10 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 	}
 
 	inode := NewInode(name, in.Mode, parent)
-	log.WithFields(log.Fields{
-		"id":      parentID,
-		"childID": inode.ID(),
-		"path":    path,
-		"mode":    Octal(in.Mode),
-	}).Debug("Creating inode.")
+	ctx.Debug().
+		Str("childID", inode.ID()).
+		Str("mode", Octal(in.Mode)).
+		Msg("Creating inode.")
 	out.NodeId = f.InsertChild(parentID, inode)
 	out.Attr = inode.makeAttr()
 	out.SetAttrTimeout(timeout)
@@ -410,12 +407,14 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 		// return the existing file inode as per "man creat"
 		parentID := f.TranslateID(in.NodeId)
 		child, _ := f.GetChild(parentID, name, f.auth)
-		log.WithFields(log.Fields{
-			"id":      parentID,
-			"childID": child.ID(),
-			"path":    child.Path(),
-			"mode":    Octal(in.Mode),
-		}).Debug("Child inode already exists, truncating.")
+		log.Debug().
+			Str("op", "Create").
+			Uint64("nodeID", in.NodeId).
+			Str("id", parentID).
+			Str("childID", child.ID()).
+			Str("path", child.Path()).
+			Str("mode", Octal(in.Mode)).
+			Msg("Child inode already exists, truncating.")
 		child.data = nil
 		child.DriveItem.Size = 0
 		child.hasChanges = true
@@ -436,23 +435,23 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	}
 
 	path := inode.Path()
+	ctx := log.With().
+		Str("op", "Open").
+		Uint64("nodeID", in.NodeId).
+		Str("id", id).
+		Str("path", path).
+		Logger()
+
 	flags := int(in.Flags)
 	if flags&os.O_RDWR+flags&os.O_WRONLY > 0 && f.IsOffline() {
-		log.WithFields(log.Fields{
-			"nodeID":    in.NodeId,
-			"id":        id,
-			"path":      path,
-			"readWrite": bool(flags&os.O_RDWR > 0),
-			"writeOnly": bool(flags&os.O_WRONLY > 0),
-		}).Debug("Refusing Open() with write flag, FS is offline.")
+		ctx.Warn().
+			Bool("readWrite", flags&os.O_RDWR > 0).
+			Bool("writeOnly", flags&os.O_WRONLY > 0).
+			Msg("Refusing Open() with write flag, FS is offline.")
 		return fuse.EROFS
 	}
 
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     id,
-		"path":   path,
-	}).Debug("Opening file for I/O.")
+	ctx.Debug().Msg("")
 
 	if inode.HasContent() {
 		// we already have data, likely the file is already opened somewhere
@@ -475,22 +474,14 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 			hashMatch = inode.VerifyChecksum(graph.QuickXORHash(&content))
 		} else {
 			hashMatch = true
-			log.WithFields(log.Fields{
-				"driveType": driveType,
-				"nodeID":    in.NodeId,
-				"id":        id,
-				"path":      path,
-			}).Warn("Could not determine drive type, not checking hashes.")
+			ctx.Warn().Str("driveType", driveType).
+				Msg("Could not determine drive type, not checking hashes.")
 		}
 		inode.RUnlock()
 
 		if hashMatch {
 			// disk content is only used if the checksums match
-			log.WithFields(log.Fields{
-				"id":     id,
-				"nodeID": in.NodeId,
-				"path":   path,
-			}).Info("Found content in cache.")
+			ctx.Info().Msg("Found content in cache.")
 
 			inode.Lock()
 			defer inode.Unlock()
@@ -499,37 +490,21 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 			inode.data = &content
 			return fuse.OK
 		}
-		log.WithFields(log.Fields{
-			"id":        id,
-			"nodeID":    in.NodeId,
-			"path":      path,
-			"drivetype": driveType,
-		}).Info("Not using cached item due to file hash mismatch.")
+		ctx.Info().Str("drivetype", driveType).
+			Msg("Not using cached item due to file hash mismatch.")
 	}
 
 	if isLocalID(id) {
-		log.WithFields(log.Fields{
-			"id":     id,
-			"nodeID": in.NodeId,
-			"path":   path,
-		}).Error("Item has a local ID, and we failed to find the cached local content!")
+		ctx.Error().Msg("Item has a local ID, and we failed to find the cached local content!")
 		return fuse.ENODATA
 	}
 
 	// didn't have it on disk, now try api
-	log.WithFields(log.Fields{
-		"id":     id,
-		"nodeID": in.NodeId,
-		"path":   path,
-	}).Info("Fetching remote content for item from API.")
+	ctx.Info().Msg("Fetching remote content for item from API.")
 
 	body, err := graph.GetItemContent(id, f.auth)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"path":   path,
-			"id":     id,
-			"nodeID": in.NodeId,
-		}).Error("Failed to fetch remote content.")
+		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
 
@@ -555,23 +530,20 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 	id := child.ID()
 	path := child.Path()
-	log.WithFields(log.Fields{
-		"nodeID":  in.NodeId,
-		"id":      parentID,
-		"childID": id,
-		"path":    path,
-	}).Debug("Unlinking inode.")
+	ctx := log.With().
+		Str("op", "Unlink").
+		Uint64("nodeID", in.NodeId).
+		Str("id", parentID).
+		Str("childID", id).
+		Str("path", path).
+		Logger()
+	ctx.Debug().Msg("Unlinking inode.")
 
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server
 	if !isLocalID(id) {
 		if err := graph.Remove(id, f.auth); err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"nodeID":   in.NodeId,
-				"path":     path,
-				"id":       id,
-				"parentID": parentID,
-			}).Error("Failed to delete item on server. Aborting op.")
+			ctx.Err(err).Msg("Failed to delete item on server. Aborting op.")
 			return fuse.EREMOTEIO
 		}
 	}
@@ -589,12 +561,14 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	}
 
 	path := inode.Path()
+	ctx := log.With().
+		Str("op", "Read").
+		Uint64("nodeID", in.NodeId).
+		Str("id", inode.ID()).
+		Str("path", path).
+		Logger()
 	if !inode.HasContent() {
-		log.WithFields(log.Fields{
-			"nodeID": in.NodeId,
-			"id":     inode.ID(),
-			"path":   path,
-		}).Warn("Read called on a closed file descriptor! Reopening file for op.")
+		ctx.Warn().Msg("Read called on a closed file descriptor! Reopening file for op.")
 		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader}, &fuse.OpenOut{})
 	}
 
@@ -611,28 +585,22 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	oend := end
 	size := len(*inode.data) // worse than using i.Size(), but some edge cases require it
 	if int(off) > size {
-		log.WithFields(log.Fields{
-			"id":        inode.DriveItem.ID,
-			"nodeID":    in.NodeId,
-			"path":      path,
-			"bufsize":   uint64(end) - off,
-			"file_size": size,
-			"offset":    off,
-		}).Error("Offset was beyond file end (Onedrive metadata was wrong!). Refusing op.")
+		ctx.Error().
+			Uint64("bufsize", uint64(end)-off).
+			Int("fileSize", size).
+			Uint64("offset", off).
+			Msg("Offset was beyond file end (Onedrive metadata was wrong!). Refusing op.")
 		return fuse.ReadResultData(make([]byte, 0)), fuse.EINVAL
 	}
 	if end > size {
 		end = size
 	}
-	log.WithFields(log.Fields{
-		"id":               inode.DriveItem.ID,
-		"nodeID":           in.NodeId,
-		"path":             path,
-		"original_bufsize": uint64(oend) - off,
-		"bufsize":          uint64(end) - off,
-		"file_size":        size,
-		"offset":           off,
-	}).Trace("Read file")
+	ctx.Trace().
+		Uint64("originalBufsize", uint64(oend)-off).
+		Uint64("bufsize", uint64(end)-off).
+		Int("fileSize", size).
+		Uint64("offset", off).
+		Msg("")
 	return fuse.ReadResultData((*inode.data)[off:end]), 0
 }
 
@@ -648,27 +616,21 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 
 	nWrite := len(data)
 	offset := int(in.Offset)
-	log.WithFields(log.Fields{
-		"id":      id,
-		"nodeID":  in.NodeId,
-		"path":    inode.Path(),
-		"bufsize": nWrite,
-		"offset":  offset,
-	}).Trace("Write file")
+	ctx := log.With().
+		Str("op", "Write").
+		Str("id", id).
+		Uint64("nodeID", in.NodeId).
+		Str("path", inode.Path()).
+		Logger()
+	ctx.Trace().
+		Int("bufsize", nWrite).
+		Int("offset", offset).Msg("")
 
 	if !inode.HasContent() {
-		log.WithFields(log.Fields{
-			"id":     id,
-			"nodeID": in.NodeId,
-			"path":   inode.Path(),
-		}).Warn("Write called on a closed file descriptor! Reopening file for write op.")
+		ctx.Warn().Msg("Write called on a closed file descriptor! Reopening file for write op.")
 		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader, Flags: in.WriteFlags}, &fuse.OpenOut{})
 		if !inode.HasContent() {
-			log.WithFields(log.Fields{
-				"id":     id,
-				"nodeID": in.NodeId,
-				"path":   inode.Path(),
-			}).Error("Open() failed, cannot write to uninitialized file!")
+			ctx.Error().Msg("Open() failed, cannot write to uninitialized file!")
 			return 0, fuse.EIO
 		}
 	}
@@ -704,11 +666,13 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		return fuse.EBADF
 	}
 
-	path := inode.Path()
-	log.WithFields(log.Fields{
-		"id":   id,
-		"path": path,
-	}).Debug()
+	ctx := log.With().
+		Str("op", "Fsync").
+		Str("id", id).
+		Uint64("nodeID", in.NodeId).
+		Str("path", inode.Path()).
+		Logger()
+	ctx.Debug().Msg("")
 	if inode.HasChanges() {
 		inode.Lock()
 		inode.hasChanges = false
@@ -723,11 +687,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		inode.Unlock()
 
 		if err := f.uploads.QueueUpload(inode); err != nil {
-			log.WithFields(log.Fields{
-				"id":   id,
-				"path": path,
-				"err":  err,
-			}).Error("Error creating upload session.")
+			ctx.Error().Err(err).Msg("Error creating upload session.")
 			return fuse.EREMOTEIO
 		}
 		return fuse.OK
@@ -743,11 +703,12 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		return fuse.EBADF
 	}
 
-	log.WithFields(log.Fields{
-		"path":   inode.Path(),
-		"nodeID": in.NodeId,
-		"id":     inode.ID(),
-	}).Debug()
+	log.Debug().
+		Str("op", "Flush").
+		Str("id", inode.ID()).
+		Str("path", inode.Path()).
+		Uint64("nodeID", in.NodeId).
+		Msg("")
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
 	// wipe data from memory to avoid mem bloat over time
@@ -768,11 +729,12 @@ func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fu
 	if inode == nil {
 		return fuse.ENOENT
 	}
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     id,
-		"path":   inode.Path(),
-	}).Trace()
+	log.Trace().
+		Str("op", "GetAttr").
+		Uint64("nodeID", in.NodeId).
+		Str("id", id).
+		Str("path", inode.Path()).
+		Msg("")
 
 	out.Attr = inode.makeAttr()
 	out.SetTimeout(timeout)
@@ -790,11 +752,12 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	path := i.Path()
 	isDir := i.IsDir() // holds an rlock
 	i.Lock()
-	log.WithFields(log.Fields{
-		"nodeID": in.NodeId,
-		"id":     i.DriveItem.ID,
-		"path":   path,
-	}).Debug()
+	log.Debug().
+		Str("op", "SetAttr").
+		Uint64("nodeID", in.NodeId).
+		Str("id", i.DriveItem.ID).
+		Str("path", path).
+		Msg("")
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
@@ -847,48 +810,38 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 	}
 	dest := filepath.Join(newParentItem.Path(), newName)
 
-	// we don't fully trust DriveItem.Parent.Path from the Graph API
-	log.WithFields(log.Fields{
-		"srcNodeID": in.NodeId,
-		"dstNodeID": in.Newdir,
-		"path":      path,
-		"dest":      dest,
-	}).Debug("Renaming inode.")
-
 	inode, _ := f.GetChild(oldParentID, name, f.auth)
 	id, err := f.remoteID(inode)
+	newParentID := newParentItem.ID()
+
+	ctx := log.With().
+		Str("op", "Rename").
+		Str("id", id).
+		Str("parentID", newParentID).
+		Str("path", path).
+		Str("dest", dest).
+		Logger()
+	ctx.Info().
+		Uint64("srcNodeID", in.NodeId).
+		Uint64("dstNodeID", in.Newdir).
+		Msg("")
+
 	if isLocalID(id) || err != nil {
 		// uploads will fail without an id
-		log.WithFields(log.Fields{
-			"id":   id,
-			"path": path,
-			"err":  err,
-		}).Error("ID of item to move cannot be local and we failed to obtain an ID.")
+		ctx.Error().Err(err).
+			Msg("ID of item to move cannot be local and we failed to obtain an ID.")
 		return fuse.EREMOTEIO
 	}
 
 	// perform remote rename
-	newParentID := newParentItem.ID()
 	if err = graph.Rename(id, newName, newParentID, f.auth); err != nil {
-		log.WithFields(log.Fields{
-			"nodeID":   in.NodeId,
-			"id":       id,
-			"parentID": newParentID,
-			"path":     path,
-			"dest":     dest,
-			"err":      err,
-		}).Error("Failed to rename remote item.")
+		ctx.Error().Err(err).Msg("Failed to rename remote item.")
 		return fuse.EREMOTEIO
 	}
 
 	// now rename local copy
 	if err = f.MovePath(oldParentID, newParentID, name, newName, f.auth); err != nil {
-		log.WithFields(log.Fields{
-			"nodeID": in.NodeId,
-			"path":   path,
-			"dest":   dest,
-			"err":    err,
-		}).Error("Failed to rename local item.")
+		ctx.Error().Err(err).Msg("Failed to rename local item.")
 		return fuse.EIO
 	}
 

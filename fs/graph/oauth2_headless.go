@@ -5,7 +5,7 @@ package graph
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // accountName arg is only present for compatibility with the non-headless C version.
@@ -17,7 +17,7 @@ func getAuthCode(accountName string) string {
 	fmt.Scanln(&response)
 	code, err := parseAuthCode(response)
 	if err != nil {
-		log.Fatal("No validation code returned, or code was invalid. " +
+		log.Fatal().Msg("No validation code returned, or code was invalid. " +
 			"Please restart the application and try again.")
 	}
 	return code
