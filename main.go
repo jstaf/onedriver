@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	odfs "github.com/jstaf/onedriver/fs"
@@ -109,6 +110,7 @@ func main() {
 	// create the filesystem
 	auth := graph.Authenticate(authPath)
 	fs := odfs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
+	go fs.DeltaLoop(30 * time.Second)
 	xdgVolumeInfo(fs, auth)
 
 	server, err := fuse.NewServer(fs, mountpoint, &fuse.MountOptions{
