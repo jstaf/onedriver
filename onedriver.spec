@@ -89,6 +89,9 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
   upload files on success. This significantly improves upload speed.
 - Fixes a crash when writes begin at an offset beyond maximum file length. This fixes a
   bug where running ld inside the filesystem would cause it to crash.
+- Switch to using zerolog instead of logrus for logging. Though zerolog is supposedly 
+  faster, the real reason to switch is that it's much easier for me (and hopefully you)
+  to read!
 
 * Tue Aug 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.2
 - onedriver now disallows rmdir on nonempty directories.

@@ -12,7 +12,7 @@ import "C"
 import (
 	"unsafe"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // Fetch the auth code required as the first part of oauth2 authentication. Uses
@@ -29,7 +29,7 @@ func getAuthCode(accountName string) string {
 	code, err := parseAuthCode(response)
 	if err != nil {
 		//TODO create a popup with the auth failure message here instead of a log message
-		log.Fatal("No validation code returned, or code was invalid. " +
+		log.Fatal().Msg("No validation code returned, or code was invalid. " +
 			"Please restart the application and try again.")
 	}
 	return code

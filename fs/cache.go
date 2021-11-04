@@ -11,7 +11,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -49,7 +49,7 @@ var (
 func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
 	if err != nil {
-		log.WithFields(log.Fields{"err": err}).Fatal("Could not open DB")
+		log.Fatal().Err(err).Msg("Could not open DB")
 	}
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(bucketContent)
@@ -73,7 +73,9 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 			fs.offline = true
 			fs.Unlock()
 			if root = fs.GetID("root"); root == nil {
-				log.Fatal("We are offline and could not fetch the filesystem root item from disk.")
+				log.Fatal().Msg(
+					"We are offline and could not fetch the filesystem root item from disk.",
+				)
 			}
 			// when offline, we load the cache deltaLink from disk
 			fs.db.View(func(tx *bolt.Tx) error {
@@ -84,15 +86,13 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 					// long enough to save its delta link. We explicitly disallow these
 					// types of startups as it's possible for things to get out of sync
 					// this way.
-					log.Fatal("Cannot perform an offline startup without a valid delta " +
-						"link from a previous session.")
+					log.Fatal().Msg("Cannot perform an offline startup without a valid " +
+						"delta link from a previous session.")
 				}
 				return nil
 			})
 		} else {
-			log.WithFields(log.Fields{
-				"err": err,
-			}).Fatal("Could not fetch root item of filesystem!")
+			log.Fatal().Err(err).Msg("Could not fetch root item of filesystem!")
 		}
 	}
 	// root inode is inode 1
@@ -108,8 +108,9 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 		if child, _ := fs.GetChild(fs.root, trash, auth); child == nil {
 			item, err := graph.Mkdir(trash, fs.root, auth)
 			if err != nil {
-				log.WithField("err", err).Error("Could not create trash folder. " +
-					"Trashing items through the file browser may result in errors.")
+				log.Error().Err(err).
+					Msg("Could not create trash folder. " +
+						"Trashing items through the file browser may result in errors.")
 			} else {
 				fs.InsertID(item.ID, NewInodeDriveItem(item))
 			}
@@ -213,10 +214,10 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 		if nodeID <= f.lastNodeID {
 			f.inodes[nodeID-1] = id
 		} else {
-			log.WithFields(log.Fields{
-				"nodeID":     nodeID,
-				"lastNodeID": f.lastNodeID,
-			}).Error("NodeID exceeded maximum node ID! Ignoring ID change.")
+			log.Error().
+				Uint64("nodeID", nodeID).
+				Uint64("lastNodeID", f.lastNodeID).
+				Msg("NodeID exceeded maximum node ID! Ignoring ID change.")
 		}
 		f.Unlock()
 	}
@@ -228,11 +229,11 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 	}
 	parent := f.GetID(parentID)
 	if parent == nil {
-		log.WithFields(log.Fields{
-			"parentID":  parentID,
-			"childID":   id,
-			"childName": inode.Name(),
-		}).Error("Parent item could not be found when setting parent.")
+		log.Error().
+			Str("parentID", parentID).
+			Str("childID", id).
+			Str("childName", inode.Name()).
+			Msg("Parent item could not be found when setting parent.")
 		return nodeID
 	}
 
@@ -309,17 +310,15 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 	inode := f.GetID(id)
 	children := make(map[string]*Inode)
 	if inode == nil {
-		log.WithFields(log.Fields{
-			"id": id,
-		}).Error("Inode not found in cache")
+		log.Error().Str("id", id).Msg("Inode not found in cache")
 		return children, errors.New(id + " not found in cache")
 	} else if !inode.IsDir() {
 		// Normal files are treated as empty folders. This only gets called if
 		// we messed up and tried to get the children of a plain-old file.
-		log.WithFields(log.Fields{
-			"id":   id,
-			"path": inode.Path(),
-		}).Warn("Attepted to get children of ordinary file")
+		log.Warn().
+			Str("id", id).
+			Str("path", inode.Path()).
+			Msg("Attepted to get children of ordinary file")
 		return children, nil
 	}
 
@@ -347,9 +346,9 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 	fetched, err := graph.GetItemChildren(id, auth)
 	if err != nil {
 		if graph.IsOffline(err) {
-			log.WithFields(log.Fields{
-				"id": id,
-			}).Warn("We are offline, and no children found in cache. Pretending there are no children.")
+			log.Warn().Str("id", id).
+				Msg("We are offline, and no children found in cache. " +
+					"Pretending there are no children.")
 			return children, nil
 		}
 		// something else happened besides being offline
@@ -443,10 +442,10 @@ func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) (uin
 		return 0, err
 	} else if parent == nil {
 		const errMsg string = "parent of key was nil"
-		log.WithFields(log.Fields{
-			"key":  key,
-			"path": inode.Path(),
-		}).Error(errMsg)
+		log.Error().
+			Str("key", key).
+			Str("path", inode.Path()).
+			Msg(errMsg)
 		return 0, errors.New(errMsg)
 	}
 
@@ -563,7 +562,7 @@ func (f *Filesystem) MoveContent(oldID string, newID string) {
 // cache is offline. Old metadata is not removed, only overwritten (to avoid an
 // offline session from wiping all metadata on a subsequent serialization).
 func (f *Filesystem) SerializeAll() {
-	log.Debug("Serializing cache metadata to disk.")
+	log.Debug().Msg("Serializing cache metadata to disk.")
 
 	allItems := make(map[string][]byte)
 	f.metadata.Range(func(k interface{}, v interface{}) bool {

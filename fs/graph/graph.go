@@ -14,8 +14,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/jstaf/onedriver/logger"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // GraphURL is the API endpoint of Microsoft Graph
@@ -33,10 +32,7 @@ type graphError struct {
 func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
 	if auth == nil || auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
-		log.WithFields(log.Fields{
-			"caller":   logger.Caller(3),
-			"calledBy": logger.Caller(4),
-		}).Error("Auth was empty and we attempted to make a request with it!")
+		log.Error().Msg("Auth was empty and we attempted to make a request with it!")
 		return nil, errors.New("cannot make a request with empty auth")
 	}
 
@@ -66,11 +62,11 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 	if response.StatusCode == 401 {
 		var err graphError
 		json.Unmarshal(body, &err)
-		log.WithFields(log.Fields{
-			"code":    err.Error.Code,
-			"message": err.Error.Message,
-		}).Warn("Authentication token invalid or new app permissions required, " +
-			"forcing reauth before retrying.")
+		log.Warn().
+			Str("code", err.Error.Code).
+			Str("message", err.Error.Message).
+			Msg("Authentication token invalid or new app permissions required, " +
+				"forcing reauth before retrying.")
 
 		reauth := newAuth(auth.path)
 		auth.AccessToken = reauth.AccessToken
