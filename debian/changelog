@@ -6,6 +6,9 @@ onedriver (0.12.0-1) focal; urgency=low
     upload files on success. This significantly improves upload speed.
   * Fixes a crash when writes begin at an offset beyond maximum file length. This fixes a
     bug where running ld inside the filesystem would cause it to crash.
+  * Switch to using zerolog instead of logrus for logging. Though zerolog is supposedly 
+    faster, the real reason to switch is that it's much easier for me (and hopefully you)
+    to read. Also, pretty colors!
 
  -- Jeff Stafford <jeff.stafford@protonmail.com>  Tue, 2 Nov 2021 19:00:00 -0400
 
