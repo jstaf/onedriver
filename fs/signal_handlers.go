@@ -16,7 +16,8 @@ func UnmountHandler(signal <-chan os.Signal, server *fuse.Server) {
 
 	err := server.Unmount()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to unmount filesystem cleanly!")
+		log.Error().Err(err).Msg("Failed to unmount filesystem cleanly! " +
+			"Run \"fusermount -uz /MOUNTPOINT/GOES/HERE\" to unmount.")
 	}
 
 	os.Exit(128)

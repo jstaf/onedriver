@@ -87,7 +87,7 @@ func main() {
 	}
 
 	zerolog.SetGlobalLevel(StringToLevel(*logLevel))
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
