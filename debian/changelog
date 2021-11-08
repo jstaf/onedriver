@@ -9,6 +9,9 @@ onedriver (0.12.0-1) focal; urgency=low
   * Switch to using zerolog instead of logrus for logging. Though zerolog is supposedly 
     faster, the real reason to switch is that it's much easier for me (and hopefully you)
     to read. Also, pretty colors!
+  * onedriver now gives you the option to choose to authenticate via the terminal when 
+    authenticating via the new --no-browser option (this is the functionality from the 
+    old "headless" build).
 
  -- Jeff Stafford <jeff.stafford@protonmail.com>  Tue, 2 Nov 2021 19:00:00 -0400
 
