@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	odfs "github.com/jstaf/onedriver/fs"
+	"github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -115,11 +115,11 @@ func main() {
 
 	// create the filesystem
 	auth := graph.Authenticate(authPath, *headless)
-	fs := odfs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
-	go fs.DeltaLoop(30 * time.Second)
-	xdgVolumeInfo(fs, auth)
+	filesystem := fs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
+	go filesystem.DeltaLoop(30 * time.Second)
+	xdgVolumeInfo(filesystem, auth)
 
-	server, err := fuse.NewServer(fs, mountpoint, &fuse.MountOptions{
+	server, err := fuse.NewServer(filesystem, mountpoint, &fuse.MountOptions{
 		Name:          "onedriver",
 		FsName:        "onedriver",
 		DisableXAttrs: true,
@@ -134,7 +134,7 @@ func main() {
 	// setup signal handler for graceful unmount on signals like sigint
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go odfs.UnmountHandler(sigChan, server)
+	go fs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
 	server.Serve()
@@ -164,8 +164,8 @@ func StringToLevel(level string) zerolog.Level {
 
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
 // corner of the mountpoint and shows the account name in the nautilus sidebar
-func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
-	if child, _ := fs.GetPath("/.xdg-volume-info", auth); child != nil {
+func xdgVolumeInfo(filesystem *fs.Filesystem, auth *graph.Auth) {
+	if child, _ := filesystem.GetPath("/.xdg-volume-info", auth); child != nil {
 		return
 	}
 	log.Info().Msg("Creating .xdg-volume-info")
@@ -190,9 +190,9 @@ func xdgVolumeInfo(fs *odfs.Filesystem, auth *graph.Auth) {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to write .xdg-volume-info")
 	}
-	root, _ := fs.GetPath("/", auth) // cannot fail
-	inode := odfs.NewInode(".xdg-volume-info", 0644, root)
+	root, _ := filesystem.GetPath("/", auth) // cannot fail
+	inode := fs.NewInode(".xdg-volume-info", 0644, root)
 	if json.Unmarshal(resp, &inode) == nil {
-		fs.InsertID(inode.ID(), inode)
+		filesystem.InsertID(inode.ID(), inode)
 	}
 }

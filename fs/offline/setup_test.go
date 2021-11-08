@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	odfs "github.com/jstaf/onedriver/fs"
+	"github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 
 	// reuses the cached data from the previous tests
 	server, _ := fuse.NewServer(
-		odfs.NewFilesystem(auth, "test.db"),
+		fs.NewFilesystem(auth, "test.db"),
 		mountLoc,
 		&fuse.MountOptions{
 			Name:          "onedriver",
@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 	// setup sigint handler for graceful unmount on interrupt/terminate
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
-	go odfs.UnmountHandler(sigChan, server)
+	go fs.UnmountHandler(sigChan, server)
 
 	// mount fs in background thread
 	go server.Serve()
