@@ -27,10 +27,10 @@ func usage() {
 	fmt.Printf(`onedriver - A Linux client for Microsoft OneDrive.
 
 This program will mount your OneDrive account as a Linux filesystem at the
-specified mountpoint. Note that this is not a sync client - files are fetched
-on-demand and cached locally. Only files you actually use will be downloaded.
-While offline, the filesystem will be read-only until connectivity is re-
-established.
+specified mountpoint. Note that this is not a sync client - files are only
+fetched on-demand and cached locally. Only files you actually use will be
+downloaded. While offline, the filesystem will be read-only until
+connectivity is re-established.
 
 Usage: onedriver [options] <mountpoint>
 
@@ -43,11 +43,12 @@ func main() {
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to OneDrive and then exit.")
-	headless := flag.Bool("headless", false,
+	headless := flag.BoolP("no-browser", "n", false,
 		"This disables launching the built-in web browser during authentication. "+
 			"Follow the instructions in the terminal to authenticate to OneDrive.")
-	logLevel := flag.StringP("log", "l", "debug", "Set logging level/verbosity. "+
-		"Can be one of: fatal, error, warn, info, debug, trace")
+	logLevel := flag.StringP("log", "l", "debug",
+		"Set logging level/verbosity for the filesystem. "+
+			"Can be one of: fatal, error, warn, info, debug, trace")
 	cacheDir := flag.StringP("cache-dir", "c", "",
 		"Change the default cache directory used by onedriver. "+
 			"Will be created if the path does not already exist.")
@@ -55,7 +56,8 @@ func main() {
 		"Delete the existing onedriver cache directory and then exit. "+
 			"Equivalent to resetting the program.")
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
-	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging.")
+	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging. "+
+		"This logs communication between onedriver and the kernel.")
 	flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
 	flag.Parse()
