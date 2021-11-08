@@ -103,22 +103,21 @@ func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
 		return nil, errors.New("data to upload cannot be nil")
 	}
 
-	inode.RLock()
-	defer inode.RUnlock()
-
 	// create a generic session for all files
+	inode.RLock()
 	session := UploadSession{
 		ID:       inode.DriveItem.ID,
 		OldID:    inode.DriveItem.ID,
 		ParentID: inode.DriveItem.Parent.ID,
 		NodeID:   inode.nodeID,
 		Name:     inode.DriveItem.Name,
-		Size:     uint64(len(*data)), // just in case it somehow differs
 		Data:     *data,
 		ModTime:  *inode.DriveItem.ModTime,
 	}
+	inode.RUnlock()
 
 	// compute both hashes for now, session does not know the drivetype
+	session.Size = uint64(len(*data)) // just in case it somehow differs
 	session.SHA1Hash = graph.SHA1Hash(data)
 	session.QuickXORHash = graph.QuickXORHash(data)
 	return &session, nil
