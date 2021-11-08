@@ -1,6 +1,6 @@
 .\" Manpage for onedriver
 
-.TH man 1 "Aug 2021" "0.12.0" "onedriver man page"
+.TH man 1 "Nov 2021" "0.12.0" "onedriver man page"
 
 .SH NAME
 onedriver \- A native Linux client for Microsoft OneDrive.
@@ -29,24 +29,28 @@ Authenticate to OneDrive and then exit.
 Change the default cache directory used by onedriver. Will be created if the path does not already exist. The \fIdir\fR argument specifies the location. 
 
 .TP
-.BR \-d , "\-\-debug"
-Enable FUSE debug logging.
+.BR \-d , " \-\-debug"
+Enable FUSE debug logging. This logs communication between onedriver and the kernel.
 
 .TP
-.BR \-h , "\-\-help"
+.BR \-h , " \-\-help"
 Displays a help message.
 
 .TP
-.BR \-l , "\-\-log "\fIlevel
+.BR \-l , " \-\-log "\fIlevel
 Set logging level/verbosity. \fIlevel\fR can be one of: 
 .BR fatal ", " error ", " warn ", " info ", " debug " or " trace " (default is " debug ")."
 
 .TP
-.BR \-v , "\-\-version"
+.BR \-n , " \-\-no\-browser"
+This disables launching the built-in web browser during authentication. Follow the instructions in the terminal to authenticate to OneDrive.
+
+.TP
+.BR \-v , " \-\-version"
 Display program version.
 
 .TP
-.BR \-w , "\-\-wipe-cache"
+.BR \-w , " \-\-wipe-cache"
 Delete the existing onedriver cache directory and then exit. Equivalent to resetting the program.
 
 

@@ -16,7 +16,7 @@ func TestMain(m *testing.M) {
 	defer f.Close()
 
 	// auth and log account metadata so we're extra sure who we're testing against
-	auth := Authenticate(".auth_tokens.json")
+	auth := Authenticate(".auth_tokens.json", false)
 	user, _ := GetUser(auth)
 	drive, _ := GetDrive(auth)
 	log.Info().

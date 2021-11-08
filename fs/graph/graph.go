@@ -68,7 +68,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 			Msg("Authentication token invalid or new app permissions required, " +
 				"forcing reauth before retrying.")
 
-		reauth := newAuth(auth.path)
+		reauth := newAuth(auth.path, false)
 		auth.AccessToken = reauth.AccessToken
 		auth.RefreshToken = reauth.RefreshToken
 		auth.ExpiresAt = reauth.ExpiresAt

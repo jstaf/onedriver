@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f, TimeFormat: "15:04:05"})
 	defer f.Close()
 
-	auth = graph.Authenticate(".auth_tokens.json")
+	auth = graph.Authenticate(".auth_tokens.json", false)
 	fs = NewFilesystem(auth, "test.db")
 	server, _ := fuse.NewServer(
 		fs,
