@@ -3,6 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -100,7 +101,7 @@ func (a *Auth) Refresh() {
 				Bytes("response", body).
 				Int("http_code", resp.StatusCode).
 				Msg("Failed to renew access tokens. Attempting to reauthenticate.")
-			a = newAuth(a.path)
+			a = newAuth(a.path, false)
 		} else {
 			a.ToFile(a.path)
 		}
@@ -114,6 +115,22 @@ func getAuthURL() string {
 		"&scope=" + url.PathEscape("user.read files.readwrite.all offline_access") +
 		"&response_type=code" +
 		"&redirect_uri=" + authRedirectURL
+}
+
+// getAuthCodeHeadless has the user perform authentication in their own browser
+// instead of WebKit2GTK and then input the auth code in the terminal.
+func getAuthCodeHeadless(accountName string) string {
+	fmt.Printf("Please visit the following URL:\n%s\n\n", getAuthURL())
+	fmt.Println("Please enter the redirect URL once you are redirected to a " +
+		"blank page (after \"Let this app access your info?\"):")
+	var response string
+	fmt.Scanln(&response)
+	code, err := parseAuthCode(response)
+	if err != nil {
+		log.Fatal().Msg("No validation code returned, or code was invalid. " +
+			"Please restart the application and try again.")
+	}
+	return code
 }
 
 // parseAuthCode is used to parse the auth code out of the redirect the server gives us
@@ -173,11 +190,21 @@ func getAuthTokens(authCode string) *Auth {
 	return &auth
 }
 
-// newAuth performs initial authentication flow and saves tokens to disk
-func newAuth(path string) *Auth {
+// newAuth performs initial authentication flow and saves tokens to disk. The headless
+// parameter determines if we will try to auth directly in the terminal instead of
+// doing it via embedded browser.
+func newAuth(path string, headless bool) *Auth {
 	old := Auth{}
 	old.FromFile(path)
-	auth := getAuthTokens(getAuthCode(old.Account))
+
+	var code string
+	if headless {
+		code = getAuthCodeHeadless(old.Account)
+	} else {
+		// in a build without CGO, this will be the same as above
+		code = getAuthCode(old.Account)
+	}
+	auth := getAuthTokens(code)
 
 	if user, err := GetUser(auth); err == nil {
 		auth.Account = user.UserPrincipalName
@@ -186,13 +213,14 @@ func newAuth(path string) *Auth {
 	return auth
 }
 
-// Authenticate performs first-time authentication to Graph
-func Authenticate(path string) *Auth {
+// Authenticate performs first-time authentication to Graph. If headless is true,
+// we will authenticate in the terminal.
+func Authenticate(path string, headless bool) *Auth {
 	auth := &Auth{}
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		// no tokens found, gotta start oauth flow from beginning
-		auth = newAuth(path)
+		auth = newAuth(path, headless)
 	} else {
 		// we already have tokens, no need to force a new auth flow
 		auth.FromFile(path)

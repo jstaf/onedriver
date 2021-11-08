@@ -43,6 +43,9 @@ func main() {
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to OneDrive and then exit.")
+	headless := flag.Bool("headless", false,
+		"This disables launching the built-in web browser during authentication. "+
+			"Follow the instructions in the terminal to authenticate to OneDrive.")
 	logLevel := flag.StringP("log", "l", "debug", "Set logging level/verbosity. "+
 		"Can be one of: fatal, error, warn, info, debug, trace")
 	cacheDir := flag.StringP("cache-dir", "c", "",
@@ -82,7 +85,7 @@ func main() {
 	authPath := filepath.Join(dir, "auth_tokens.json")
 	if *authOnly {
 		os.Remove(authPath)
-		graph.Authenticate(authPath)
+		graph.Authenticate(authPath, *headless)
 		os.Exit(0)
 	}
 
@@ -92,7 +95,8 @@ func main() {
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
 		flag.Usage()
-		log.Fatal().Msg("No mountpoint provided, exiting.")
+		fmt.Fprintf(os.Stderr, "\nNo mountpoint provided, exiting.\n")
+		os.Exit(1)
 	}
 
 	log.Info().Msgf("onedriver v%s %s", version, commit[:clen])
@@ -108,7 +112,7 @@ func main() {
 	}
 
 	// create the filesystem
-	auth := graph.Authenticate(authPath)
+	auth := graph.Authenticate(authPath, *headless)
 	fs := odfs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
 	go fs.DeltaLoop(30 * time.Second)
 	xdgVolumeInfo(fs, auth)

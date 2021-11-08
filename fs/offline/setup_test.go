@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 
-	auth = graph.Authenticate(".auth_tokens.json")
+	auth = graph.Authenticate(".auth_tokens.json", false)
 	inode, err := graph.GetItem("root", auth)
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")
