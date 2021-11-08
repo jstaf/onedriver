@@ -752,20 +752,31 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	path := i.Path()
 	isDir := i.IsDir() // holds an rlock
 	i.Lock()
-	log.Debug().
+
+	ctx := log.With().
 		Str("op", "SetAttr").
 		Uint64("nodeID", in.NodeId).
 		Str("id", i.DriveItem.ID).
 		Str("path", path).
-		Msg("")
+		Logger()
 
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
+		ctx.Info().
+			Str("subop", "utimens").
+			Time("oldMtime", *i.DriveItem.ModTime).
+			Time("newMtime", *i.DriveItem.ModTime).
+			Msg("")
 		i.DriveItem.ModTime = &mtime
 	}
 
 	// chmod
 	if mode, valid := in.GetMode(); valid {
+		ctx.Info().
+			Str("subop", "chmod").
+			Str("oldMode", Octal(i.mode)).
+			Str("newMode", Octal(mode)).
+			Msg("")
 		if isDir {
 			i.mode = fuse.S_IFDIR | mode
 		} else {
@@ -775,6 +786,16 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 
 	// truncate
 	if size, valid := in.GetSize(); valid {
+		ctx.Info().
+			Str("subop", "truncate").
+			Uint64("oldSize", i.DriveItem.Size).
+			Uint64("newSize", size).
+			Msg("")
+		if i.data == nil {
+			data := f.GetContent(i.DriveItem.ID)
+			i.data = &data
+		}
+
 		if size > i.DriveItem.Size {
 			// unlikely to be hit, but implementing just in case
 			extra := make([]byte, size-i.DriveItem.Size)
