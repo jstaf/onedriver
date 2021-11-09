@@ -492,9 +492,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		}
 		ctx.Info().Str("drivetype", driveType).
 			Msg("Not using cached item due to file hash mismatch.")
-	}
-
-	if isLocalID(id) {
+	} else if isLocalID(id) {
 		ctx.Error().Msg("Item has a local ID, and we failed to find the cached local content!")
 		return fuse.ENODATA
 	}
