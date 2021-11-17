@@ -252,7 +252,7 @@ func (i *Inode) Mode() uint32 {
 	i.RLock()
 	defer i.RUnlock()
 	if i.mode == 0 { // only 0 if fetched from Graph API
-		if i.Folder != nil {
+		if i.DriveItem.IsDir() {
 			return fuse.S_IFDIR | 0755
 		}
 		return fuse.S_IFREG | 0644
@@ -265,7 +265,7 @@ func (i *Inode) Mode() uint32 {
 func (i *Inode) ModTime() uint64 {
 	i.RLock()
 	defer i.RUnlock()
-	return uint64(i.DriveItem.ModTime.Unix())
+	return i.DriveItem.ModTimeUnix()
 }
 
 // NLink gives the number of hard links to an inode (or child count if a

@@ -19,7 +19,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 		// get deltas
 		log.Trace().Msg("Fetching deltas from server.")
 		pollSuccess := false
-		deltas := make(map[string]*Inode)
+		deltas := make(map[string]*graph.DriveItem)
 		for {
 			incoming, cont, err := f.pollDeltas(f.auth)
 			if err != nil {
@@ -36,7 +36,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			for _, delta := range incoming {
 				// As per the API docs, the last delta received from the server
 				// for an item is the one we should use.
-				deltas[delta.ID()] = delta
+				deltas[delta.ID] = delta
 			}
 			if !cont {
 				log.Info().Msgf("Fetched %d deltas.", len(deltas))
@@ -51,7 +51,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			err := f.applyDelta(delta)
 			// retry deletion of non-empty directories after all other deltas applied
 			if err != nil && err.Error() == "directory is non-empty" {
-				secondPass = append(secondPass, delta.ID())
+				secondPass = append(secondPass, delta.ID)
 			}
 		}
 		for _, id := range secondPass {
@@ -85,9 +85,9 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 }
 
 type deltaResponse struct {
-	NextLink  string   `json:"@odata.nextLink,omitempty"`
-	DeltaLink string   `json:"@odata.deltaLink,omitempty"`
-	Values    []*Inode `json:"value,omitempty"`
+	NextLink  string             `json:"@odata.nextLink,omitempty"`
+	DeltaLink string             `json:"@odata.deltaLink,omitempty"`
+	Values    []*graph.DriveItem `json:"value,omitempty"`
 }
 
 // Polls the delta endpoint and return deltas + whether or not to continue
@@ -95,10 +95,10 @@ type deltaResponse struct {
 // client will actually appear as deltas from the server (there is no
 // distinction between local and remote changes from the server's perspective,
 // everything is a delta, regardless of where it came from).
-func (f *Filesystem) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
+func (f *Filesystem) pollDeltas(auth *graph.Auth) ([]*graph.DriveItem, bool, error) {
 	resp, err := graph.Get(f.deltaLink, auth)
 	if err != nil {
-		return make([]*Inode, 0), false, err
+		return make([]*graph.DriveItem, 0), false, err
 	}
 
 	page := deltaResponse{}
@@ -120,10 +120,10 @@ func (f *Filesystem) pollDeltas(auth *graph.Auth) ([]*Inode, bool, error) {
 // * Deleted items
 // * Changed content remotely, but not locally
 // * New items in a folder we have locally
-func (f *Filesystem) applyDelta(delta *Inode) error {
-	id := delta.ID()
-	name := delta.Name()
-	parentID := delta.ParentID()
+func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
+	id := delta.ID
+	name := delta.Name
+	parentID := delta.Parent.ID
 	ctx := log.With().
 		Str("id", id).
 		Str("parentID", parentID).
@@ -181,7 +181,7 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 		} else {
 			ctx.Info().Str("delta", "create").
 				Msg("Creating inode from delta.")
-			f.InsertChild(parentID, delta)
+			f.InsertChild(parentID, NewInodeDriveItem(delta))
 			return nil
 		}
 	}
@@ -209,11 +209,11 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 	// actually modifies remotely is the actual file data, so we simply accept
 	// the remote metadata changes that do not deal with the file's content
 	// changing.
-	if delta.ModTime() > local.ModTime() && !delta.ETagIsMatch(local.ETag) {
+	if delta.ModTimeUnix() > local.ModTime() && !delta.ETagIsMatch(local.ETag) {
 		sameContent := false
 		if !delta.IsDir() && delta.File != nil {
 			local.RLock()
-			if delta.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+			if delta.Parent.DriveType == graph.DriveTypePersonal {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
 			} else {
 				sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
@@ -228,12 +228,12 @@ func (f *Filesystem) applyDelta(delta *Inode) error {
 			// update modtime, hashes, purge any local content in memory
 			local.Lock()
 			defer local.Unlock()
-			local.DriveItem.ModTime = delta.DriveItem.ModTime
-			local.DriveItem.Size = delta.DriveItem.Size
-			local.DriveItem.ETag = delta.DriveItem.ETag
+			local.DriveItem.ModTime = delta.ModTime
+			local.DriveItem.Size = delta.Size
+			local.DriveItem.ETag = delta.ETag
 			// the rest of these are harmless when this is a directory
 			// as they will be null anyways
-			local.DriveItem.File = delta.DriveItem.File
+			local.DriveItem.File = delta.File
 			local.hasChanges = false
 			local.data = nil
 			return nil
