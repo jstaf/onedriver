@@ -351,6 +351,7 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 		ID:      dir.ID(),
 		Parent:  &graph.DriveItemParent{ID: dir.ParentID()},
 		Deleted: &graph.Deleted{State: "softdeleted"},
+		Folder:  &graph.Folder{},
 	}
 	err := cache.applyDelta(delta)
 	if cache.GetID(delta.ID) == nil {
