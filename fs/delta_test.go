@@ -17,7 +17,14 @@ import (
 // a helper function for use with tests
 func (i *Inode) setContent(newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
+	now := time.Now()
+	i.DriveItem.ModTime = &now
 	i.data = &newContent
+
+	if i.DriveItem.File == nil {
+		i.DriveItem.File = &graph.File{}
+	}
+
 	if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 		i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(&newContent)
 	} else {
@@ -197,41 +204,16 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 // client data is preserved.
 func TestDeltaContentChangeBoth(t *testing.T) {
 	t.Parallel()
-	fpath := filepath.Join(DeltaDir, "both_content_changed.txt")
+
+	cache := NewFilesystem(auth, "test_delta_content_change_both.db")
+	inode := NewInode("both_content_changed.txt", 0644|fuse.S_IFREG, nil)
+	cache.InsertPath("/both_content_changed.txt", nil, inode)
 	original := []byte("initial content")
-	failOnErr(t, ioutil.WriteFile(fpath, original, 0644))
-
-	var inode *Inode
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		inode, _ = fs.GetPath("/onedriver_tests/delta/both_content_changed.txt", nil)
-		if !isLocalID(inode.ID()) {
-			break
-		}
-	}
-	if isLocalID(inode.ID()) {
-		t.Fatal("ID was local")
-	}
-
-	// change and upload it via the API
-	var item *graph.DriveItem
-	var err error
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		item, err = graph.GetItemPath("/onedriver_tests/delta/both_content_changed.txt", auth)
-		if err == nil {
-			break
-		}
-	}
-	failOnErr(t, err)
-	inode = fs.GetID(item.ID)
-	if inode == nil {
-		t.Fatal("Local item cannot be nil")
-	}
+	inode.setContent(original)
 
 	// write to, but do not close the file to simulate an in-use local file
 	local := []byte("local write content")
-	_, status := fs.Write(
+	_, status := cache.Write(
 		context.Background().Done(),
 		&fuse.WriteIn{
 			InHeader: fuse.InHeader{NodeId: inode.NodeID()},
@@ -245,31 +227,40 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	}
 
 	// apply a fake delta to the local item
-	fakeDelta, err := graph.GetItem(item.ID, auth)
-	failOnErr(t, err)
+	fakeDelta := inode.DriveItem
 	now := time.Now().Add(time.Second * 10)
 	fakeDelta.ModTime = &now
+	fakeDelta.Size = uint64(len(original))
 	fakeDelta.ETag = "sldfjlsdjflkdj"
-
-	// should do nothing
-	failOnErr(t, fs.applyDelta(fakeDelta))
-	contents, _ := ioutil.ReadFile(fpath)
-	if !bytes.Equal(contents, local) {
-		t.Log("Contents of open local file changed!")
-		t.Fatalf("Got: %s\nWanted: %s\n", contents, local)
+	fakeDelta.File.Hashes = graph.Hashes{
+		QuickXorHash: graph.QuickXORHash(&original),
+		SHA1Hash:     graph.SHA1Hash(&original),
 	}
 
-	// wipe out local changes
-	inode.Lock()
+	// should do nothing
+	failOnErr(t, cache.applyDelta(&fakeDelta))
+	if inode.Size() != uint64(len(local)) {
+		t.Log("Contents of open local file changed!")
+		t.Fatalf("Got len: %d, wanted: %d\n", inode.Size(), len(local))
+	}
+
+	// act as if the file is now flushed (these are the ops that would happen during
+	// a flush)
+	inode.DriveItem.File = &graph.File{}
+	if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(inode.data)
+	} else {
+		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
+	}
+	cache.InsertContent(inode.DriveItem.ID, *inode.data)
+	inode.data = nil
 	inode.hasChanges = false
-	inode.Unlock()
 
 	// should now change the file
-	failOnErr(t, fs.applyDelta(fakeDelta))
-	contents, _ = ioutil.ReadFile(fpath)
-	if !bytes.Equal(contents, original) {
-		t.Log("Contents of closed local file not updated by delta.")
-		t.Fatalf("Got: %s\nWanted: %s\n", contents, original)
+	failOnErr(t, cache.applyDelta(&fakeDelta))
+	if inode.Size() != fakeDelta.Size {
+		t.Log("Contents of local file was not changed after disabling local changes!")
+		t.Fatalf("Got len: %d, wanted: %d\n", inode.Size(), fakeDelta.Size)
 	}
 }
 
