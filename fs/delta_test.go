@@ -3,6 +3,7 @@ package fs
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,7 +17,14 @@ import (
 // a helper function for use with tests
 func (i *Inode) setContent(newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
+	now := time.Now()
+	i.DriveItem.ModTime = &now
 	i.data = &newContent
+
+	if i.DriveItem.File == nil {
+		i.DriveItem.File = &graph.File{}
+	}
+
 	if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 		i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(&newContent)
 	} else {
@@ -196,40 +204,64 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 // client data is preserved.
 func TestDeltaContentChangeBoth(t *testing.T) {
 	t.Parallel()
-	fpath := filepath.Join(DeltaDir, "both_content_changed")
-	failOnErr(t, ioutil.WriteFile(fpath, []byte("initial content"), 0644))
 
-	// change and upload it via the API
-	var item *graph.DriveItem
-	var err error
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		item, err = graph.GetItemPath("/onedriver_tests/delta/both_content_changed", auth)
-		if err == nil {
-			break
-		}
+	cache := NewFilesystem(auth, "test_delta_content_change_both.db")
+	inode := NewInode("both_content_changed.txt", 0644|fuse.S_IFREG, nil)
+	cache.InsertPath("/both_content_changed.txt", nil, inode)
+	original := []byte("initial content")
+	inode.setContent(original)
+
+	// write to, but do not close the file to simulate an in-use local file
+	local := []byte("local write content")
+	_, status := cache.Write(
+		context.Background().Done(),
+		&fuse.WriteIn{
+			InHeader: fuse.InHeader{NodeId: inode.NodeID()},
+			Offset:   0,
+			Size:     uint32(len(local)),
+		},
+		local,
+	)
+	if status != fuse.OK {
+		t.Fatal("Write failed")
 	}
-	failOnErr(t, err)
 
-	inode := NewInodeDriveItem(item)
-	newContent := []byte("remote")
-	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, inode.data)
-	failOnErr(t, err)
-	failOnErr(t, session.Upload(auth))
-
-	// now change it locally
-	failOnErr(t, ioutil.WriteFile(fpath, []byte("local"), 0644))
-
-	// file has been changed both remotely and locally
-	time.Sleep(time.Second * 15)
-	content, err := ioutil.ReadFile(fpath)
-	failOnErr(t, err)
-
-	if bytes.Equal(content, []byte("local")) {
-		return
+	// apply a fake delta to the local item
+	fakeDelta := inode.DriveItem
+	now := time.Now().Add(time.Second * 10)
+	fakeDelta.ModTime = &now
+	fakeDelta.Size = uint64(len(original))
+	fakeDelta.ETag = "sldfjlsdjflkdj"
+	fakeDelta.File.Hashes = graph.Hashes{
+		QuickXorHash: graph.QuickXORHash(&original),
+		SHA1Hash:     graph.SHA1Hash(&original),
 	}
-	t.Fatal("Client copy not preserved")
+
+	// should do nothing
+	failOnErr(t, cache.applyDelta(&fakeDelta))
+	if inode.Size() != uint64(len(local)) {
+		t.Log("Contents of open local file changed!")
+		t.Fatalf("Got len: %d, wanted: %d\n", inode.Size(), len(local))
+	}
+
+	// act as if the file is now flushed (these are the ops that would happen during
+	// a flush)
+	inode.DriveItem.File = &graph.File{}
+	if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
+		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(inode.data)
+	} else {
+		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
+	}
+	cache.InsertContent(inode.DriveItem.ID, *inode.data)
+	inode.data = nil
+	inode.hasChanges = false
+
+	// should now change the file
+	failOnErr(t, cache.applyDelta(&fakeDelta))
+	if inode.Size() != fakeDelta.Size {
+		t.Log("Contents of local file was not changed after disabling local changes!")
+		t.Fatalf("Got len: %d, wanted: %d\n", inode.Size(), fakeDelta.Size)
+	}
 }
 
 // If we have local content in the local disk cache that doesn't match what the
@@ -306,16 +338,14 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 	cache.InsertPath("/folder", nil, dir)
 	cache.InsertPath("/folder/file", nil, file)
 
-	delta := &Inode{
-		DriveItem: graph.DriveItem{
-			ID:      dir.ID(),
-			Parent:  &graph.DriveItemParent{ID: dir.ParentID()},
-			Deleted: &graph.Deleted{State: "softdeleted"},
-		},
-		mode: 0755 | fuse.S_IFDIR,
+	delta := &graph.DriveItem{
+		ID:      dir.ID(),
+		Parent:  &graph.DriveItemParent{ID: dir.ParentID()},
+		Deleted: &graph.Deleted{State: "softdeleted"},
+		Folder:  &graph.Folder{},
 	}
 	err := cache.applyDelta(delta)
-	if cache.GetID(delta.ID()) == nil {
+	if cache.GetID(delta.ID) == nil {
 		t.Fatal("Folder should still be present")
 	}
 	if err == nil {
@@ -324,7 +354,7 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 
 	cache.DeletePath("/folder/file")
 	cache.applyDelta(delta)
-	if cache.GetID(delta.ID()) != nil {
+	if cache.GetID(delta.ID) != nil {
 		t.Fatal("Still found folder after emptying it first (the correct way).")
 	}
 }
@@ -364,14 +394,11 @@ func TestDeltaMissingHash(t *testing.T) {
 
 	time.Sleep(time.Second)
 	now := time.Now()
-	delta := &Inode{
-		DriveItem: graph.DriveItem{
-			ID:      file.ID(),
-			Parent:  &graph.DriveItemParent{ID: file.ParentID()},
-			ModTime: &now,
-			Size:    12345,
-		},
-		mode: 0644 | fuse.S_IFREG,
+	delta := &graph.DriveItem{
+		ID:      file.ID(),
+		Parent:  &graph.DriveItemParent{ID: file.ParentID()},
+		ModTime: &now,
+		Size:    12345,
 	}
 	cache.applyDelta(delta)
 	// if we survive to here without a segfault, test passed

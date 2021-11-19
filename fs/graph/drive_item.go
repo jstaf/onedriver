@@ -67,6 +67,16 @@ type DriveItem struct {
 	ETag             string           `json:"eTag,omitempty"`
 }
 
+// IsDir returns if the DriveItem represents a directory or not
+func (d *DriveItem) IsDir() bool {
+	return d.Folder != nil
+}
+
+// ModTimeUnix returns the modification time as a unix uint64 time
+func (d *DriveItem) ModTimeUnix() uint64 {
+	return uint64(d.ModTime.Unix())
+}
+
 // getItem is the internal method used to lookup items
 func getItem(path string, auth *Auth) (*DriveItem, error) {
 	body, err := Get(path, auth)

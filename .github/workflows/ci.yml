@@ -4,7 +4,7 @@ jobs:
   test:
     name: Run tests
     runs-on: ubuntu-20.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-go@v2
         with:
-          go-version: "1.14"
+          go-version: "1.16"
 
       - name: Install apt dependencies
         run: |
@@ -97,6 +97,8 @@ jobs:
           path-to-lcov: coverage.lcov
           flag-name: ${{ matrix.account_type }}
           parallel: true
+        # decreased coverage isn't a failure
+        continue-on-error: true
         if: always()
   finish:
     name: Complete Coveralls run
@@ -109,3 +111,5 @@ jobs:
       with:
         github-token: ${{ secrets.github_token }}
         parallel-finished: true
+      # decreased coverage isn't a failure
+      continue-on-error: true
