@@ -8,6 +8,14 @@
  */
 static void destroy_window(GtkWidget *widget, gpointer data) { gtk_main_quit(); }
 
+static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_uri,
+                                         GTlsCertificate *certificate,
+                                         GTlsCertificateFlags errors,
+                                         gpointer user_data) {
+    g_print("Webkit load failed for %s: %d\n", failing_uri, errors);
+    return false;
+}
+
 /**
  * Catch redirects once authentication completes.
  */
@@ -50,6 +58,8 @@ char *webkit_auth_window(char *auth_url, char *account_name) {
     auth_redirect_value[0] = '\0';
     g_signal_connect(web_view, "load-changed", G_CALLBACK(web_view_load_changed),
                      &auth_redirect_value);
+    g_signal_connect(web_view, "load-failed-with-tls-errors",
+                     G_CALLBACK(web_view_load_failed_tls), NULL);
     g_signal_connect(auth_window, "destroy", G_CALLBACK(destroy_window), web_view);
 
     // show and grab focus
