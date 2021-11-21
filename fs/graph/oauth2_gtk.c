@@ -12,7 +12,50 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                                          GTlsCertificate *certificate,
                                          GTlsCertificateFlags errors,
                                          gpointer user_data) {
-    g_print("Webkit load failed for %s: %d\n", failing_uri, errors);
+    char *reason;
+    switch (errors) {
+    case 0:
+        reason = "No error - There was no error verifying the "
+                 "certificate.";
+        break;
+    case G_TLS_CERTIFICATE_UNKNOWN_CA:
+        reason = "G_TLS_CERTIFICATE_UNKNOWN_CA - The signing certificate authority is "
+                 "not known.";
+        break;
+    case G_TLS_CERTIFICATE_BAD_IDENTITY:
+        reason = "G_TLS_CERTIFICATE_BAD_IDENTITY - The certificate does not match the "
+                 "expected identity of "
+                 "the site that it was retrieved from.";
+        break;
+    case G_TLS_CERTIFICATE_NOT_ACTIVATED:
+        reason = "G_TLS_CERTIFICATE_NOT_ACTIVATED - The certificate’s activation time is "
+                 "still in the future.";
+        break;
+    case G_TLS_CERTIFICATE_EXPIRED:
+        reason = "G_TLS_CERTIFICATE_EXPIRED - The certificate has expired.";
+        break;
+    case G_TLS_CERTIFICATE_REVOKED:
+        reason = "G_TLS_CERTIFICATE_REVOKED - The certificate has been revoked according "
+                 "to the "
+                 "GTlsConnection's certificate revocation list.";
+        break;
+    case G_TLS_CERTIFICATE_INSECURE:
+        reason = "G_TLS_CERTIFICATE_INSECURE - The certificate’s algorithm is considered "
+                 "insecure.";
+        break;
+    case G_TLS_CERTIFICATE_GENERIC_ERROR:
+        reason = "G_TLS_CERTIFICATE_GENERIC_ERROR - Some other error occurred validating "
+                 "the certificate.";
+        break;
+    default:
+        snprintf(reason, 256,
+                 "Multiple failures (%d) - There were multiple errors during certificate "
+                 "verification.",
+                 errors);
+        break;
+    }
+
+    g_print("Webkit load failed with TLS errors for %s : %s\n", failing_uri, reason);
     return false;
 }
 
