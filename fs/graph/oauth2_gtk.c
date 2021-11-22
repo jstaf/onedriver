@@ -8,6 +8,9 @@
  */
 static void destroy_window(GtkWidget *widget, gpointer data) { gtk_main_quit(); }
 
+/**
+ * Handle TLS errors with the microsoft side of things.
+ */
 static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_uri,
                                          GTlsCertificate *certificate,
                                          GTlsCertificateFlags errors,
@@ -56,6 +59,20 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
     }
 
     g_print("Webkit load failed with TLS errors for %s : %s\n", failing_uri, reason);
+
+    // something is up with Fedora 35's verification of this particular cert,
+    // so we specifically only allow G_TLS_CERTIFICATE_GENERIC_ERROR for only this cert.
+    GUri *uri = g_uri_parse(failing_uri, G_URI_FLAGS_NONE, NULL);
+    const gchar *host = g_uri_get_host(uri);
+    if (errors & G_TLS_CERTIFICATE_GENERIC_ERROR &&
+        strncmp("account.live.com", host, 17) == 0) {
+        WebKitWebContext *context = webkit_web_view_get_context(web_view);
+        webkit_web_context_allow_tls_certificate_for_host(context, certificate,
+                                                          "account.live.com");
+        g_print("Ignoring G_TLS_CERTIFICATE_GENERIC_ERROR for account.live.com only.\n");
+        webkit_web_view_reload(web_view);
+        return true;
+    }
     return false;
 }
 
