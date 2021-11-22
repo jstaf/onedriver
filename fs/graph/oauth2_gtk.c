@@ -67,9 +67,15 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
     if (errors & G_TLS_CERTIFICATE_GENERIC_ERROR &&
         strncmp("account.live.com", host, 17) == 0) {
         WebKitWebContext *context = webkit_web_view_get_context(web_view);
+        // allow these failing domains from the webpage and reload
         webkit_web_context_allow_tls_certificate_for_host(context, certificate,
                                                           "account.live.com");
-        g_print("Ignoring G_TLS_CERTIFICATE_GENERIC_ERROR for account.live.com only.\n");
+        webkit_web_context_allow_tls_certificate_for_host(context, certificate,
+                                                          "acctcdn.msauth.net");
+        webkit_web_context_allow_tls_certificate_for_host(context, certificate,
+                                                          "acctcdn.msftauth.net");
+        g_print("Ignoring G_TLS_CERTIFICATE_GENERIC_ERROR for account.live.com, "
+                "acctcdn.msauth.net, acctcdn.msftauth.net.\n");
         webkit_web_view_reload(web_view);
         return true;
     }
