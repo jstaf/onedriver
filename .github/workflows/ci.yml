@@ -25,7 +25,6 @@ jobs:
             gcc \
             pkg-config \
             libwebkit2gtk-4.0-dev \
-            libglib2.0-dev \
             libjson-glib-dev \
             make \
             wget \

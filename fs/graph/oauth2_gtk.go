@@ -3,7 +3,7 @@
 package graph
 
 /*
-#cgo linux pkg-config: webkit2gtk-4.0 glib-2.0
+#cgo linux pkg-config: webkit2gtk-4.0
 #include "stdlib.h"
 #include "oauth2_gtk.h"
 */
