@@ -76,6 +76,8 @@ other OneDrive clients:
 
 ## Quick start
 
+### Fedora/CentOS/RHEL
+
 Users on Fedora/CentOS/RHEL systems are recommended to install onedriver from 
 [COPR](https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/).
 This will install the latest version of onedriver through your package manager 
@@ -86,6 +88,24 @@ sudo dnf copr enable jstaf/onedriver
 sudo dnf install onedriver
 ```
 
+### OpenSUSE
+
+OpenSUSE users need to add the COPR repo either for Leap or Tumbleweed
+
+```bash
+# Leap 15.3
+sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-leap-15.3/jstaf-onedriver-opensuse-leap-15.3.repo onedriver
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install onedriver
+
+# Tumbleweed 
+sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-tumbleweed/jstaf-onedriver-opensuse-tumbleweed.repo onedriver
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install onedriver
+```
+
+### Ubuntu/Pop!_OS/Debian
+
 Ubuntu/Pop!_OS/Debian users can install onedriver from the
 [OpenSUSE Build Service](https://software.opensuse.org/download.html?project=home%3Ajstaf&package=onedriver)
 (despite the name, OBS also does a nice job of building packages for Debian).
@@ -95,28 +115,15 @@ If you previously installed onedriver via PPA,
 you can purge the old PPA from your system via:
 `sudo add-apt-repository --remove ppa:jstaf/onedriver`
 
+### Arch/Manjaro/EndeavourOS
+
 Arch/Manjaro/EndeavourOS users can install onedriver from the 
 [AUR](https://aur.archlinux.org/packages/onedriver/).
-
-OpenSUSE users need to add COPR repo either for Leap or Tumbleweed
-
-Leap 15.3
-```bash
-sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-leap-15.3/jstaf-onedriver-opensuse-leap-15.3.repo onedriver
-sudo zypper --gpg-auto-import-keys refresh
-sudo zypper install onedriver
-```
-Tumbleweed 
-```bash
-sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-tumbleweed/jstaf-onedriver-opensuse-tumbleweed.repo onedriver
-sudo zypper --gpg-auto-import-keys refresh
-sudo zypper install onedriver
-```
 
 Post-installation, you can start onedriver either via the `onedriver-launcher` 
 desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
-### Multiple drives and starting OneDrive on login via systemd
+## Multiple drives and starting OneDrive on login via systemd
 
 **Note:** You can also set this up through the GUI via the `onedriver-launcher`
 desktop app installed via rpm/deb/`make install`. You can skip this section
