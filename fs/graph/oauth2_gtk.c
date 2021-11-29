@@ -49,8 +49,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
     char *reason;
     switch (errors) {
     case 0:
-        reason = "No error - There was no error verifying the "
-                 "certificate.";
+        reason = "No error - There was no error verifying the certificate.";
         break;
     case G_TLS_CERTIFICATE_UNKNOWN_CA:
         reason = "G_TLS_CERTIFICATE_UNKNOWN_CA - The signing certificate authority is "
@@ -58,8 +57,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
         break;
     case G_TLS_CERTIFICATE_BAD_IDENTITY:
         reason = "G_TLS_CERTIFICATE_BAD_IDENTITY - The certificate does not match the "
-                 "expected identity of "
-                 "the site that it was retrieved from.";
+                 "expected identity of the site that it was retrieved from.";
         break;
     case G_TLS_CERTIFICATE_NOT_ACTIVATED:
         reason = "G_TLS_CERTIFICATE_NOT_ACTIVATED - The certificate’s activation time is "
@@ -70,8 +68,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
         break;
     case G_TLS_CERTIFICATE_REVOKED:
         reason = "G_TLS_CERTIFICATE_REVOKED - The certificate has been revoked according "
-                 "to the "
-                 "GTlsConnection's certificate revocation list.";
+                 "to the GTlsConnection's certificate revocation list.";
         break;
     case G_TLS_CERTIFICATE_INSECURE:
         reason = "G_TLS_CERTIFICATE_INSECURE - The certificate’s algorithm is considered "
