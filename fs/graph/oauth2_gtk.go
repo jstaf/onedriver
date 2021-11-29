@@ -34,3 +34,17 @@ func getAuthCode(accountName string) string {
 	}
 	return code
 }
+
+// uriGetHost is exclusively here for testing because we cannot use CGo in tests,
+// but can use functions that invoke CGo in tests.
+func uriGetHost(uri string) string {
+	input := C.CString(uri)
+	defer C.free(unsafe.Pointer(input))
+
+	host := C.uri_get_host(input)
+	defer C.free(unsafe.Pointer(host))
+	if host == nil {
+		return ""
+	}
+	return C.GoString(host)
+}

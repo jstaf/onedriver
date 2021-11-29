@@ -82,6 +82,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	zerolog.SetGlobalLevel(StringToLevel(*logLevel))
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+
 	// authenticate/re-authenticate if necessary
 	os.MkdirAll(dir, 0700)
 	authPath := filepath.Join(dir, "auth_tokens.json")
@@ -90,9 +93,6 @@ func main() {
 		graph.Authenticate(authPath, *headless)
 		os.Exit(0)
 	}
-
-	zerolog.SetGlobalLevel(StringToLevel(*logLevel))
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
