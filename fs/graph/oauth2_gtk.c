@@ -4,6 +4,37 @@
 #include <webkit2/webkit2.h>
 
 /**
+ * Get the host from a URI
+ */
+char *uri_get_host(char *uri) {
+    if (!uri || strlen(uri) == 1) {
+        return NULL;
+    }
+
+    int start = 0;
+    for (int i = 1; i < strlen(uri); i++) {
+        if (uri[i] != '/') {
+            // only care about "/"
+            continue;
+        }
+
+        if (uri[i - 1] == '/') {
+            // we're at the the "//" in "https://"
+            start = i + 1;
+        } else if (start > 0) {
+            int len = i - start;
+            char *host = malloc(len);
+            return strncpy(host, uri + start, len);
+        }
+    }
+
+    if (start > 0) {
+        return strdup(uri + start);
+    }
+    return NULL;
+}
+
+/**
  * Exit the main loop when the window is destroyed.
  */
 static void destroy_window(GtkWidget *widget, gpointer data) { gtk_main_quit(); }
@@ -62,8 +93,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
 
     // something is up with Fedora 35's verification of this particular cert,
     // so we specifically only allow G_TLS_CERTIFICATE_GENERIC_ERROR for only this cert.
-    GUri *uri = g_uri_parse(failing_uri, G_URI_FLAGS_NONE, NULL);
-    const gchar *host = g_uri_get_host(uri);
+    char *host = uri_get_host(failing_uri);
     if (errors & G_TLS_CERTIFICATE_GENERIC_ERROR &&
         strncmp("account.live.com", host, 17) == 0) {
         WebKitWebContext *context = webkit_web_view_get_context(web_view);
