@@ -172,14 +172,6 @@ fusermount -uz mount
 # you can also just "ctrl-c" onedriver to unmount it
 ```
 
-A headless binary (no GUI) can be built with `make onedriver-headless`.
-If you don't know which target to build, this isn't the one for you (run
-`make` instead). When using the headless build, follow the text instructions
-in the terminal to perform first-time authentication to the Microsoft Graph
-API. Though it's not officially supported, the headless build should work on
-macOS, BSD, and even Windows as long as you have a variant of FUSE installed
-(for instance, OSXFUSE on macOS or libfuse on BSD).
-
 ### Running the tests
 
 The tests will write and delete files/folders on your onedrive account at the
