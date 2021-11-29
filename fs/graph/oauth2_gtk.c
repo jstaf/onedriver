@@ -24,7 +24,9 @@ char *uri_get_host(char *uri) {
         } else if (start > 0) {
             int len = i - start;
             char *host = malloc(len);
-            return strncpy(host, uri + start, len);
+            strncpy(host, uri + start, len);
+            host[len] = '\0';
+            return host;
         }
     }
 
