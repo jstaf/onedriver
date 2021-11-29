@@ -103,8 +103,9 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                                                           "acctcdn.msauth.net");
         webkit_web_context_allow_tls_certificate_for_host(context, certificate,
                                                           "acctcdn.msftauth.net");
-        g_print("Ignoring G_TLS_CERTIFICATE_GENERIC_ERROR for account.live.com, "
-                "acctcdn.msauth.net, acctcdn.msftauth.net.\n");
+        g_print("Ignoring G_TLS_CERTIFICATE_GENERIC_ERROR for this certificate as a "
+                "workaround for https://bugzilla.redhat.com/show_bug.cgi?id=2024296 - "
+                "reloading page.\n");
         webkit_web_view_reload(web_view);
         return true;
     }
