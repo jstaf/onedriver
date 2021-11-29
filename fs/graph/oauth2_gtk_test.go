@@ -12,11 +12,11 @@ func TestURIGetHost(t *testing.T) {
 
 	host = uriGetHost("https://account.live.com/test/index.html")
 	if host != "account.live.com" {
-		t.Errorf("Got %s, wanted \"account.live.com\"\n", host)
+		t.Errorf("With extra path: got \"%s\", wanted \"account.live.com\"\n", host)
 	}
 
 	host = uriGetHost("http://account.live.com")
 	if host != "account.live.com" {
-		t.Errorf("Got %s, wanted \"account.live.com\"\n", host)
+		t.Errorf("No extra path: got \"%s\", wanted \"account.live.com\"\n", host)
 	}
 }
