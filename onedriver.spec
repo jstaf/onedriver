@@ -95,6 +95,8 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 - onedriver now gives you the option to choose to authenticate via the terminal when 
   authenticating via the new --no-browser option (this is the functionality from the 
   old "headless" build).
+- Add a workaround for the TLS cert authentication issue from
+  https://bugzilla.redhat.com/show_bug.cgi?id=2024296
 
 * Tue Aug 17 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.11.2
 - onedriver now disallows rmdir on nonempty directories.
