@@ -25,6 +25,7 @@ __debug_bin
 
 # do not include binaries, but do include sources
 onedriver
+onedriver-ui
 onedriver-headless
 onedriver-launcher
 c-tests

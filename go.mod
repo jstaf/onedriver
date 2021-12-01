@@ -1,6 +1,7 @@
 module github.com/jstaf/onedriver
 
 require (
+	github.com/gotk3/gotk3 v0.6.1
 	github.com/hanwen/go-fuse/v2 v2.1.0
 	github.com/rclone/rclone v1.50.0
 	github.com/rs/zerolog v1.26.0
