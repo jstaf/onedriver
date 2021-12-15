@@ -30,6 +30,7 @@ onedriver-headless
 onedriver-launcher
 c-tests
 onedriver-*/
+!cmd/onedriver-ui
 !cmd/onedriver
 vendor/
 
