@@ -4,20 +4,24 @@ import (
 	"os"
 
 	"github.com/gotk3/gotk3/gtk"
-	"github.com/rs/zerolog/log"
 )
 
+// DirChooser is used to pick a directory
 func DirChooser(title string) string {
 	gtk.Init(nil)
-	chooser, _ := gtk.FileChooserNativeDialogNew(title, nil, gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER, "Select", "")
+	chooser, _ := gtk.FileChooserNativeDialogNew(title, nil,
+		gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER, "Select", "Cancel")
 	homedir, _ := os.UserHomeDir()
 	chooser.SetCurrentFolder(homedir)
 
+	var directory string
 	chooser.Connect("response", func() {
-		log.Info().Msg("test")
+		directory = chooser.GetFilename()
 	})
 
-	chooser.Show()
-	gtk.Main()
+	response := chooser.Run()
+	if response == int(gtk.RESPONSE_ACCEPT) {
+		return directory
+	}
 	return ""
 }

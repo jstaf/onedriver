@@ -61,5 +61,5 @@ func activateCallback(app *gtk.Application) {
 func mountpointCallback(button *gtk.Button) {
 	log.Info().Msg("hello!")
 	dir := ui.DirChooser("Select a mountpoint")
-	log.Info().Msg(dir)
+	log.Info().Str("dir", dir).Msg("")
 }
