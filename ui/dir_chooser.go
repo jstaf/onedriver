@@ -8,7 +8,6 @@ import (
 
 // DirChooser is used to pick a directory
 func DirChooser(title string) string {
-	gtk.Init(nil)
 	chooser, _ := gtk.FileChooserNativeDialogNew(title, nil,
 		gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER, "Select", "Cancel")
 	homedir, _ := os.UserHomeDir()
