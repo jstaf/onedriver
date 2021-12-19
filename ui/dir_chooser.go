@@ -18,8 +18,7 @@ func DirChooser(title string) string {
 		directory = chooser.GetFilename()
 	})
 
-	response := chooser.Run()
-	if response == int(gtk.RESPONSE_ACCEPT) {
+	if chooser.Run() == int(gtk.RESPONSE_ACCEPT) {
 		return directory
 	}
 	return ""

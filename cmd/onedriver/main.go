@@ -12,16 +12,13 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/jstaf/onedriver/cmd/common"
 	"github.com/jstaf/onedriver/fs"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 )
-
-const version = "0.12.0"
-
-var commit string
 
 func usage() {
 	fmt.Printf(`onedriver - A Linux client for Microsoft OneDrive.
@@ -62,12 +59,8 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	clen := 0
-	if len(commit) > 7 {
-		clen = 8
-	}
 	if *versionFlag {
-		fmt.Printf("onedriver v%s %s\n", version, commit[:clen])
+		fmt.Println("onedriver", common.Version())
 		os.Exit(0)
 	}
 
@@ -82,7 +75,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	zerolog.SetGlobalLevel(StringToLevel(*logLevel))
+	zerolog.SetGlobalLevel(common.StringToLevel(*logLevel))
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 
 	// authenticate/re-authenticate if necessary
@@ -101,7 +94,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info().Msgf("onedriver v%s %s", version, commit[:clen])
+	log.Info().Msgf("onedriver %s", common.Version())
 	mountpoint := flag.Arg(0)
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
@@ -138,28 +131,6 @@ func main() {
 
 	// serve filesystem
 	server.Serve()
-}
-
-// StringToLevel converts a string to a LogLevel in a case-insensitive manner.
-func StringToLevel(level string) zerolog.Level {
-	level = strings.ToLower(level)
-	switch level {
-	case "fatal":
-		return zerolog.FatalLevel
-	case "error":
-		return zerolog.ErrorLevel
-	case "warn":
-		return zerolog.WarnLevel
-	case "info":
-		return zerolog.InfoLevel
-	case "debug":
-		return zerolog.DebugLevel
-	case "trace":
-		return zerolog.TraceLevel
-	default:
-		log.Error().Msgf("Unrecognized log level \"%s\", defaulting to \"trace\".\n", level)
-		return zerolog.TraceLevel
-	}
 }
 
 // xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the

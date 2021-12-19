@@ -5,24 +5,17 @@ import (
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/jstaf/onedriver/cmd/common"
 	"github.com/jstaf/onedriver/ui"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-const version = "0.12.0"
-
-var commit string
-
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 
-	clen := 0
-	if len(commit) > 7 {
-		clen = 8
-	}
-	log.Info().Msgf("onedriver-launcher v%s %s", version, commit[:clen])
+	log.Info().Msgf("onedriver-launcher %s", common.Version())
 
 	app, err := gtk.ApplicationNew("com.github.jstaf.onedriver", glib.APPLICATION_FLAGS_NONE)
 	if err != nil {

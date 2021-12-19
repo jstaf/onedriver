@@ -25,15 +25,19 @@ TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
 TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
 
 
-all: onedriver onedriver-launcher
+all: onedriver onedriver-launcher onedriver-ui
 
 
-onedriver: $(shell find fs/ -type f) main.go
-	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
+onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-onedriver-headless: $(shell find fs/ -type f) main.go
-	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)"
+onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
+	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
+
+
+onedriver-ui: $(shell find ui/ -type f) cmd/onedriver-ui/main.go
+	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
 
 
 install: onedriver onedriver-launcher
