@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/jstaf/onedriver/cmd/common"
@@ -43,16 +44,17 @@ func activateCallback(app *gtk.Application) {
 	mountpointBtn, _ := gtk.ButtonNewFromIconName("list-add-symbolic", gtk.ICON_SIZE_BUTTON)
 	mountpointBtn.SetTooltipText("Add a new OneDrive account.")
 	mountpointBtn.Connect("clicked", func(button *gtk.Button) {
-		mountpointCallback(button)
+		mount := ui.DirChooser("Select a mountpoint")
+		if !ui.MountpointIsValid(mount) {
+			log.Error().Str("mountpoint", mount).
+				Msg("Mountpoint was not valid. Mountpoint must be an empty directory.")
+
+		}
+		log.Info().Str("mountpoint", mount).Msg("Creating mountpoint.")
+		escapedMount := unit.UnitNamePathEscape(mount)
+		systemdUnit := ui.SystemdTemplateUnit(ui.OnedriverServiceTemplate, escapedMount)
 	})
 	header.PackStart(mountpointBtn)
 
 	window.ShowAll()
-}
-
-// this callback creates a new mountpoint when pressed
-func mountpointCallback(button *gtk.Button) {
-	log.Info().Msg("hello!")
-	dir := ui.DirChooser("Select a mountpoint")
-	log.Info().Str("dir", dir).Msg("")
 }
