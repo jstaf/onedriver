@@ -1,10 +1,10 @@
-package ui
+package systemd
 
 import "testing"
 
 // Does systemd unit name templating work correctly?
-func TestSystemdTemplateUnit(t *testing.T) {
-	escaped := SystemdTemplateUnit(OnedriverServiceTemplate, "this-is-a-test")
+func TestTemplateUnit(t *testing.T) {
+	escaped := TemplateUnit(OnedriverServiceTemplate, "this-is-a-test")
 	const expected = "onedriver@this-is-a-test.service"
 	if escaped != expected {
 		t.Fatalf("Templating did not work. Got \"%s\", wanted \"%s\"\n", escaped, expected)
@@ -12,14 +12,14 @@ func TestSystemdTemplateUnit(t *testing.T) {
 }
 
 // Does systemd unit untemplating work?
-func TestSystemdUntemplateUnit(t *testing.T) {
-	_, err := SystemdUntemplateUnit("this-wont-work")
+func TestUntemplateUnit(t *testing.T) {
+	_, err := UntemplateUnit("this-wont-work")
 	if err == nil {
 		t.Error("Untemplating \"this-wont-work\" shouldn't have worked.")
 	}
 
 	expected := "home-some-path"
-	unescaped, err := SystemdUntemplateUnit("onedriver@home-some-path")
+	unescaped, err := UntemplateUnit("onedriver@home-some-path")
 	if err != nil {
 		t.Error("Failed to untemplate unit:", err)
 	}
@@ -28,7 +28,7 @@ func TestSystemdUntemplateUnit(t *testing.T) {
 	}
 
 	expected = "opt-other"
-	unescaped, err = SystemdUntemplateUnit("onedriver@opt-other.service")
+	unescaped, err = UntemplateUnit("onedriver@opt-other.service")
 	if err != nil {
 		t.Error("Failed to untemplate unit:", err)
 	}

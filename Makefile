@@ -36,8 +36,10 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
+# deprecation warnings silenced because they're in the upstream gotk3 library,
+# which we have no control over
 onedriver-ui: $(shell find ui/ -type f) cmd/onedriver-ui/main.go
-	go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
+	CGO_CFLAGS=-Wno-deprecated-declarations go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
 
 
 install: onedriver onedriver-launcher
@@ -145,5 +147,5 @@ test: build/c-test onedriver dmel.fa
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
-	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher unshare .auth_tokens.json
+	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher onedriver-ui unshare .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/ build/
