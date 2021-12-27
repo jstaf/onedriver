@@ -65,7 +65,7 @@ func TestUnitEnabled(t *testing.T) {
 	enabled, err = UnitIsEnabled(unitName)
 	failOnErr(t, err)
 	if !enabled {
-		t.Error("Could not detect unit as enabled")
+		t.Error("Could not detect unit as enabled.")
 	}
 
 	failOnErr(t, UnitSetEnabled(unitName, true))

@@ -7,9 +7,14 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	godbus "github.com/godbus/dbus/v5"
 )
 
-const OnedriverServiceTemplate = "onedriver@.service"
+const (
+	OnedriverServiceTemplate = "onedriver@.service"
+	SystemdBusName           = "org.freedesktop.systemd1"
+	SystemdObjectPath        = "/org/freedesktop/systemd1"
+)
 
 // TemplateUnit templates a unit name as systemd would
 func TemplateUnit(template, instance string) string {
@@ -71,14 +76,21 @@ func UnitSetActive(unit string, active bool) error {
 
 // UnitIsEnabled returns true if a particular systemd unit is enabled.
 func UnitIsEnabled(unit string) (bool, error) {
-	ctx := context.Background()
-	conn, err := dbus.NewUserConnectionContext(ctx)
+	conn, err := godbus.ConnectSessionBus()
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	//conn.GetUnitPropertiesContext()
-	return false, nil
+
+	var state string
+	obj := conn.Object(SystemdBusName, SystemdObjectPath)
+	err = obj.Call(
+		"org.freedesktop.systemd1.Manager.GetUnitFileState", 0, unit,
+	).Store(&state)
+	if err != nil {
+		return false, err
+	}
+	return state == "enabled", nil
 }
 
 // UnitSetEnabled sets a systemd unit to enabled/disabled.
