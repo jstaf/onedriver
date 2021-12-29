@@ -1,13 +1,11 @@
 package systemd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/coreos/go-systemd/v22/dbus"
-	godbus "github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5"
 )
 
 const (
@@ -41,42 +39,49 @@ func UntemplateUnit(unit string) (string, error) {
 
 // UnitIsActive returns true if the unit is currently active
 func UnitIsActive(unit string) (bool, error) {
-	conn, err := dbus.NewUserConnectionContext(context.Background())
+	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	return false, nil
+
+	obj := conn.Object(SystemdBusName, SystemdObjectPath)
+	call := obj.Call("org.freedesktop.systemd1.Manager.GetUnit", 0, unit)
+	if call.Err != nil {
+		return false, call.Err
+	}
+	var unitPath string
+	if err = call.Store(&unitPath); err != nil {
+		return false, err
+	}
+
+	obj = conn.Object(SystemdBusName, dbus.ObjectPath(unitPath))
+	property, err := obj.GetProperty("org.freedesktop.systemd1.Unit.ActiveState")
+	if err != nil {
+		return false, err
+	}
+	var active string
+	property.Store(&active)
+	return active == "active", nil
 }
 
 func UnitSetActive(unit string, active bool) error {
-	ctx := context.Background()
-	conn, err := dbus.NewUserConnectionContext(ctx)
+	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	status := make(chan string)
+	obj := conn.Object(SystemdBusName, SystemdObjectPath)
 	if active {
-		_, err = conn.StartUnitContext(context.Background(), unit, "replace", status)
-	} else {
-		_, err = conn.StopUnitContext(context.Background(), unit, "replace", status)
-
+		return obj.Call("org.freedesktop.systemd1.Manager.StartUnit", 0, unit, "replace").Err
 	}
-	if err != nil {
-		return err
-	}
-
-	if result := <-status; result != "done" {
-		return errors.New(fmt.Sprintf("job failed with status %s", result))
-	}
-	return nil
+	return obj.Call("org.freedesktop.systemd1.Manager.StopUnit", 0, unit, "replace").Err
 }
 
 // UnitIsEnabled returns true if a particular systemd unit is enabled.
 func UnitIsEnabled(unit string) (bool, error) {
-	conn, err := godbus.ConnectSessionBus()
+	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return false, err
 	}
@@ -95,18 +100,20 @@ func UnitIsEnabled(unit string) (bool, error) {
 
 // UnitSetEnabled sets a systemd unit to enabled/disabled.
 func UnitSetEnabled(unit string, enabled bool) error {
-	ctx := context.Background()
-	conn, err := dbus.NewUserConnectionContext(ctx)
+	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
 	units := []string{unit}
+	obj := conn.Object(SystemdBusName, SystemdObjectPath)
 	if enabled {
-		_, _, err = conn.EnableUnitFilesContext(ctx, units, false, true)
-	} else {
-		_, err = conn.DisableUnitFilesContext(ctx, units, false)
+		return obj.Call(
+			"org.freedesktop.systemd1.Manager.EnableUnitFiles", 0, units, false, true,
+		).Err
 	}
-	return err
+	return obj.Call(
+		"org.freedesktop.systemd1.Manager.DisableUnitFiles", 0, units, false,
+	).Err
 }
