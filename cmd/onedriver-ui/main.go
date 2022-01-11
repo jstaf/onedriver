@@ -84,6 +84,12 @@ func activateCallback(app *gtk.Application) {
 	})
 	header.PackStart(mountpointBtn)
 
+	mounts := ui.GetKnownMounts()
+	for _, mount := range mounts {
+		mount = unit.UnitNamePathUnescape(mount)
+		listbox.Insert(newMountRow(mount), -1)
+	}
+
 	window.ShowAll()
 }
 

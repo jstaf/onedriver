@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/rs/zerolog/log"
 )
 
 // onedriver specific utility functions
@@ -45,6 +46,21 @@ func GetAccountName(instance string) (string, error) {
 // GetKnownMounts returns the currently known mountpoints
 func GetKnownMounts() []string {
 	mounts := make([]string, 0)
+	cacheDir, _ := os.UserCacheDir()
+	onedriverCache := filepath.Join(cacheDir, "onedriver")
+	os.MkdirAll(onedriverCache, 0700)
+	dirents, err := ioutil.ReadDir(onedriverCache)
+	if err != nil {
+		log.Error().Err(err).Msg("Could not fetch known mountpoints.")
+		return mounts
+	}
+
+	for _, dirent := range dirents {
+		_, err := os.Stat(filepath.Join(onedriverCache, dirent.Name(), "auth_tokens.json"))
+		if err == nil {
+			mounts = append(mounts, dirent.Name())
+		}
+	}
 	return mounts
 }
 

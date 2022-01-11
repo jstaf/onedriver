@@ -19,6 +19,7 @@ func TestMountpointIsValid(t *testing.T) {
 		{"does_not_exist", false},
 		{"mount", true},
 		{"_test", false},
+		{"_test/.example", false},
 	}
 	for _, test := range tests {
 		if MountpointIsValid(test.mountpoint) != test.expected {
