@@ -35,7 +35,7 @@ func main() {
 	app.Connect("activate", func(application *gtk.Application) {
 		activateCallback(application)
 	})
-	app.Run(os.Args)
+	os.Exit(app.Run(os.Args))
 }
 
 // activateCallback is what actually sets up the application
@@ -58,7 +58,7 @@ func activateCallback(app *gtk.Application) {
 		if !ui.MountpointIsValid(mount) {
 			log.Error().Str("mountpoint", mount).
 				Msg("Mountpoint was not valid. Mountpoint must be an empty directory.")
-
+			return
 		}
 
 		escapedMount := unit.UnitNamePathEscape(mount)
@@ -87,6 +87,7 @@ func activateCallback(app *gtk.Application) {
 	window.ShowAll()
 }
 
+// newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
 func newMountRow(mount string) *gtk.ListBoxRow {
 	row, _ := gtk.ListBoxRowNew()
 	row.SetSelectable(true)
@@ -94,6 +95,7 @@ func newMountRow(mount string) *gtk.ListBoxRow {
 	row.Add(box)
 
 	escapedMount := unit.UnitNamePathEscape(mount)
+	unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, escapedMount)
 
 	var label *gtk.Label
 	tildePath := ui.EscapeHome(mount)
@@ -111,6 +113,70 @@ func newMountRow(mount string) *gtk.ListBoxRow {
 		))
 	}
 	box.PackStart(label, false, false, 5)
+
+	// create a button to delete the mountpoint
+	deleteMountpointBtn, _ := gtk.ButtonNewFromIconName("user-trash-symbolic", gtk.ICON_SIZE_BUTTON)
+	deleteMountpointBtn.SetTooltipText("Remove OneDrive account from local computer")
+	deleteMountpointBtn.Connect("clicked", func() {
+		dialog, _ := gtk.DialogNewWithButtons("Remove mountpoint?", nil, gtk.DIALOG_MODAL,
+			[]interface{}{"Cancel", gtk.RESPONSE_REJECT},
+			[]interface{}{"Remove", gtk.RESPONSE_ACCEPT},
+		)
+		if dialog.Run() == gtk.RESPONSE_ACCEPT {
+			systemd.UnitSetEnabled(unitName, false)
+			systemd.UnitSetActive(unitName, false)
+
+			cachedir, _ := os.UserCacheDir()
+			os.RemoveAll(fmt.Sprintf("%s/onedriver/%s/", cachedir, escapedMount))
+
+			row.Destroy()
+		}
+		dialog.Destroy()
+	})
+	box.PackEnd(deleteMountpointBtn, false, false, 0)
+
+	// create a button to enable/disable the mountpoint
+	unitEnabledBtn, _ := gtk.ToggleButtonNew()
+	enabledImg, _ := gtk.ImageNewFromIconName("object-select-symbolic", gtk.ICON_SIZE_BUTTON)
+	unitEnabledBtn.SetImage(enabledImg)
+	unitEnabledBtn.SetTooltipText("Start mountpoint on login")
+	enabled, err := systemd.UnitIsEnabled(unitName)
+	if err == nil {
+		unitEnabledBtn.SetActive(enabled)
+	} else {
+		log.Error().Err(err).Msg("Error checking unit enabled state.")
+	}
+	unitEnabledBtn.Connect("toggled", func() {
+		err := systemd.UnitSetEnabled(unitName, unitEnabledBtn.GetActive())
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("unit", unitName).
+				Msg("Could not change systemd unit enabled state.")
+		}
+	})
+	box.PackEnd(unitEnabledBtn, false, false, 0)
+
+	// a switch to start/stop the mountpoint
+	mountToggle, _ := gtk.SwitchNew()
+	active, err := systemd.UnitIsActive(unitName)
+	if err == nil {
+		mountToggle.SetActive(active)
+	} else {
+		log.Error().Err(err).Msg("Error checking unit active state.")
+	}
+	mountToggle.SetTooltipText("Mount or unmount selected OneDrive account")
+	mountToggle.SetVAlign(gtk.ALIGN_CENTER)
+	mountToggle.Connect("state-set", func() {
+		err := systemd.UnitSetActive(unitName, mountToggle.GetActive())
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("unit", unitName).
+				Msg("Could not change systemd unit active state.")
+		}
+	})
+	box.PackEnd(mountToggle, false, false, 0)
 
 	return row
 }

@@ -36,10 +36,8 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-# deprecation warnings silenced because they're in the upstream gotk3 library,
-# which we have no control over
 onedriver-ui: $(shell find ui/ -type f) cmd/onedriver-ui/main.go
-	CGO_CFLAGS=-Wno-deprecated-declarations go build -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
+	go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
 
 
 install: onedriver onedriver-launcher
@@ -135,6 +133,7 @@ dmel.fa:
 test: build/c-test onedriver dmel.fa
 	$<
 	rm -f *.race* fusefs_tests.log
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./ui/systemd
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs/graph
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs
 	go test -c ./fs/offline
