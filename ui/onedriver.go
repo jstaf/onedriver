@@ -19,7 +19,11 @@ func PollUntilAvail(mountpoint string, timeout int) {}
 
 // MountpointIsValid returns if the mountpoint exists and nothing is in it.
 func MountpointIsValid(mountpoint string) bool {
-	return false
+	dirents, err := ioutil.ReadDir(mountpoint)
+	if err != nil {
+		return false
+	}
+	return len(dirents) == 0
 }
 
 func GetAccountName(instance string) (string, error) {
@@ -40,7 +44,8 @@ func GetAccountName(instance string) (string, error) {
 
 // GetKnownMounts returns the currently known mountpoints
 func GetKnownMounts() []string {
-	return make([]string, 0)
+	mounts := make([]string, 0)
+	return mounts
 }
 
 // EscapeHome replaces the user's absolute home directory with "~"
