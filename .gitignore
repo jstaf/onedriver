@@ -25,12 +25,10 @@ __debug_bin
 
 # do not include binaries, but do include sources
 onedriver
-onedriver-ui
 onedriver-headless
 onedriver-launcher
-c-tests
 onedriver-*/
-!cmd/onedriver-ui
+!cmd/onedriver-launcher
 !cmd/onedriver
 vendor/
 

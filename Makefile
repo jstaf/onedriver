@@ -1,4 +1,4 @@
-.PHONY: all, test, c-test, srpm, rpm, changes, dsc, deb, clean, install
+.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, install
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -10,22 +10,8 @@ RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 TEST_UID := $(shell id -u)
 TEST_GID := $(shell id -g)
 
-# c build variables
-DEPS = gtk+-3.0 gio-2.0 glib-2.0 json-glib-1.0
-SRCS := $(shell find launcher/ -name *.c | grep -v _test)
-OBJS := $(SRCS:%.c=build/%.o)
-INC_DIRS := $(shell find launcher/ -type d | grep -v _test)
-INC_FLAGS := $(addprefix -I,$(INC_DIRS))
-CFLAGS := -std=gnu11 ${CFLAGS} $(INC_FLAGS) $(shell pkg-config --cflags $(DEPS))
-LDFLAGS := $(shell pkg-config --libs $(DEPS))
 
-# c test variables
-TEST_SRCS := $(shell find launcher/ -name *.c | grep -v launcher/main.c)
-TEST_OBJS := $(TEST_SRCS:%.c=build/%.o)
-TEST_LDFLAGS := $(shell pkg-config --libs $(DEPS)) -lrt -lm
-
-
-all: onedriver onedriver-launcher onedriver-ui
+all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
@@ -36,9 +22,8 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
-# deprecation warnings are gotk3's fault, no point cluttering up every build and test
-onedriver-ui: $(shell find ui/ -type f) cmd/onedriver-ui/main.go
-	CGO_CFLAGS=-Wno-deprecated-declarations go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
+onedriver-launcher: $(shell find ui/ -type f) cmd/onedriver-launcher/main.go
+	go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-launcher
 
 
 install: onedriver onedriver-launcher
@@ -51,23 +36,6 @@ install: onedriver onedriver-launcher
 	cp resources/onedriver@.service /etc/systemd/user/
 	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
-
-
-onedriver-launcher: $(OBJS)
-	gcc -o $@ $^ $(LDFLAGS)
-
-
-build/%.o: %.c
-	mkdir -p $(shell dirname $@)
-	gcc -o $@ -c $^ $(CFLAGS)
-
-
-build/c-test: $(TEST_OBJS)
-	gcc -o $@ $^ $(TEST_LDFLAGS)
-
-
-c-test: build/c-test
-	$<
 
 
 # used to create release tarball for rpmbuild
@@ -131,12 +99,10 @@ dmel.fa:
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
 # permission to mount the fuse filesystem.
-test: build/c-test onedriver dmel.fa
-	$<
+test: onedriver dmel.fa
 	rm -f *.race* fusefs_tests.log
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./ui/systemd
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs/graph
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" gotest -race -v -parallel=8 -count=1 ./fs
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
+		gotest -race -v -parallel=8 -count=1 $(go list ./... | grep -v offline)
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
@@ -147,5 +113,5 @@ test: build/c-test onedriver dmel.fa
 clean:
 	fusermount -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
-	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher onedriver-ui unshare .auth_tokens.json
+	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/ build/
