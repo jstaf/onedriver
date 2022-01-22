@@ -73,14 +73,8 @@ func activateCallback(app *gtk.Application) {
 			return
 		}
 
-		// open it in default file browser
-		cURI := C.CString("file://" + mount)
-		C.g_app_info_launch_default_for_uri(cURI, nil, nil)
-		C.free(unsafe.Pointer(cURI))
-
-		row := newMountRow(mount)
-		listbox.Insert(row, -1)
-		row.ShowAll()
+		listbox.Insert(newMountRow(mount), -1)
+		xdgOpenDir(mount)
 	})
 	header.PackStart(mountpointBtn)
 
@@ -90,7 +84,45 @@ func activateCallback(app *gtk.Application) {
 		listbox.Insert(newMountRow(mount), -1)
 	}
 
+	listbox.Connect("row-activated", func() {
+		row := listbox.GetSelectedRow()
+		mount, _ := row.GetName()
+		unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate,
+			unit.UnitNamePathEscape(mount))
+
+		log.Debug().
+			Str("mount", mount).
+			Str("unit", unitName).
+			Str("signal", "row-activated").
+			Msg("")
+
+		active, _ := systemd.UnitIsActive(unitName)
+		if !active {
+			err := systemd.UnitSetActive(unitName, true)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("unit", unitName).
+					Msg("Could not set unit state to active.")
+			}
+			//mountToggle.SetActive(true)
+			ui.PollUntilAvail(mount, -1)
+		}
+		xdgOpenDir(mount)
+	})
+
 	window.ShowAll()
+}
+
+// xdgOpenDir opens a folder in the user's default file browser
+func xdgOpenDir(mount string) {
+	log.Debug().Str("mount", mount).Msg("Opening mount.")
+	if mount == "" {
+		return
+	}
+	cURI := C.CString("file://" + mount)
+	C.g_app_info_launch_default_for_uri(cURI, nil, nil)
+	C.free(unsafe.Pointer(cURI))
 }
 
 // newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
@@ -184,5 +216,7 @@ func newMountRow(mount string) *gtk.ListBoxRow {
 	})
 	box.PackEnd(mountToggle, false, false, 0)
 
+	// name is used by "row-activated" callback
+	row.SetName(mount)
 	return row
 }

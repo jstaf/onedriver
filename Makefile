@@ -36,8 +36,9 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
+# deprecation warnings are gotk3's fault, no point cluttering up every build and test
 onedriver-ui: $(shell find ui/ -type f) cmd/onedriver-ui/main.go
-	go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
+	CGO_CFLAGS=-Wno-deprecated-declarations go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-ui
 
 
 install: onedriver onedriver-launcher
