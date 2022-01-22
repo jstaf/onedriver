@@ -103,9 +103,9 @@ dmel.fa:
 # permission to mount the fuse filesystem.
 test: onedriver onedriver-launcher dmel.fa
 	rm -f *.race* fusefs_tests.log
+	CGO_ENABLED=0 gotest -v -parallel=8 -count=1 $(shell go list ./ui/... | grep -v offline)
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
-		CGO_CFLAGS=-Wno-deprecated-declarations \
-		gotest -race -v -parallel=8 -count=1 $(shell go list ./... | grep -v offline)
+		gotest -race -v -parallel=8 -count=1 $(shell go list ./fs/... | grep -v offline)
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
