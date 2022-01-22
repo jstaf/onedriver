@@ -22,8 +22,10 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver
 
 
+# -Wno-deprecated-declarations is for gotk3, which uses deprecated methods for older
+# glib compatibility: https://github.com/gotk3/gotk3/issues/762#issuecomment-919035313
 onedriver-launcher: $(shell find ui/ -type f) cmd/onedriver-launcher/main.go
-	go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-launcher
+	CGO_CFLAGS=-Wno-deprecated-declarations go build -v -ldflags="-X main.commit=$(shell git rev-parse HEAD)" ./cmd/onedriver-launcher
 
 
 install: onedriver onedriver-launcher
@@ -99,10 +101,11 @@ dmel.fa:
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
 # permission to mount the fuse filesystem.
-test: onedriver dmel.fa
+test: onedriver onedriver-launcher dmel.fa
 	rm -f *.race* fusefs_tests.log
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
-		gotest -race -v -parallel=8 -count=1 $(go list ./... | grep -v offline)
+		CGO_CFLAGS=-Wno-deprecated-declarations \
+		gotest -race -v -parallel=8 -count=1 $(shell go list ./... | grep -v offline)
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
