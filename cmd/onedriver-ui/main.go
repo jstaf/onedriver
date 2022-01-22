@@ -51,6 +51,8 @@ func activateCallback(app *gtk.Application) {
 	listbox, _ := gtk.ListBoxNew()
 	window.Add(listbox)
 
+	switches := make(map[string]*gtk.Switch)
+
 	mountpointBtn, _ := gtk.ButtonNewFromIconName("list-add-symbolic", gtk.ICON_SIZE_BUTTON)
 	mountpointBtn.SetTooltipText("Add a new OneDrive account.")
 	mountpointBtn.Connect("clicked", func(button *gtk.Button) {
@@ -73,15 +75,20 @@ func activateCallback(app *gtk.Application) {
 			return
 		}
 
-		listbox.Insert(newMountRow(mount), -1)
-		xdgOpenDir(mount)
+		row, sw := newMountRow(mount)
+		switches[mount] = sw
+		listbox.Insert(row, -1)
+
+		go xdgOpenDir(mount)
 	})
 	header.PackStart(mountpointBtn)
 
 	mounts := ui.GetKnownMounts()
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
-		listbox.Insert(newMountRow(mount), -1)
+		row, sw := newMountRow(mount)
+		switches[mount] = sw
+		listbox.Insert(row, -1)
 	}
 
 	listbox.Connect("row-activated", func() {
@@ -105,19 +112,24 @@ func activateCallback(app *gtk.Application) {
 					Str("unit", unitName).
 					Msg("Could not set unit state to active.")
 			}
-			//mountToggle.SetActive(true)
-			ui.PollUntilAvail(mount, -1)
+
 		}
-		xdgOpenDir(mount)
+		switches[mount].SetActive(true)
+
+		go xdgOpenDir(mount)
 	})
 
 	window.ShowAll()
 }
 
-// xdgOpenDir opens a folder in the user's default file browser
+// xdgOpenDir opens a folder in the user's default file browser.
+// Should be invoked as a goroutine to not block the main app.
 func xdgOpenDir(mount string) {
-	log.Debug().Str("mount", mount).Msg("Opening mount.")
-	if mount == "" {
+	log.Debug().Str("dir", mount).Msg("Opening directory.")
+	if mount == "" || !ui.PollUntilAvail(mount, -1) {
+		log.Error().
+			Str("dir", mount).
+			Msg("Either directory was invalid or exceeded timeout waiting for fs to become available.")
 		return
 	}
 	cURI := C.CString("file://" + mount)
@@ -126,7 +138,7 @@ func xdgOpenDir(mount string) {
 }
 
 // newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
-func newMountRow(mount string) *gtk.ListBoxRow {
+func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	row, _ := gtk.ListBoxRowNew()
 	row.SetSelectable(true)
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 5)
@@ -218,5 +230,6 @@ func newMountRow(mount string) *gtk.ListBoxRow {
 
 	// name is used by "row-activated" callback
 	row.SetName(mount)
-	return row
+	row.ShowAll()
+	return row, mountToggle
 }

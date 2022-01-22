@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/rs/zerolog/log"
@@ -16,7 +17,19 @@ import (
 
 // PollUntilAvail will block until the mountpoint is available or a timeout is reached.
 // If timeout is -1, default timeout is 120s.
-func PollUntilAvail(mountpoint string, timeout int) {}
+func PollUntilAvail(mountpoint string, timeout int) bool {
+	if timeout == -1 {
+		timeout = 120
+	}
+	for i := 1; i < timeout*10; i++ {
+		_, err := os.Stat(filepath.Join(mountpoint, ".xdg-volume-info"))
+		if err == nil {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
 
 // MountpointIsValid returns if the mountpoint exists and nothing is in it.
 func MountpointIsValid(mountpoint string) bool {
