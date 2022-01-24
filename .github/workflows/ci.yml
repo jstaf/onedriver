@@ -4,7 +4,7 @@ jobs:
   test:
     name: Run tests
     runs-on: ubuntu-20.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
