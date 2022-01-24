@@ -49,8 +49,8 @@ break.
 # done via sed because #cgo flags appear to ignore #ifdef
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
-GOOS=linux go build -mod=vendor -ldflags="-X main.commit=$(cat .commit)"
-make onedriver-launcher
+GOOS=linux go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
+GOOS=linux go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
 gzip resources/onedriver.1
 
 %install
