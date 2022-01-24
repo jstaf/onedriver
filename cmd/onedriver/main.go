@@ -55,10 +55,14 @@ func main() {
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging. "+
 		"This logs communication between onedriver and the kernel.")
-	flag.BoolP("help", "h", false, "Displays this help message.")
+	help := flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
 	flag.Parse()
 
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
 	if *versionFlag {
 		fmt.Println("onedriver", common.Version())
 		os.Exit(0)

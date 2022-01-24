@@ -20,10 +20,38 @@ import (
 	"github.com/jstaf/onedriver/ui/systemd"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	flag "github.com/spf13/pflag"
 )
 
+func usage() {
+	fmt.Printf(`onedriver-launcher - Manage and configure onedriver mountpoints
+
+Usage: onedriver-launcher [options]
+
+Valid options:
+`)
+	flag.PrintDefaults()
+}
+
 func main() {
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	logLevel := flag.StringP("log", "l", "debug",
+		"Set logging level/verbosity for the filesystem. "+
+			"Can be one of: fatal, error, warn, info, debug, trace")
+	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
+	help := flag.BoolP("help", "h", false, "Displays this help message.")
+	flag.Usage = usage
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
+	if *versionFlag {
+		fmt.Println("onedriver-launcher", common.Version())
+		os.Exit(0)
+	}
+
+	zerolog.SetGlobalLevel(common.StringToLevel(*logLevel))
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 
 	log.Info().Msgf("onedriver-launcher %s", common.Version())
@@ -35,7 +63,7 @@ func main() {
 	app.Connect("activate", func(application *gtk.Application) {
 		activateCallback(application)
 	})
-	os.Exit(app.Run(os.Args))
+	os.Exit(app.Run(nil))
 }
 
 // activateCallback is what actually sets up the application
@@ -59,7 +87,8 @@ func activateCallback(app *gtk.Application) {
 		mount := ui.DirChooser("Select a mountpoint")
 		if !ui.MountpointIsValid(mount) {
 			log.Error().Str("mountpoint", mount).
-				Msg("Mountpoint was not valid. Mountpoint must be an empty directory.")
+				Msg("Mountpoint was not valid (or user cancelled the operation). " +
+					"Mountpoint must be an empty directory.")
 			return
 		}
 
@@ -86,6 +115,9 @@ func activateCallback(app *gtk.Application) {
 	mounts := ui.GetKnownMounts()
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
+
+		log.Info().Str("mount", mount).Msg("Found existing mount.")
+
 		row, sw := newMountRow(mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
@@ -168,11 +200,22 @@ func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	deleteMountpointBtn, _ := gtk.ButtonNewFromIconName("user-trash-symbolic", gtk.ICON_SIZE_BUTTON)
 	deleteMountpointBtn.SetTooltipText("Remove OneDrive account from local computer")
 	deleteMountpointBtn.Connect("clicked", func() {
+		log.Trace().
+			Str("signal", "clicked").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Msg("Request to delete mount.")
+
 		dialog, _ := gtk.DialogNewWithButtons("Remove mountpoint?", nil, gtk.DIALOG_MODAL,
 			[]interface{}{"Cancel", gtk.RESPONSE_REJECT},
 			[]interface{}{"Remove", gtk.RESPONSE_ACCEPT},
 		)
 		if dialog.Run() == gtk.RESPONSE_ACCEPT {
+			log.Info().
+				Str("signal", "clicked").
+				Str("mount", mount).
+				Str("unitName", unitName).
+				Msg("Deleting mount.")
 			systemd.UnitSetEnabled(unitName, false)
 			systemd.UnitSetActive(unitName, false)
 
@@ -197,6 +240,12 @@ func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 		log.Error().Err(err).Msg("Error checking unit enabled state.")
 	}
 	unitEnabledBtn.Connect("toggled", func() {
+		log.Info().
+			Str("signal", "toggled").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Bool("enabled", unitEnabledBtn.GetActive()).
+			Msg("Changing systemd unit enabled state.")
 		err := systemd.UnitSetEnabled(unitName, unitEnabledBtn.GetActive())
 		if err != nil {
 			log.Error().
@@ -218,6 +267,12 @@ func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	mountToggle.SetTooltipText("Mount or unmount selected OneDrive account")
 	mountToggle.SetVAlign(gtk.ALIGN_CENTER)
 	mountToggle.Connect("state-set", func() {
+		log.Info().
+			Str("signal", "state-set").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Bool("active", mountToggle.GetActive()).
+			Msg("Changing systemd unit active state.")
 		err := systemd.UnitSetActive(unitName, mountToggle.GetActive())
 		if err != nil {
 			log.Error().
