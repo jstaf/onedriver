@@ -27,8 +27,8 @@ __debug_bin
 onedriver
 onedriver-headless
 onedriver-launcher
-c-tests
 onedriver-*/
+!cmd/onedriver-launcher
 !cmd/onedriver
 vendor/
 
