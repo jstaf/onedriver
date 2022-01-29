@@ -66,6 +66,7 @@ jobs:
           # cannot run systemd tests here because github actions runners don't have dbus setup +
           # if CGO is on, the UI tests will take foreverrrrr
           CGO_ENABLED=0 gotest -v -covermode=count -coverpkg=./ui/... -coverprofile=ui.coverage ./ui
+          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=quickxorhash.coverage ./fs/graph/quickxorhash
           gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
           gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
           go test -c -covermode=count -coverpkg=./fs/... ./fs/offline
