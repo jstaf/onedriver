@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rclone/rclone/backend/onedrive/quickxorhash"
+	"github.com/jstaf/onedriver/fs/graph/quickxorhash"
 )
 
 // SHA1Hash returns the SHA1 hash of some data as a string
