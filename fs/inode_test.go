@@ -9,6 +9,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // verify that items automatically get created with an ID of "local-"
@@ -33,7 +35,7 @@ func TestMode(t *testing.T) {
 	}
 
 	fname := "/onedriver_tests/test_mode.txt"
-	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	require.NoError(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
 
 	var err error
 	for i := 0; i < 10; i++ {
@@ -63,23 +65,18 @@ func TestIsDir(t *testing.T) {
 	}
 
 	fname := "/onedriver_tests/test_is_dir.txt"
-	failOnErr(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	require.NoError(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
 
-	var err error
-	for i := 0; i < 10; i++ {
-		item, err = graph.GetItemPath(fname, auth)
+	assert.Eventually(t, func() bool {
+		item, err := graph.GetItemPath(fname, auth)
 		if err == nil && item != nil {
-			break
+			if inode := NewInodeDriveItem(item); inode.IsDir() {
+				t.Fatal("File created with mode 644 not detected as file")
+			}
+			return true
 		}
-		time.Sleep(time.Second)
-	}
-	if item == nil {
-		t.Fatal("item cannot be nil, err:", err)
-	}
-	inode = NewInodeDriveItem(item)
-	if inode.IsDir() {
-		t.Fatal("file created with mode 644 not detected as a file")
-	}
+		return false
+	}, 10*time.Second, time.Second, "Could not create item.")
 }
 
 // A filename like .~lock.libreoffice-test.docx# will fail to upload unless the
@@ -87,20 +84,19 @@ func TestIsDir(t *testing.T) {
 func TestFilenameEscape(t *testing.T) {
 	t.Parallel()
 	fname := `.~lock.libreoffice-test.docx#`
-	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
+	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
 
 	// make sure it made it to the server
-	for i := 0; i < 10; i++ {
+	assert.Eventually(t, func() bool {
 		children, err := graph.GetItemChildrenPath("/onedriver_tests", auth)
-		failOnErr(t, err)
+		require.NoError(t, err)
 		for _, child := range children {
 			if child.Name == fname {
-				return
+				return true
 			}
 		}
-		time.Sleep(5 * time.Second)
-	}
-	t.Fatalf("Could not find file: \"%s\"", fname)
+		return false
+	}, retrySeconds, 5*time.Second, "Could not find file: ", fname)
 }
 
 // When running creat() on an existing file, we should truncate the existing file and
@@ -111,7 +107,7 @@ func TestDoubleCreate(t *testing.T) {
 	fname := "double_create.txt"
 
 	parent, err := fs.GetPath("/onedriver_tests", auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	fs.Create(
 		context.Background().Done(),
@@ -142,13 +138,11 @@ func TestDoubleCreate(t *testing.T) {
 		&fuse.CreateOut{},
 	)
 	child, err = fs.GetChild(parent.ID(), fname, auth)
-	if err != nil || child == nil {
+	require.NoError(t, err)
+	if child == nil {
 		t.Fatal("Could not find child post-create")
 	}
-	if childID != child.ID() {
-		t.Errorf(
-			"IDs did not match when create run twice on same file.\nOriginal: %s\nNew: %s",
-			childID, child.ID(),
-		)
-	}
+	assert.Equal(t, childID, child.ID(),
+		"IDs did not match when create run twice on same file.",
+	)
 }

@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Can we detect a mountpoint as valid appropriately?
@@ -22,10 +24,10 @@ func TestMountpointIsValid(t *testing.T) {
 		{"_test/.example", false},
 	}
 	for _, test := range tests {
-		if MountpointIsValid(test.mountpoint) != test.expected {
-			t.Errorf("Did not correctly determine if mountpoint \"%s\" was valid.\n",
-				test.mountpoint)
-		}
+		assert.Equalf(t, test.expected, MountpointIsValid(test.mountpoint),
+			"Did not correctly determine if mountpoint \"%s\" was valid.\n",
+			test.mountpoint,
+		)
 	}
 
 	os.RemoveAll("_test")
@@ -43,13 +45,9 @@ func TestHomeEscapeUnescape(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if result := EscapeHome(test.unescaped); result != test.escaped {
-			t.Errorf("Did not correctly escape home. Got \"%s\", wanted \"%s\"\n",
-				result, test.escaped)
-		}
-		if result := UnescapeHome(test.escaped); result != test.unescaped {
-			t.Errorf("Did not correctly escape home. Got \"%s\", wanted \"%s\"\n",
-				result, test.unescaped)
-		}
+		assert.Equal(t, test.escaped, EscapeHome(test.unescaped),
+			"Did not correctly escape home.")
+		assert.Equal(t, test.unescaped, UnescapeHome(test.escaped),
+			"Did not correctly unescape home.")
 	}
 }

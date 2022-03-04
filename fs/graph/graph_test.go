@@ -3,15 +3,17 @@ package graph
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestResourcePath(t *testing.T) {
 	t.Parallel()
-	escaped := ResourcePath("/some path/here!")
-	wanted := `/me/drive/root:%2Fsome%20path%2Fhere%21`
-	if escaped != wanted {
-		t.Fatalf("Escaped path was wrong - got: \"%s\", wanted \"%s\"", escaped, wanted)
-	}
+	assert.Equal(t,
+		`/me/drive/root:%2Fsome%20path%2Fhere%21`,
+		ResourcePath("/some path/here!"),
+		"Escaped path was wrong.",
+	)
 }
 
 func TestRequestUnauthenticated(t *testing.T) {
@@ -22,7 +24,5 @@ func TestRequestUnauthenticated(t *testing.T) {
 		ExpiresAt: time.Now().Unix() + 60*60*24*365,
 	}
 	_, err := Get("/me/drive/root", badAuth)
-	if err == nil {
-		t.Fatal("An unauthenticated request was not handled as an error")
-	}
+	assert.Error(t, err, "An unauthenticated request was not handled as an error")
 }

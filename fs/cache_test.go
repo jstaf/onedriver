@@ -3,30 +3,25 @@ package fs
 
 import (
 	"fmt"
-	"log"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRootGet(t *testing.T) {
 	t.Parallel()
 	cache := NewFilesystem(auth, "test_root_get.db")
 	root, err := cache.GetPath("/", auth)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if root.Path() != "/" {
-		t.Fatal("Root path did not resolve correctly")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "/", root.Path(), "Root path did not resolve correctly.")
 }
 
 func TestRootChildrenUpdate(t *testing.T) {
 	t.Parallel()
 	cache := NewFilesystem(auth, "test_root_children_update.db")
 	children, err := cache.GetChildrenPath("/", auth)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if _, exists := children["documents"]; !exists {
 		t.Fatal("Could not find documents folder.")
@@ -37,23 +32,19 @@ func TestSubdirGet(t *testing.T) {
 	t.Parallel()
 	cache := NewFilesystem(auth, "test_subdir_get.db")
 	documents, err := cache.GetPath("/Documents", auth)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if documents.Name() != "Documents" {
-		t.Fatalf("Failed to fetch \"/Documents\". Got \"%s\" instead!\n", documents.Name())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "Documents", documents.Name(), "Failed to fetch \"/Documents\".")
 }
 
 func TestSubdirChildrenUpdate(t *testing.T) {
 	t.Parallel()
 	cache := NewFilesystem(auth, "test_subdir_children_update.db")
 	children, err := cache.GetChildrenPath("/Documents", auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	if _, exists := children["documents"]; exists {
-		log.Println("Documents directory found inside itself. " +
-			"Likely the cache did not traverse correctly.\n\nChildren:\n")
+		fmt.Println("Documents directory found inside itself. " +
+			"Likely the cache did not traverse correctly.\n\nChildren:")
 		for key := range children {
 			fmt.Println(key)
 		}
@@ -69,7 +60,5 @@ func TestSamePointer(t *testing.T) {
 	if item != item2 {
 		t.Fatalf("Pointers to cached items do not match: %p != %p\n", item, item2)
 	}
-	if item == nil {
-		t.Fatal("Item was nil!")
-	}
+	assert.NotNil(t, item)
 }

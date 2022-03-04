@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Does Go's internal ReadDir function work? This is mostly here to compare against
@@ -39,7 +41,7 @@ func TestReaddir(t *testing.T) {
 func TestLs(t *testing.T) {
 	t.Parallel()
 	stdout, err := exec.Command("ls", "mount").Output()
-	failOnErr(t, err)
+	require.NoError(t, err)
 	sout := string(stdout)
 	if !strings.Contains(sout, "Documents") {
 		t.Fatal("Could not find \"Documents\" folder.")
@@ -51,30 +53,27 @@ func TestTouchCreate(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "empty")
 	syscall.Umask(022) // otherwise tests fail if default umask is 002
-	failOnErr(t, exec.Command("touch", fname).Run())
+	require.NoError(t, exec.Command("touch", fname).Run())
 	st, err := os.Stat(fname)
-	failOnErr(t, err)
-	if st.Size() != 0 {
-		t.Fatal("size was not 0")
-	}
+	require.NoError(t, err)
+
+	require.Zero(t, st.Size(), "Size should be zero.")
 	if st.Mode() != 0644 {
-		t.Fatalf("Mode of new file was not 644, got %o instead.\n", st.Mode())
+		t.Fatal("Mode of new file was not 644, got", Octal(uint32(st.Mode())))
 	}
-	if st.IsDir() {
-		t.Fatal("New file detected as directory")
-	}
+	require.False(t, st.IsDir(), "New file detected as directory.")
 }
 
 // does the touch command update modification time properly?
 func TestTouchUpdateTime(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "modtime")
-	failOnErr(t, exec.Command("touch", fname).Run())
+	require.NoError(t, exec.Command("touch", fname).Run())
 	st1, _ := os.Stat(fname)
 
 	time.Sleep(2 * time.Second)
 
-	failOnErr(t, exec.Command("touch", fname).Run())
+	require.NoError(t, exec.Command("touch", fname).Run())
 	st2, _ := os.Stat(fname)
 
 	if st2.ModTime().Equal(st1.ModTime()) || st2.ModTime().Before(st1.ModTime()) {
@@ -87,11 +86,11 @@ func TestTouchUpdateTime(t *testing.T) {
 func TestChmod(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "chmod_tester")
-	failOnErr(t, exec.Command("touch", fname).Run())
-	failOnErr(t, os.Chmod(fname, 0777))
+	require.NoError(t, exec.Command("touch", fname).Run())
+	require.NoError(t, os.Chmod(fname, 0777))
 	st, _ := os.Stat(fname)
 	if st.Mode() != 0777 {
-		t.Fatalf("Mode of file was not 0777, got %o instead", st.Mode())
+		t.Fatalf("Mode of file was not 0777, got %o instead!", st.Mode())
 	}
 }
 
@@ -101,24 +100,22 @@ func TestChmod(t *testing.T) {
 func TestMkdirRmdir(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "folder1")
-	failOnErr(t, os.Mkdir(fname, 0755))
-	failOnErr(t, os.Remove(fname))
-	failOnErr(t, os.Mkdir(fname, 0755))
+	require.NoError(t, os.Mkdir(fname, 0755))
+	require.NoError(t, os.Remove(fname))
+	require.NoError(t, os.Mkdir(fname, 0755))
 }
 
 // We shouldn't be able to rmdir nonempty directories
 func TestRmdirNonempty(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(TestDir, "nonempty")
-	failOnErr(t, os.Mkdir(dir, 0755))
-	failOnErr(t, os.Mkdir(filepath.Join(dir, "contents"), 0755))
-	if os.Remove(dir) == nil {
-		t.Fatal("We somehow removed a nonempty directory!")
-	}
+	require.NoError(t, os.Mkdir(dir, 0755))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "contents"), 0755))
 
-	if os.RemoveAll(dir) != nil {
-		t.Fatal("Could not remove a nonempty directory the correct way!")
-	}
+	require.Error(t, os.Remove(dir), "We somehow removed a nonempty directory!")
+
+	require.NoError(t, os.RemoveAll(dir),
+		"Could not remove a nonempty directory the correct way!")
 }
 
 // test that we can write to a file and read its contents back correctly
@@ -126,13 +123,10 @@ func TestReadWrite(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "write.txt")
 	content := "my hands are typing words\n"
-	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
 	read, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
-	if string(read) != content {
-		t.Fatalf("File content was not correct - got: %s\nwanted: %s\n",
-			string(read), content)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, content, string(read), "File content was not correct.")
 }
 
 // ld can crash the filesystem because it starts writing output at byte 64 in previously
@@ -140,13 +134,13 @@ func TestReadWrite(t *testing.T) {
 func TestWriteOffset(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "main.c")
-	failOnErr(t, ioutil.WriteFile(fname,
+	require.NoError(t, ioutil.WriteFile(fname,
 		[]byte(`#include <stdio.h>
 
 int main(int argc, char **argv) {
 	printf("ld writes files in a funny manner!");
 }`), 0644))
-	failOnErr(t, exec.Command("gcc", "-o", filepath.Join(TestDir, "main.o"), fname).Run())
+	require.NoError(t, exec.Command("gcc", "-o", filepath.Join(TestDir, "main.o"), fname).Run())
 }
 
 // test that we can create a file and rename it
@@ -155,22 +149,18 @@ func TestRenameMove(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "rename.txt")
 	dname := filepath.Join(TestDir, "new-destination-name.txt")
-	failOnErr(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
-	failOnErr(t, os.Rename(fname, dname))
+	require.NoError(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
+	require.NoError(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)
-	failOnErr(t, err)
-	if st == nil {
-		t.Fatal("Renamed file does not exist")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, st, "Renamed file does not exist.")
 
 	os.Mkdir(filepath.Join(TestDir, "dest"), 0755)
 	dname2 := filepath.Join(TestDir, "dest/even-newer-name.txt")
-	failOnErr(t, os.Rename(dname, dname2))
+	require.NoError(t, os.Rename(dname, dname2))
 	st, err = os.Stat(dname2)
-	failOnErr(t, err)
-	if st == nil {
-		t.Fatal("Renamed file does not exist")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, st, "Renamed file does not exist.")
 }
 
 // test that copies work as expected
@@ -179,15 +169,12 @@ func TestCopy(t *testing.T) {
 	fname := filepath.Join(TestDir, "copy-start.txt")
 	dname := filepath.Join(TestDir, "copy-end.txt")
 	content := "and copies too!\n"
-	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
-	failOnErr(t, exec.Command("cp", fname, dname).Run())
+	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	require.NoError(t, exec.Command("cp", fname, dname).Run())
 
 	read, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
-	if string(read) != content {
-		t.Fatalf("File content was not correct\ngot: %s\nwanted: %s\n",
-			string(read), content)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, content, string(read), "File content was not correct.")
 }
 
 // do appends work correctly?
@@ -201,7 +188,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	file, err := os.Open(fname)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
@@ -229,16 +216,14 @@ func TestTruncate(t *testing.T) {
 	}
 
 	file, err := os.Open(fname)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	var counter int
 	for scanner.Scan() {
 		counter++
-		if scanner.Text() != "append" {
-			t.Fatalf("File text was wrong. Got \"%s\", wanted \"append\"\n", scanner.Text())
-		}
+		assert.Equal(t, "append", scanner.Text(), "File text was wrong.")
 	}
 	if counter != 1 {
 		t.Fatalf("Got wrong number of lines (%d), expected 1\n", counter)
@@ -260,30 +245,22 @@ tortor. In tempus lacinia est, nec gravida ipsum viverra sed. In vel felis
 vitae odio pulvinar egestas. Sed ullamcorper, nulla non molestie dictum,
 massa lectus mattis dolor, in volutpat nulla lectus id neque.`
 	fname := filepath.Join(TestDir, "midfile.txt")
-	failOnErr(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
 
 	file, _ := os.OpenFile(fname, os.O_RDWR, 0644)
 	defer file.Close()
 	match := "my hands are typing words. aaaaaaa"
 
 	n, err := file.WriteAt([]byte(match), 123)
-	failOnErr(t, err)
-	if n != len(match) {
-		t.Fatalf("Got %d bytes written, wanted %d bytes.\n", n, len(match))
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(match), n, "Wrong number of bytes written.")
 
 	result := make([]byte, len(match))
 	n, err = file.ReadAt(result, 123)
-	failOnErr(t, err)
+	require.NoError(t, err)
+	require.Equal(t, len(match), n, "Wrong number of bytes read.")
 
-	if n != len(match) {
-		t.Fatalf("Got %d bytes read, wanted %d bytes.\n", n, len(match))
-	}
-	if string(result) != match {
-		t.Fatalf("Content did not match expected output.\n"+
-			"Got: \"%s\"\n Wanted: \"%s\"\n",
-			string(result), match)
-	}
+	require.Equal(t, match, string(result), "Content did not match expected output.")
 }
 
 // Statfs should succeed
@@ -291,19 +268,16 @@ func TestStatFs(t *testing.T) {
 	t.Parallel()
 	var st syscall.Statfs_t
 	err := syscall.Statfs(TestDir, &st)
-	failOnErr(t, err)
-
-	if st.Blocks == 0 {
-		t.Fatal("StatFs failed, got 0 blocks!")
-	}
+	require.NoError(t, err)
+	require.NotZero(t, st.Blocks, "StatFs failed, got 0 blocks!")
 }
 
 // does unlink work? (because apparently we weren't testing that before...)
 func TestUnlink(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "unlink_tester")
-	failOnErr(t, exec.Command("touch", fname).Run())
-	failOnErr(t, os.Remove(fname))
+	require.NoError(t, exec.Command("touch", fname).Run())
+	require.NoError(t, os.Remove(fname))
 	stdout, _ := exec.Command("ls", "mount").Output()
 	if strings.Contains(string(stdout), "unlink_tester") {
 		t.Fatalf("Deleting %s did not work.", fname)
@@ -315,17 +289,14 @@ func TestUnlink(t *testing.T) {
 // issues with OneDrive's case-insensitivity.
 func TestNTFSIsABadFilesystem(t *testing.T) {
 	t.Parallel()
-	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
+	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
 		[]byte("NTFS is bad"), 0644))
-	failOnErr(t, ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
+	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
 		[]byte("yep"), 0644))
 
 	content, err := ioutil.ReadFile(filepath.Join(TestDir, "Case-Sensitive.TXT"))
-	failOnErr(t, err)
-	if string(content) != "yep" {
-		t.Fatalf("Did not find expected output. got: \"%s\", wanted \"%s\"\n",
-			string(content), "yep")
-	}
+	require.NoError(t, err)
+	require.Equal(t, "yep", string(content), "Did not find expected output.")
 }
 
 // same as last test, but with exclusive create() calls.
@@ -333,13 +304,12 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 	t.Parallel()
 	file, err := os.OpenFile(filepath.Join(TestDir, "case-sensitive2.txt"), os.O_CREATE|os.O_EXCL, 0644)
 	file.Close()
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	file, err = os.OpenFile(filepath.Join(TestDir, "CASE-SENSITIVE2.txt"), os.O_CREATE|os.O_EXCL, 0644)
 	file.Close()
-	if err == nil {
-		t.Fatal("We should be throwing an error, since OneDrive is case-insensitive.")
-	}
+	require.Error(t, err,
+		"We should be throwing an error, since OneDrive is case-insensitive.")
 }
 
 // Ensure that case-sensitivity collisions due to renames are handled properly
@@ -352,34 +322,27 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 
 	// should work
 	secondName := filepath.Join(TestDir, "new_name.txt")
-	failOnErr(t, ioutil.WriteFile(secondName, []byte("new"), 0644))
-	failOnErr(t, os.Rename(secondName, fname))
+	require.NoError(t, ioutil.WriteFile(secondName, []byte("new"), 0644))
+	require.NoError(t, os.Rename(secondName, fname))
 	contents, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
-	if string(contents) != "new" {
-		t.Fatalf("Contents did not match expected output: got \"%s\", wanted \"new\"\n",
-			string(contents))
-	}
+	require.NoError(t, err)
+	require.Equal(t, "new", string(contents), "Contents did not match expected output.")
 
 	// should fail
 	thirdName := filepath.Join(TestDir, "new_name2.txt")
-	failOnErr(t, ioutil.WriteFile(thirdName, []byte("this rename should work"), 0644))
+	require.NoError(t, ioutil.WriteFile(thirdName, []byte("this rename should work"), 0644))
 	err = os.Rename(thirdName, filepath.Join(TestDir, "original_name.txt"))
-	if err != nil {
-		t.Fatal("Rename failed:", err)
-	}
+	require.NoError(t, err, "Rename failed.")
 
 	_, err = os.Stat(fname)
-	if err != nil {
-		t.Fatalf("\"%s\" does not exist after the rename\n", fname)
-	}
+	require.NoErrorf(t, err, "\"%s\" does not exist after the rename.", fname)
 }
 
 // This test is insurance to prevent tests (and the fs) from accidentally not
 // storing case for filenames at all
 func TestChildrenAreCasedProperly(t *testing.T) {
 	t.Parallel()
-	failOnErr(t, ioutil.WriteFile(
+	require.NoError(t, ioutil.WriteFile(
 		filepath.Join(TestDir, "CASE-check.txt"), []byte("yep"), 0644))
 	stdout, err := exec.Command("ls", TestDir).Output()
 	if err != nil {
@@ -397,12 +360,10 @@ func TestEchoWritesToFile(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "bagels")
 	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
-	if err != nil {
-		t.Log(string(out))
-		t.Fatal(err)
-	}
+	require.NoError(t, err, out)
+
 	content, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if !bytes.Contains(content, []byte("bagels")) {
 		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"\n", content)
 	}
@@ -412,10 +373,8 @@ func TestEchoWritesToFile(t *testing.T) {
 func TestStat(t *testing.T) {
 	t.Parallel()
 	stat, err := os.Stat("mount/Documents")
-	failOnErr(t, err)
-	if stat.Name() != "Documents" {
-		t.Fatalf("Name was not \"Documents\", got \"%s\" instead.\n", stat.Name())
-	}
+	require.NoError(t, err)
+	require.Equal(t, "Documents", stat.Name(), "Name was not \"Documents\".")
 
 	if stat.ModTime().Year() < 1971 {
 		t.Fatal("Modification time of /Documents wrong, got: " + stat.ModTime().String())
@@ -444,7 +403,7 @@ func TestNoQuestionMarks(t *testing.T) {
 func TestGIOTrash(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "trash_me.txt")
-	failOnErr(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
+	require.NoError(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
 
 	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
 	if err != nil {
@@ -470,9 +429,9 @@ func TestListChildrenPaging(t *testing.T) {
 	// files have been prepopulated during test setup to avoid being picked up by
 	// the delta thread
 	items, err := graph.GetItemChildrenPath("/onedriver_tests/paging", auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if len(files) < 201 {
 		if len(items) < 201 {
 			t.Logf("Skipping test, number of paging files from the API were also less than 201.\nAPI: %d\nFS: %d\n",
@@ -490,7 +449,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 	t.Parallel()
 	content := []byte("This will break things.")
 	fname := filepath.Join(TestDir, "libreoffice.txt")
-	failOnErr(t, ioutil.WriteFile(fname, content, 0644))
+	require.NoError(t, ioutil.WriteFile(fname, content, 0644))
 
 	out, err := exec.Command(
 		"libreoffice",
@@ -499,20 +458,18 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		"--outdir", TestDir,
 		fname,
 	).CombinedOutput()
-	if err != nil {
-		t.Log(string(out))
-		t.Fatal(err)
-	}
+	require.NoError(t, err, out)
 
-	for i := 0; i < 10; i++ {
-		time.Sleep(3 * time.Second)
+	assert.Eventually(t, func() bool {
 		item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
 		if err == nil && item != nil {
 			if item.Size == 0 {
 				t.Fatal("Item size was 0!")
 			}
-			return // success
+			return true
 		}
-	}
-	t.Fatal("Could not find /onedriver_tests/libreoffice.docx post-upload!")
+		return false
+	}, retrySeconds, 3*time.Second,
+		"Could not find /onedriver_tests/libreoffice.docx post-upload!",
+	)
 }

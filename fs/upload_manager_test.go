@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -24,7 +26,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 	go exec.Command("cp", "dmel.fa", filepath.Join(TestDir, "upload_to_disk.fa")).Run()
 	time.Sleep(time.Second)
 	inode, err := fs.GetPath("/onedriver_tests/upload_to_disk.fa", nil)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	// we can find the in-progress upload because there is a several second
 	// delay on new uploads
@@ -58,7 +60,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 	// now we create a new UploadManager from scratch, with the file injected
 	// into its db and confirm that the file gets uploaded
 	db, err := bolt.Open("test_upload_disk_serialization.db", 0644, nil)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	db.Update(func(tx *bolt.Tx) error {
 		b, _ := tx.CreateBucket(bucketUploads)
 		payload, _ := json.Marshal(&session)
@@ -66,16 +68,15 @@ func TestUploadDiskSerialization(t *testing.T) {
 	})
 
 	NewUploadManager(time.Second, db, fs, auth)
-	for i := 0; i < 20; i++ {
+	assert.Eventually(t, func() bool {
 		driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
 		if driveItem != nil && err == nil {
-			return
+			return true
 		}
-		time.Sleep(5 * time.Second)
-	}
-	if err != nil || driveItem == nil {
-		t.Fatalf("Could not find uploaded file after unserializing from disk and resuming upload. Err: %s", err)
-	}
+		return false
+	}, 100*time.Second, 5*time.Second,
+		"Could not find uploaded file after unserializing from disk and resuming upload.",
+	)
 }
 
 // Make sure that uploading the same file multiple times works exactly as it should.
@@ -84,35 +85,30 @@ func TestRepeatedUploads(t *testing.T) {
 
 	// test setup
 	fname := filepath.Join(TestDir, "repeated_upload.txt")
-	failOnErr(t, ioutil.WriteFile(fname, []byte("initial content"), 0644))
-	var success bool
+	require.NoError(t, ioutil.WriteFile(fname, []byte("initial content"), 0644))
 	var inode *Inode
-	for i := 0; i < 5; i++ {
-		time.Sleep(2 * time.Second)
+	require.Eventually(t, func() bool {
 		inode, _ = fs.GetPath("/onedriver_tests/repeated_upload.txt", auth)
-		if !isLocalID(inode.ID()) {
-			success = true
-			break
-		}
-	}
-	if !success {
-		t.Fatalf("ID was local after upload")
-	}
+		return !isLocalID(inode.ID())
+	}, retrySeconds, 2*time.Second, "ID was local after upload.")
 
 	for i := 0; i < 5; i++ {
 		uploadme := []byte(fmt.Sprintf("iteration: %d", i))
-		failOnErr(t, ioutil.WriteFile(fname, uploadme, 0644))
+		require.NoError(t, ioutil.WriteFile(fname, uploadme, 0644))
+
 		time.Sleep(5 * time.Second)
+
 		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
-		failOnErr(t, err)
+		require.NoError(t, err)
+
 		content, err := graph.GetItemContent(item.ID, auth)
-		failOnErr(t, err)
+		require.NoError(t, err)
 
 		if !bytes.Equal(content, uploadme) {
 			// wait and retry once
 			time.Sleep(5 * time.Second)
 			content, err := graph.GetItemContent(item.ID, auth)
-			failOnErr(t, err)
+			require.NoError(t, err)
 			if !bytes.Equal(content, uploadme) {
 				t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)
 			}

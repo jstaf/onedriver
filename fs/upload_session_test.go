@@ -10,13 +10,15 @@ import (
 	"time"
 
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestUploadSession verifies that the basic functionality of uploads works correctly.
 func TestUploadSession(t *testing.T) {
 	t.Parallel()
 	testDir, err := fs.GetPath("/onedriver_tests", auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
 	data := []byte("our super special data")
@@ -25,9 +27,9 @@ func TestUploadSession(t *testing.T) {
 	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode, inode.data)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	err = session.Upload(auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if isLocalID(session.ID) {
 		t.Fatalf("The session's ID was somehow still local following an upload: %s\n",
 			session.ID)
@@ -37,7 +39,7 @@ func TestUploadSession(t *testing.T) {
 	}
 
 	resp, err := graph.GetItemContent(session.ID, auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if !bytes.Equal(data, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, resp)
 	}
@@ -52,12 +54,12 @@ func TestUploadSession(t *testing.T) {
 	inode.DriveItem.Size = uint64(len(newData))
 
 	session2, err := NewUploadSession(inode, inode.data)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	err = session2.Upload(auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	resp, err = graph.GetItemContent(session.ID, auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if !bytes.Equal(newData, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", newData, resp)
 	}
@@ -70,7 +72,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	t.Parallel()
 	data := []byte("super special data for upload test 2")
 	err := ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	time.Sleep(10 * time.Second)
 	item, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
@@ -79,7 +81,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	}
 
 	content, err := graph.GetItemContent(item.ID, auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
 	}
@@ -87,7 +89,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	// upload it again to ensure uploads with an existing remote id succeed
 	data = []byte("more super special data")
 	err = ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	time.Sleep(15 * time.Second)
 	item2, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
@@ -96,7 +98,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	}
 
 	content, err = graph.GetItemContent(item2.ID, auth)
-	failOnErr(t, err)
+	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
 	}
@@ -107,10 +109,10 @@ func TestUploadSessionSmallFS(t *testing.T) {
 func TestUploadSessionLargeFS(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "dmel.fa")
-	failOnErr(t, exec.Command("cp", "dmel.fa", fname).Run())
+	require.NoError(t, exec.Command("cp", "dmel.fa", fname).Run())
 
 	contents, err := ioutil.ReadFile(fname)
-	failOnErr(t, err)
+	require.NoError(t, err)
 
 	header := ">X dna:chromosome chromosome:BDGP6.22:X:1:23542271:1 REF"
 	if string(contents[:len(header)]) != header {
@@ -132,13 +134,9 @@ func TestUploadSessionLargeFS(t *testing.T) {
 
 	// poll endpoint to make sure it has a size greater than 0
 	size := uint64(len(contents))
-	for i := 0; i < 120; i++ {
-		time.Sleep(time.Second)
+	assert.Eventually(t, func() bool {
 		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
 		inode := NewInodeDriveItem(item)
-		if item != nil && inode.Size() == size {
-			return
-		}
-	}
-	t.Fatalf("\nUpload session did not complete successfully!")
+		return item != nil && inode.Size() == size
+	}, 120*time.Second, time.Second, "Upload session did not complete successfully!")
 }

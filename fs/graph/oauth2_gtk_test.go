@@ -2,21 +2,19 @@
 
 package graph
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestURIGetHost(t *testing.T) {
 	host := uriGetHost("this won't work")
-	if host != "" {
-		t.Errorf("Func should return NULL if not a valid URI, got %s\n", host)
-	}
+	assert.Equal(t, "", host, "Func should return NULL if not a valid URI")
 
 	host = uriGetHost("https://account.live.com/test/index.html")
-	if host != "account.live.com" {
-		t.Errorf("With extra path: got \"%s\", wanted \"account.live.com\"\n", host)
-	}
+	assert.Equal(t, "account.live.com", host, "Failed URI host with extra path.")
 
 	host = uriGetHost("http://account.live.com")
-	if host != "account.live.com" {
-		t.Errorf("No extra path: got \"%s\", wanted \"account.live.com\"\n", host)
-	}
+	assert.Equal(t, "account.live.com", host, "Failed URI host without extra path")
 }

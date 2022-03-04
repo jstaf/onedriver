@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,7 +23,7 @@ const (
 	mountLoc     = "mount"
 	TestDir      = mountLoc + "/onedriver_tests"
 	DeltaDir     = TestDir + "/delta"
-	retrySeconds = 60
+	retrySeconds = 60 * time.Second //lint:ignore ST1011 a
 )
 
 var (
@@ -122,15 +121,6 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Println("Successfully unmounted fuse server!")
 	os.Exit(code)
-}
-
-// convenience handler to fail tests if an error is not nil
-func failOnErr(t *testing.T, err error) {
-	if err != nil {
-		_, file, line, _ := runtime.Caller(1)
-		t.Logf("Test failed at %s:%d:\n", file, line)
-		t.Fatal(err)
-	}
 }
 
 // Apparently 200 reqests is the default paging limit.
