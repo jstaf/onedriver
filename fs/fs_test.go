@@ -57,8 +57,10 @@ func TestTouchCreate(t *testing.T) {
 	st, err := os.Stat(fname)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, st.Size(), "Size should be zero.")
-	require.Equal(t, 0644, st.Mode(), "Mode of new file was not 644.")
+	require.Zero(t, st.Size(), "Size should be zero.")
+	if st.Mode() != 0644 {
+		t.Fatal("Mode of new file was not 644, got", Octal(uint32(st.Mode())))
+	}
 	require.False(t, st.IsDir(), "New file detected as directory.")
 }
 
@@ -87,7 +89,9 @@ func TestChmod(t *testing.T) {
 	require.NoError(t, exec.Command("touch", fname).Run())
 	require.NoError(t, os.Chmod(fname, 0777))
 	st, _ := os.Stat(fname)
-	assert.Equal(t, 0777, st.Mode(), "Mode of file was wrong.")
+	if st.Mode() != 0777 {
+		t.Fatal("Mode of file was wrong, got", Octal(uint32(st.Mode())))
+	}
 }
 
 // test that both mkdir and rmdir work, as well as the potentially failing

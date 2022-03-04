@@ -90,7 +90,7 @@ func TestRepeatedUploads(t *testing.T) {
 	require.Eventually(t, func() bool {
 		inode, _ = fs.GetPath("/onedriver_tests/repeated_upload.txt", auth)
 		return !isLocalID(inode.ID())
-	}, 10*time.Second, 2*time.Second, "ID was local after upload.")
+	}, retrySeconds, 2*time.Second, "ID was local after upload.")
 
 	for i := 0; i < 5; i++ {
 		uploadme := []byte(fmt.Sprintf("iteration: %d", i))

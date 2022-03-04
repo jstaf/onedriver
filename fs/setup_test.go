@@ -23,7 +23,7 @@ const (
 	mountLoc     = "mount"
 	TestDir      = mountLoc + "/onedriver_tests"
 	DeltaDir     = TestDir + "/delta"
-	retrySeconds = 60 * time.Second
+	retrySeconds = 60 * time.Second //lint:ignore ST1011 a
 )
 
 var (
