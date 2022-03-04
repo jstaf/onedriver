@@ -90,7 +90,7 @@ func TestChmod(t *testing.T) {
 	require.NoError(t, os.Chmod(fname, 0777))
 	st, _ := os.Stat(fname)
 	if st.Mode() != 0777 {
-		t.Fatalf("Mode of file was wrong, got %o instead!", st.Mode())
+		t.Fatalf("Mode of file was not 0777, got %o instead!", st.Mode())
 	}
 }
 
