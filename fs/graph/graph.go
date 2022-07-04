@@ -184,9 +184,27 @@ type Drive struct {
 	Quota     DriveQuota `json:"quota,omitempty"`
 }
 
-// GetDrive is used to fetch the details of the user's OneDrive.
-func GetDrive(auth *Auth) (Drive, error) {
-	resp, err := Get("/me/drive", auth)
+type DriveList struct {
+	Drives []*Drive `json:"value"`
+}
+
+// GetAllDrives fetches all drives a user has access to
+func GetAllDrives(auth *Auth) ([]*Drive, error) {
+	resp, err := Get("/me/drives", auth)
+	drives := DriveList{}
+	if err != nil {
+		return drives.Drives, err
+	}
+	return drives.Drives, json.Unmarshal(resp, &drives)
+}
+
+// GetDrive is used to fetch the details of a specific drive
+func GetDrive(id string, auth *Auth) (Drive, error) {
+	endpoint := "/me/drive"
+	if id != "me" {
+		endpoint = "/drives/" + url.PathEscape(id)
+	}
+	resp, err := Get(endpoint, auth)
 	drive := Drive{}
 	if err != nil {
 		return drive, err
