@@ -99,7 +99,7 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) fuse.Status {
 	ctx := log.With().Str("op", "StatFs").Logger()
 	ctx.Debug().Msg("")
-	drive, err := graph.GetDrive(f.auth)
+	drive, err := graph.GetDrive("me", f.auth)
 	if err != nil {
 		return fuse.EREMOTEIO
 	}
