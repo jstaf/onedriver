@@ -20,6 +20,7 @@ import (
 // https://github.com/libfuse/libfuse/blob/master/include/fuse_lowlevel.h
 type Filesystem struct {
 	fuse.RawFileSystem
+	InodeMapper
 
 	metadata  sync.Map
 	db        *bolt.DB
@@ -29,9 +30,7 @@ type Filesystem struct {
 	uploads   *UploadManager
 
 	sync.RWMutex
-	offline    bool
-	lastNodeID uint64
-	inodes     []string
+	offline bool
 
 	// tracks currently open directories
 	opendirsM sync.RWMutex
@@ -65,7 +64,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 		opendirs:      make(map[uint64][]*Inode),
 	}
 
-	rootItem, err := graph.GetItem("root", auth)
+	rootItem, err := graph.GetItem("me", "root", auth)
 	root := NewInodeDriveItem(rootItem)
 	if err != nil {
 		if graph.IsOffline(err) {
@@ -107,7 +106,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
 		if child, _ := fs.GetChild(fs.root, trash, auth); child == nil {
-			item, err := graph.Mkdir(trash, fs.root, auth)
+			item, err := graph.Mkdir(trash, "me", fs.root, auth)
 			if err != nil {
 				log.Error().Err(err).
 					Msg("Could not create trash folder. " +
@@ -133,43 +132,13 @@ func (f *Filesystem) IsOffline() bool {
 	return f.offline
 }
 
-// TranslateID returns the DriveItemID for a given NodeID
-func (f *Filesystem) TranslateID(nodeID uint64) string {
-	f.RLock()
-	defer f.RUnlock()
-	if nodeID > f.lastNodeID || nodeID == 0 {
-		return ""
-	}
-	return f.inodes[nodeID-1]
-}
-
 // GetNodeID fetches the inode for a particular inode ID.
 func (f *Filesystem) GetNodeID(nodeID uint64) *Inode {
-	id := f.TranslateID(nodeID)
+	id := f.MapNodeID(nodeID)
 	if id == "" {
 		return nil
 	}
 	return f.GetID(id)
-}
-
-// InsertNodeID assigns a numeric inode ID used by the kernel if one is not
-// already assigned.
-func (f *Filesystem) InsertNodeID(inode *Inode) uint64 {
-	nodeID := inode.NodeID()
-	if nodeID == 0 {
-		// lock ordering is to satisfy deadlock detector
-		inode.Lock()
-		f.Lock()
-
-		f.lastNodeID++
-		f.inodes = append(f.inodes, inode.DriveItem.ID)
-		nodeID = f.lastNodeID
-		inode.nodeID = nodeID
-
-		f.Unlock()
-		inode.Unlock()
-	}
-	return nodeID
 }
 
 // GetID gets an inode from the cache by ID. No API fetching is performed.
@@ -189,7 +158,7 @@ func (f *Filesystem) GetID(id string) *Inode {
 			return err
 		})
 		if found != nil {
-			f.InsertNodeID(found)
+			f.AssignNodeID(found)
 			f.metadata.Store(id, found) // move to memory for next time
 		}
 		return found
@@ -203,24 +172,13 @@ func (f *Filesystem) GetID(id string) *Inode {
 // filesystem. Returns the Inode's numeric NodeID.
 func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 	f.metadata.Store(id, inode)
-	nodeID := f.InsertNodeID(inode)
+	nodeID := f.AssignNodeID(inode)
 
 	if id != inode.ID() {
 		// we update the inode IDs here in case they do not match/changed
 		inode.Lock()
 		inode.DriveItem.ID = id
 		inode.Unlock()
-
-		f.Lock()
-		if nodeID <= f.lastNodeID {
-			f.inodes[nodeID-1] = id
-		} else {
-			log.Error().
-				Uint64("nodeID", nodeID).
-				Uint64("lastNodeID", f.lastNodeID).
-				Msg("NodeID exceeded maximum node ID! Ignoring ID change.")
-		}
-		f.Unlock()
 	}
 
 	parentID := inode.ParentID()
@@ -361,7 +319,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 	for _, item := range fetched {
 		// we will always have an id after fetching from the server
 		child := NewInodeDriveItem(item)
-		f.InsertNodeID(child)
+		f.AssignNodeID(child)
 		f.metadata.Store(child.DriveItem.ID, child)
 
 		// store in result map
