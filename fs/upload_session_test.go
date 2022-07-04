@@ -38,7 +38,7 @@ func TestUploadSession(t *testing.T) {
 		t.Errorf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
 
-	resp, err := graph.GetItemContent(session.ID, auth)
+	resp, err := graph.GetItemContent(graph.Me, session.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(data, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, resp)
@@ -58,7 +58,7 @@ func TestUploadSession(t *testing.T) {
 	err = session2.Upload(auth)
 	require.NoError(t, err)
 
-	resp, err = graph.GetItemContent(session.ID, auth)
+	resp, err = graph.GetItemContent(graph.Me, session.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(newData, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", newData, resp)
@@ -75,12 +75,12 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Second)
-	item, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
+	item, err := graph.GetItemPath(graph.Me, "/onedriver_tests/uploadSessionSmallFS.txt", auth)
 	if err != nil || item == nil {
 		t.Fatal(err)
 	}
 
-	content, err := graph.GetItemContent(item.ID, auth)
+	content, err := graph.GetItemContent(graph.Me, item.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
@@ -92,12 +92,12 @@ func TestUploadSessionSmallFS(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(15 * time.Second)
-	item2, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
+	item2, err := graph.GetItemPath(graph.Me, "/onedriver_tests/uploadSessionSmallFS.txt", auth)
 	if err != nil || item == nil {
 		t.Fatal(err)
 	}
 
-	content, err = graph.GetItemContent(item2.ID, auth)
+	content, err = graph.GetItemContent(graph.Me, item2.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
@@ -135,7 +135,7 @@ func TestUploadSessionLargeFS(t *testing.T) {
 	// poll endpoint to make sure it has a size greater than 0
 	size := uint64(len(contents))
 	assert.Eventually(t, func() bool {
-		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
+		item, _ := graph.GetItemPath(graph.Me, "/onedriver_tests/dmel.fa", auth)
 		inode := NewInodeDriveItem(item)
 		return item != nil && inode.Size() == size
 	}, 120*time.Second, time.Second, "Upload session did not complete successfully!")

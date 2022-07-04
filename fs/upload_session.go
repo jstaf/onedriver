@@ -43,6 +43,7 @@ type UploadSession struct {
 	ID                 string    `json:"id"`
 	OldID              string    `json:"oldID"`
 	ParentID           string    `json:"parentID"`
+	DriveID            string    `json:"driveID"`
 	NodeID             uint64    `json:"nodeID"`
 	Name               string    `json:"name"`
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
@@ -109,6 +110,7 @@ func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
 		ID:       inode.DriveItem.ID,
 		OldID:    inode.DriveItem.ID,
 		ParentID: inode.DriveItem.Parent.ID,
+		DriveID:  inode.DriveItem.DriveID(),
 		NodeID:   inode.nodeID,
 		Name:     inode.DriveItem.Name,
 		Data:     *data,
@@ -304,9 +306,9 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			// multipart uploads, so we manually fetch the newly updated item
 			var remotePtr *graph.DriveItem
 			if isLocalID(u.ID) {
-				remotePtr, err = graph.GetItemChild(u.ParentID, u.Name, auth)
+				remotePtr, err = graph.GetItemChild(u.DriveID, u.ParentID, u.Name, auth)
 			} else {
-				remotePtr, err = graph.GetItem(u.ID, auth)
+				remotePtr, err = graph.GetItem(u.DriveID, u.ID, auth)
 			}
 			if err == nil {
 				remote = *remotePtr

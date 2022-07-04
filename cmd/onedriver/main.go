@@ -175,7 +175,7 @@ func xdgVolumeInfo(filesystem *fs.Filesystem, auth *graph.Auth) {
 	// just upload directly and shove it in the cache
 	// (since the fs isn't mounted yet)
 	resp, err := graph.Put(
-		graph.ResourcePath("/.xdg-volume-info")+":/content",
+		graph.ResourcePath(graph.Me, "/.xdg-volume-info")+":/content",
 		auth,
 		strings.NewReader(xdgVolumeInfo),
 	)

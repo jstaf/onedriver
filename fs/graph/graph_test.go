@@ -10,8 +10,8 @@ import (
 func TestResourcePath(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t,
-		`/me/drive/root:%2Fsome%20path%2Fhere%21`,
-		ResourcePath("/some path/here!"),
+		`/drives/me/root:%2Fsome%20path%2Fhere%21`,
+		ResourcePath("me", "/some path/here!"),
 		"Escaped path was wrong.",
 	)
 }

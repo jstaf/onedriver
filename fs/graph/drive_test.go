@@ -9,7 +9,7 @@ import (
 
 func TestDrives(t *testing.T) {
 	// this is our default drive
-	me, err := GetDrive("me", auth)
+	me, err := GetDrive(Me, auth)
 	require.NoError(t, err)
 
 	// we should be able to fetch it by ID as well

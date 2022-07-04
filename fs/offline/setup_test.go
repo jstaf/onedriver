@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	os.Mkdir(mountLoc, 0755)
 
 	auth = graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
-	inode, err := graph.GetItem("root", auth)
+	inode, err := graph.GetItem("me", "root", auth)
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")
 		os.Exit(1)

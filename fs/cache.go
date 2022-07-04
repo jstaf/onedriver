@@ -64,7 +64,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 		opendirs:      make(map[uint64][]*Inode),
 	}
 
-	rootItem, err := graph.GetItem("me", "root", auth)
+	rootItem, err := graph.GetItem(graph.Me, graph.Root, auth)
 	root := NewInodeDriveItem(rootItem)
 	if err != nil {
 		if graph.IsOffline(err) {
@@ -72,7 +72,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 			fs.Lock()
 			fs.offline = true
 			fs.Unlock()
-			if root = fs.GetID("root"); root == nil {
+			if root = fs.GetID(graph.Root); root == nil {
 				log.Fatal().Msg(
 					"We are offline and could not fetch the filesystem root item from disk.",
 				)
@@ -106,7 +106,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 		// does not exist
 		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
 		if child, _ := fs.GetChild(fs.root, trash, auth); child == nil {
-			item, err := graph.Mkdir(trash, "me", fs.root, auth)
+			item, err := graph.Mkdir(trash, graph.Me, fs.root, auth)
 			if err != nil {
 				log.Error().Err(err).
 					Msg("Could not create trash folder. " +
@@ -302,7 +302,7 @@ func (f *Filesystem) GetChildrenID(id string, auth *graph.Auth) (map[string]*Ino
 	inode.RUnlock()
 
 	// We haven't fetched the children for this item yet, get them from the server.
-	fetched, err := graph.GetItemChildren(id, auth)
+	fetched, err := graph.GetItemChildren(inode.DriveID(), id, auth)
 	if err != nil {
 		if graph.IsOffline(err) {
 			log.Warn().Str("id", id).

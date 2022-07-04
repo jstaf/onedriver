@@ -133,7 +133,7 @@ func createPagingTestFiles() {
 		group.Add(1)
 		go func(n int, wg *sync.WaitGroup) {
 			_, err := graph.Put(
-				graph.ResourcePath(fmt.Sprintf("/onedriver_tests/paging/%d.txt", n))+":/content",
+				graph.ResourcePath("me", fmt.Sprintf("/onedriver_tests/paging/%d.txt", n))+":/content",
 				auth,
 				strings.NewReader("test\n"),
 			)

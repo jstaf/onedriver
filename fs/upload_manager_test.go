@@ -49,7 +49,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 	fs.uploads.CancelUpload(session.ID)
 
 	// confirm that the file didn't get uploaded yet (just in case!)
-	driveItem, err := graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
+	driveItem, err := graph.GetItemPath(graph.Me, "/onedriver_tests/upload_to_disk.fa", auth)
 	if err == nil || driveItem != nil {
 		if driveItem.Size > 0 {
 			t.Fatal("This test should be rewritten, the file was uploaded before " +
@@ -69,7 +69,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 
 	NewUploadManager(time.Second, db, fs, auth)
 	assert.Eventually(t, func() bool {
-		driveItem, err = graph.GetItemPath("/onedriver_tests/upload_to_disk.fa", auth)
+		driveItem, err = graph.GetItemPath(graph.Me, "/onedriver_tests/upload_to_disk.fa", auth)
 		if driveItem != nil && err == nil {
 			return true
 		}
@@ -98,16 +98,16 @@ func TestRepeatedUploads(t *testing.T) {
 
 		time.Sleep(5 * time.Second)
 
-		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
+		item, err := graph.GetItemPath(graph.Me, "/onedriver_tests/repeated_upload.txt", auth)
 		require.NoError(t, err)
 
-		content, err := graph.GetItemContent(item.ID, auth)
+		content, err := graph.GetItemContent(graph.Me, item.ID, auth)
 		require.NoError(t, err)
 
 		if !bytes.Equal(content, uploadme) {
 			// wait and retry once
 			time.Sleep(5 * time.Second)
-			content, err := graph.GetItemContent(item.ID, auth)
+			content, err := graph.GetItemContent(graph.Me, item.ID, auth)
 			require.NoError(t, err)
 			if !bytes.Equal(content, uploadme) {
 				t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)

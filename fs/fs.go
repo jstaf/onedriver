@@ -58,7 +58,7 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 				// A file with this name already exists on the server, get its ID and
 				// use that. This is probably the same file, but just got uploaded
 				// earlier.
-				children, err := graph.GetItemChildren(i.ParentID(), f.auth)
+				children, err := graph.GetItemChildren(i.DriveID(), i.ParentID(), f.auth)
 				if err != nil {
 					return originalID, err
 				}
@@ -134,10 +134,12 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 		return fuse.ENOENT
 	}
 	id := inode.ID()
+	driveID := inode.DriveID()
 	path := filepath.Join(inode.Path(), name)
 	ctx := log.With().
 		Str("op", "Mkdir").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", driveID).
 		Str("id", id).
 		Str("path", path).
 		Str("mode", Octal(in.Mode)).
@@ -145,7 +147,7 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 	ctx.Debug().Msg("")
 
 	// create the new directory on the server
-	item, err := graph.Mkdir(name, id, f.auth)
+	item, err := graph.Mkdir(name, driveID, id, f.auth)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Could not create remote directory!")
 		return fuse.EREMOTEIO
@@ -163,7 +165,7 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 
 // Rmdir removes a directory if it's empty.
 func (f *Filesystem) Rmdir(cancel <-chan struct{}, in *fuse.InHeader, name string) fuse.Status {
-	parentID := f.TranslateID(in.NodeId)
+	parentID := f.MapNodeID(in.NodeId)
 	if parentID == "" {
 		return fuse.ENOENT
 	}
@@ -179,7 +181,7 @@ func (f *Filesystem) Rmdir(cancel <-chan struct{}, in *fuse.InHeader, name strin
 
 // ReadDir provides a list of all the entries in the directory
 func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) fuse.Status {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	dir := f.GetID(id)
 	if dir == nil {
 		return fuse.ENOENT
@@ -192,6 +194,7 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.
 		Str("op", "OpenDir").
 		Uint64("nodeID", in.NodeId).
 		Str("id", id).
+		Str("driveID", dir.DriveID()).
 		Str("path", path).Logger()
 	ctx.Debug().Msg("")
 
@@ -330,7 +333,7 @@ func (f *Filesystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.
 // Lookup is called by the kernel when the VFS wants to know about a file inside
 // a directory.
 func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name string, out *fuse.EntryOut) fuse.Status {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	log.Trace().
 		Str("op", "Lookup").
 		Uint64("nodeID", in.NodeId).
@@ -352,7 +355,7 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 // Mknod creates a regular file. The server doesn't have this yet.
 func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) fuse.Status {
-	parentID := f.TranslateID(in.NodeId)
+	parentID := f.MapNodeID(in.NodeId)
 	if parentID == "" {
 		return fuse.EBADF
 	}
@@ -379,6 +382,8 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 
 	inode := NewInode(name, in.Mode, parent)
 	ctx.Debug().
+		Str("driveID", inode.DriveID()).
+		Str("parentID", parentID).
 		Str("childID", inode.ID()).
 		Str("mode", Octal(in.Mode)).
 		Msg("Creating inode.")
@@ -405,11 +410,12 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 	if result == fuse.Status(syscall.EEXIST) {
 		// if the inode already exists, we should truncate the existing file and
 		// return the existing file inode as per "man creat"
-		parentID := f.TranslateID(in.NodeId)
+		parentID := f.MapNodeID(in.NodeId)
 		child, _ := f.GetChild(parentID, name, f.auth)
 		log.Debug().
 			Str("op", "Create").
 			Uint64("nodeID", in.NodeId).
+			Str("driveID", child.DriveID()).
 			Str("id", parentID).
 			Str("childID", child.ID()).
 			Str("path", child.Path()).
@@ -428,16 +434,18 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 // data from the server. Data is loaded into memory on Open, and persisted to
 // disk on Flush.
 func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) fuse.Status {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.ENOENT
 	}
 
+	driveID := inode.DriveID()
 	path := inode.Path()
 	ctx := log.With().
 		Str("op", "Open").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", driveID).
 		Str("id", id).
 		Str("path", path).
 		Logger()
@@ -500,7 +508,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	// didn't have it on disk, now try api
 	ctx.Info().Msg("Fetching remote content for item from API.")
 
-	body, err := graph.GetItemContent(id, f.auth)
+	body, err := graph.GetItemContent(driveID, id, f.auth)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
@@ -516,7 +524,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 // Unlink deletes a child file.
 func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name string) fuse.Status {
-	parentID := f.TranslateID(in.NodeId)
+	parentID := f.MapNodeID(in.NodeId)
 	child, _ := f.GetChild(parentID, name, nil)
 	if child == nil {
 		// the file we are unlinking never existed
@@ -527,10 +535,12 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 	}
 
 	id := child.ID()
+	driveID := child.DriveID()
 	path := child.Path()
 	ctx := log.With().
 		Str("op", "Unlink").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", driveID).
 		Str("id", parentID).
 		Str("childID", id).
 		Str("path", path).
@@ -540,7 +550,7 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 	// if no ID, the item is local-only, and does not need to be deleted on the
 	// server
 	if !isLocalID(id) {
-		if err := graph.Remove(id, f.auth); err != nil {
+		if err := graph.Remove(driveID, id, f.auth); err != nil {
 			ctx.Err(err).Msg("Failed to delete item on server. Aborting op.")
 			return fuse.EREMOTEIO
 		}
@@ -562,6 +572,7 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	ctx := log.With().
 		Str("op", "Read").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", inode.DriveID()).
 		Str("id", inode.ID()).
 		Str("path", path).
 		Logger()
@@ -606,7 +617,7 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 // Flush() is called. Returns the number of bytes written and the status of the
 // op.
 func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (uint32, fuse.Status) {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return 0, fuse.EBADF
@@ -616,8 +627,9 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 	offset := int(in.Offset)
 	ctx := log.With().
 		Str("op", "Write").
-		Str("id", id).
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", inode.DriveID()).
+		Str("id", id).
 		Str("path", inode.Path()).
 		Logger()
 	ctx.Trace().
@@ -658,7 +670,7 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
 // storage. This method is used to trigger uploads of file content.
 func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.EBADF
@@ -666,8 +678,9 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 
 	ctx := log.With().
 		Str("op", "Fsync").
-		Str("id", id).
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", inode.DriveID()).
+		Str("id", id).
 		Str("path", inode.Path()).
 		Logger()
 	ctx.Debug().Msg("")
@@ -722,7 +735,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 // Getattr returns a the Inode as a UNIX stat. Holds the read mutex for all of
 // the "metadata fetch" operations.
 func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) fuse.Status {
-	id := f.TranslateID(in.NodeId)
+	id := f.MapNodeID(in.NodeId)
 	inode := f.GetID(id)
 	if inode == nil {
 		return fuse.ENOENT
@@ -730,6 +743,7 @@ func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fu
 	log.Trace().
 		Str("op", "GetAttr").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", inode.DriveID()).
 		Str("id", id).
 		Str("path", inode.Path()).
 		Msg("")
@@ -754,6 +768,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	ctx := log.With().
 		Str("op", "SetAttr").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", i.DriveItem.DriveID()).
 		Str("id", i.DriveItem.ID).
 		Str("path", path).
 		Logger()
@@ -813,7 +828,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 
 // Rename renames and/or moves an inode.
 func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name string, newName string) fuse.Status {
-	oldParentID := f.TranslateID(in.NodeId)
+	oldParentID := f.MapNodeID(in.NodeId)
 	oldParentItem := f.GetNodeID(in.NodeId)
 	if oldParentID == "" || oldParentItem == nil {
 		return fuse.EBADF
@@ -831,11 +846,17 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 
 	inode, _ := f.GetChild(oldParentID, name, f.auth)
 	id, err := f.remoteID(inode)
+	driveID := inode.DriveID()
+
+	//TODO check for cross-drive moves
+	newParentDriveID := newParentItem.DriveID()
 	newParentID := newParentItem.ID()
 
 	ctx := log.With().
 		Str("op", "Rename").
+		Str("driveID", driveID).
 		Str("id", id).
+		Str("parentDriveID", newParentDriveID).
 		Str("parentID", newParentID).
 		Str("path", path).
 		Str("dest", dest).
@@ -853,7 +874,13 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 	}
 
 	// perform remote rename
-	if err = graph.Rename(id, newName, newParentID, f.auth); err != nil {
+	err = graph.Rename(
+		driveID, id,
+		newName,
+		newParentDriveID, newParentID,
+		f.auth,
+	)
+	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to rename remote item.")
 		return fuse.EREMOTEIO
 	}

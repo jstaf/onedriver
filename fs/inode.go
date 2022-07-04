@@ -135,17 +135,6 @@ func (i *Inode) NodeID() uint64 {
 	return i.nodeID
 }
 
-// SetNodeID sets the inode ID for an inode if not already set. Does nothing if
-// the Inode already has an ID.
-func (i *Inode) SetNodeID(id uint64) uint64 {
-	i.Lock()
-	defer i.Unlock()
-	if i.nodeID == 0 {
-		i.nodeID = id
-	}
-	return i.nodeID
-}
-
 var charset = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 func randString(length int) string {
@@ -179,6 +168,13 @@ func (i *Inode) ParentID() string {
 		return ""
 	}
 	return i.DriveItem.Parent.ID
+}
+
+// DriveID returns the ID of the drive that this item is stored in
+func (i *Inode) DriveID() string {
+	i.RLock()
+	defer i.RUnlock()
+	return i.DriveItem.DriveID()
 }
 
 // Path returns an inode's full Path

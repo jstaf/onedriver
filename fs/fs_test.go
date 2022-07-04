@@ -428,7 +428,7 @@ func TestListChildrenPaging(t *testing.T) {
 	t.Parallel()
 	// files have been prepopulated during test setup to avoid being picked up by
 	// the delta thread
-	items, err := graph.GetItemChildrenPath("/onedriver_tests/paging", auth)
+	items, err := graph.GetItemChildrenPath(graph.Me, "/onedriver_tests/paging", auth)
 	require.NoError(t, err)
 	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
 	require.NoError(t, err)
@@ -461,7 +461,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 	require.NoError(t, err, out)
 
 	assert.Eventually(t, func() bool {
-		item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
+		item, err := graph.GetItemPath(graph.Me, "/onedriver_tests/libreoffice.docx", auth)
 		if err == nil && item != nil {
 			if item.Size == 0 {
 				t.Fatal("Item size was 0!")

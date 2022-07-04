@@ -18,8 +18,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// GraphURL is the API endpoint of Microsoft Graph
-const GraphURL = "https://graph.microsoft.com/v1.0"
+const (
+	// GraphURL is the API endpoint of Microsoft Graph
+	GraphURL = "https://graph.microsoft.com/v1.0"
+	// Me is a special drive ID that refer's to the user's drive
+	Me = "me"
+	// Root is a special identifier refers to the root drive item
+	// (and is somewhat specific to onedriver but also used by Microsoft)
+	Root = "root"
+)
 
 // graphError is an internal struct used when decoding Graph's error messages
 type graphError struct {
@@ -120,32 +127,32 @@ func Delete(resource string, auth *Auth) error {
 }
 
 // IDPath computes the resource path for an item by ID
-func IDPath(id string) string {
-	if id == "root" {
-		return "/me/drive/root"
+func IDPath(drive, id string) string {
+	if id == Root {
+		return fmt.Sprintf("/drives/%s/root", url.PathEscape(drive))
 	}
-	return "/me/drive/items/" + url.PathEscape(id)
+	return fmt.Sprintf("/drives/%s/items/%s", url.PathEscape(drive), url.PathEscape(id))
 }
 
 // ResourcePath translates an item's path to the proper path used by Graph
-func ResourcePath(path string) string {
+func ResourcePath(drive, path string) string {
 	if path == "/" {
-		return "/me/drive/root"
+		return fmt.Sprintf("/drives/%s/root", url.PathEscape(drive))
 	}
-	return "/me/drive/root:" + url.PathEscape(path)
+	return fmt.Sprintf("/drives/%s/root:%s", url.PathEscape(drive), url.PathEscape(path))
 }
 
 // ChildrenPath returns the path to an item's children
-func childrenPath(path string) string {
+func childrenPath(drive, path string) string {
 	if path == "/" {
-		return ResourcePath(path) + "/children"
+		return ResourcePath(drive, path) + "/children"
 	}
-	return ResourcePath(path) + ":/children"
+	return ResourcePath(drive, path) + ":/children"
 }
 
 // ChildrenPathID returns the API resource path of an item's children
-func childrenPathID(id string) string {
-	return fmt.Sprintf("/me/drive/items/%s/children", url.PathEscape(id))
+func childrenPathID(drive, id string) string {
+	return fmt.Sprintf("/drives/%s/items/%s/children", url.PathEscape(drive), url.PathEscape(id))
 }
 
 // User represents the user. Currently only used to fetch the account email so

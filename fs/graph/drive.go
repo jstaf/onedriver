@@ -41,7 +41,7 @@ func GetAllDrives(auth *Auth) ([]*Drive, error) {
 // GetDrive is used to fetch the details of a specific drive
 func GetDrive(id string, auth *Auth) (Drive, error) {
 	endpoint := "/me/drive"
-	if id != "me" {
+	if id != Me {
 		endpoint = "/drives/" + url.PathEscape(id)
 	}
 	resp, err := Get(endpoint, auth)

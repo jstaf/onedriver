@@ -85,6 +85,13 @@ func (d *DriveItem) IsShared() bool {
 	return d.RemoteItem != nil
 }
 
+func (d *DriveItem) DriveID() string {
+	if d.IsShared() {
+		return d.RemoteItem.Parent.DriveID
+	}
+	return d.Parent.DriveID
+}
+
 // ModTimeUnix returns the modification time as a unix uint64 time
 func (d *DriveItem) ModTimeUnix() uint64 {
 	return uint64(d.ModTime.Unix())
@@ -107,43 +114,57 @@ func getItem(path string, auth *Auth) (*DriveItem, error) {
 }
 
 // GetItem fetches a DriveItem by ID. ID can also be "root" for the root item.
-func GetItem(id string, auth *Auth) (*DriveItem, error) {
-	return getItem(IDPath(id), auth)
+func GetItem(drive, id string, auth *Auth) (*DriveItem, error) {
+	return getItem(IDPath(drive, id), auth)
 }
 
 // GetItemChild fetches the named child of an item.
-func GetItemChild(id string, name string, auth *Auth) (*DriveItem, error) {
+func GetItemChild(drive, id string, name string, auth *Auth) (*DriveItem, error) {
 	return getItem(
-		fmt.Sprintf("%s:/%s", IDPath(id), url.PathEscape(name)),
+		fmt.Sprintf("%s:/%s", IDPath(drive, id), url.PathEscape(name)),
 		auth,
 	)
 }
 
 // GetItemPath fetches a DriveItem by path. Only used in special cases, like for the
 // root item.
-func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
-	return getItem(ResourcePath(path), auth)
+func GetItemPath(drive, path string, auth *Auth) (*DriveItem, error) {
+	return getItem(ResourcePath(drive, path), auth)
 }
 
 // GetItemContent retrieves an item's content from the Graph endpoint.
-func GetItemContent(id string, auth *Auth) ([]byte, error) {
-	return Get("/me/drive/items/"+id+"/content", auth)
+func GetItemContent(drive, id string, auth *Auth) ([]byte, error) {
+	return Get(
+		fmt.Sprintf(
+			"/drives/%s/items/%s/content",
+			url.PathEscape(drive),
+			url.PathEscape(id),
+		),
+		auth,
+	)
 }
 
 // Remove removes a directory or file by ID
-func Remove(id string, auth *Auth) error {
-	return Delete("/me/drive/items/"+id, auth)
+func Remove(drive, id string, auth *Auth) error {
+	return Delete(
+		fmt.Sprintf("/drives/%s/items/%s", url.PathEscape(drive), url.PathEscape(id)),
+		auth,
+	)
 }
 
 // Mkdir creates a directory on the server at the specified parent ID.
-func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
+func Mkdir(name, parentDrive, parentID string, auth *Auth) (*DriveItem, error) {
 	// create a new folder on the server
 	newFolderPost := DriveItem{
 		Name:   name,
 		Folder: &Folder{},
 	}
 	bytePayload, _ := json.Marshal(newFolderPost)
-	resp, err := Post(childrenPathID(parentID), auth, bytes.NewReader(bytePayload))
+	resp, err := Post(
+		childrenPathID(parentDrive, parentID),
+		auth,
+		bytes.NewReader(bytePayload),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -153,27 +174,36 @@ func Mkdir(name string, parentID string, auth *Auth) (*DriveItem, error) {
 
 // Rename moves and/or renames an item on the server. The itemName and parentID
 // arguments correspond to the *new* basename or id of the parent.
-func Rename(itemID string, itemName string, parentID string, auth *Auth) error {
+func Rename(itemDrive, itemID, itemName, parentDrive, parentID string, auth *Auth) error {
 	// start creating patch content for server
 	// mutex does not need to be initialized since it is never used locally
 	patchContent := DriveItem{
 		ConflictBehavior: "replace", // overwrite existing content at new location
 		Name:             itemName,
 		Parent: &DriveItemParent{
-			ID: parentID,
+			DriveID: parentDrive,
+			ID:      parentID,
 		},
 	}
 
 	// apply patch to server copy - note that we don't actually care about the
 	// response content, only if it returns an error
 	jsonPatch, _ := json.Marshal(patchContent)
-	_, err := Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
+	_, err := Patch(
+		fmt.Sprintf("/drives/%s/items/%s", url.PathEscape(itemDrive), url.PathEscape(itemID)),
+		auth,
+		bytes.NewReader(jsonPatch),
+	)
 	if err != nil && strings.Contains(err.Error(), "resourceModified") {
 		// Wait a second, then retry the request. The Onedrive servers sometimes
 		// aren't quick enough here if the object has been recently created
 		// (<1 second ago).
 		time.Sleep(time.Second)
-		_, err = Patch("/me/drive/items/"+itemID, auth, bytes.NewReader(jsonPatch))
+		_, err = Patch(
+			fmt.Sprintf("/drives/%s/items/%s", url.PathEscape(itemDrive), url.PathEscape(itemID)),
+			auth,
+			bytes.NewReader(jsonPatch),
+		)
 	}
 	return err
 }
@@ -204,11 +234,11 @@ func getItemChildren(pollURL string, auth *Auth) ([]*DriveItem, error) {
 }
 
 // GetItemChildren fetches all children of an item denoted by ID.
-func GetItemChildren(id string, auth *Auth) ([]*DriveItem, error) {
-	return getItemChildren(childrenPathID(id), auth)
+func GetItemChildren(drive, id string, auth *Auth) ([]*DriveItem, error) {
+	return getItemChildren(childrenPathID(drive, id), auth)
 }
 
 // GetItemChildrenPath fetches all children of an item denoted by path.
-func GetItemChildrenPath(path string, auth *Auth) ([]*DriveItem, error) {
-	return getItemChildren(childrenPath(path), auth)
+func GetItemChildrenPath(drive, path string, auth *Auth) ([]*DriveItem, error) {
+	return getItemChildren(childrenPath(drive, path), auth)
 }
