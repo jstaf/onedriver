@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetItem(t *testing.T) {
@@ -11,7 +12,7 @@ func TestGetItem(t *testing.T) {
 	var auth Auth
 	auth.FromFile(".auth_tokens.json")
 	item, err := GetItemPath(Me, "/", &auth)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "root", item.Name, "Failed to fetch directory root.")
 
 	_, err = GetItemPath(Me, "/lkjfsdlfjdwjkfl", &auth)
