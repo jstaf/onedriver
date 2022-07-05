@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,7 +178,10 @@ func (i *Inode) DriveID() string {
 	return i.DriveItem.DriveID()
 }
 
-// Path returns an inode's full Path
+var pathRexp *regexp.Regexp = regexp.MustCompile(`^.+:/`)
+
+// Path returns an inode's full Path. Used for debugging and logs only as it is
+// not guaranteed to be reliable.
 func (i *Inode) Path() string {
 	// special case when it's the root item
 	name := i.Name()
@@ -191,8 +195,8 @@ func (i *Inode) Path() string {
 	if i.DriveItem.Parent == nil {
 		return name
 	}
-	prepath := strings.TrimPrefix(i.DriveItem.Parent.Path+"/"+name, "/drive/root:")
-	return strings.Replace(prepath, "//", "/", -1)
+
+	return pathRexp.ReplaceAllString(i.DriveItem.Parent.Path, "/")
 }
 
 // HasContent returns whether the file has been populated with data

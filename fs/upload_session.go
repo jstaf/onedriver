@@ -26,8 +26,8 @@ const (
 	uploadLargeSize uint64 = 4 * 1024 * 1024
 )
 
-// upload states
 const (
+	// upload states
 	uploadNotStarted = iota
 	uploadStarted
 	uploadComplete
@@ -206,13 +206,15 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// support these either (this is why we have to use etags).
 		if isLocalID(u.ID) {
 			uploadPath = fmt.Sprintf(
-				"/me/drive/items/%s:/%s:/content",
+				"/drives/%s/items/%s:/%s:/content",
+				url.PathEscape(u.DriveID),
 				url.PathEscape(u.ParentID),
 				url.PathEscape(u.Name),
 			)
 		} else {
 			uploadPath = fmt.Sprintf(
-				"/me/drive/items/%s/content",
+				"/drives/%s/items/%s/content",
+				url.PathEscape(u.DriveID),
 				url.PathEscape(u.ID),
 			)
 		}
@@ -230,13 +232,15 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	} else {
 		if isLocalID(u.ID) {
 			uploadPath = fmt.Sprintf(
-				"/me/drive/items/%s:/%s:/createUploadSession",
+				"/drives/%s/items/%s:/%s:/createUploadSession",
+				url.PathEscape(u.DriveID),
 				url.PathEscape(u.ParentID),
 				url.PathEscape(u.Name),
 			)
 		} else {
 			uploadPath = fmt.Sprintf(
-				"/me/drive/items/%s/createUploadSession",
+				"/drives/%s/items/%s/createUploadSession",
+				url.PathEscape(u.DriveID),
 				url.PathEscape(u.ID),
 			)
 		}
@@ -278,6 +282,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			for backoff := 1; status >= 500; backoff *= 2 {
 				log.Error().
 					Str("id", u.ID).
+					Str("driveID", u.DriveID).
 					Str("name", u.Name).
 					Int("chunk", i).
 					Int("nchunks", nchunks).
@@ -332,6 +337,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID
 	u.Lock()
 	u.ID = remote.ID
+	u.DriveID = remote.DriveID()
 	u.ETag = remote.ETag
 	u.Unlock()
 	return u.setState(uploadComplete, nil)

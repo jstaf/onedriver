@@ -26,6 +26,7 @@ type Filesystem struct {
 	db        *bolt.DB
 	auth      *graph.Auth
 	root      string // the id of the filesystem's root item
+	driveID   string // the id of the filesystem's base drive
 	deltaLink string
 	uploads   *UploadManager
 
@@ -97,6 +98,7 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	}
 	// root inode is inode 1
 	fs.root = root.ID()
+	fs.driveID = root.DriveID()
 	fs.InsertID(fs.root, root)
 
 	fs.uploads = NewUploadManager(2*time.Second, db, fs, auth)
@@ -130,6 +132,15 @@ func (f *Filesystem) IsOffline() bool {
 	f.RLock()
 	defer f.RUnlock()
 	return f.offline
+}
+
+// AliasDriveID converts a drive ID to "me" if it's the user's base drive.
+// We just use this for cleaner logs, since most items will be from the base drive.
+func (f *Filesystem) AliasDriveID(id string) string {
+	if id != f.driveID {
+		return id
+	}
+	return graph.Me
 }
 
 // GetNodeID fetches the inode for a particular inode ID.

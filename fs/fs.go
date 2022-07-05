@@ -66,6 +66,7 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 					if child.Name == name {
 						log.Info().
 							Str("name", name).
+							Str("driveID", f.AliasDriveID(child.DriveID())).
 							Str("originalID", originalID).
 							Str("newID", child.ID).
 							Msg("Exchanged ID.")
@@ -86,6 +87,7 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 		err = f.MoveID(originalID, session.ID)
 		log.Info().
 			Str("name", name).
+			Str("driveID", f.AliasDriveID(session.DriveID)).
 			Str("originalID", originalID).
 			Str("newID", session.ID).
 			Msg("Exchanged ID.")
@@ -139,7 +141,7 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 	ctx := log.With().
 		Str("op", "Mkdir").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", driveID).
+		Str("driveID", f.AliasDriveID(driveID)).
 		Str("id", id).
 		Str("path", path).
 		Str("mode", Octal(in.Mode)).
@@ -194,7 +196,7 @@ func (f *Filesystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.
 		Str("op", "OpenDir").
 		Uint64("nodeID", in.NodeId).
 		Str("id", id).
-		Str("driveID", dir.DriveID()).
+		Str("driveID", f.AliasDriveID(dir.DriveID())).
 		Str("path", path).Logger()
 	ctx.Debug().Msg("")
 
@@ -369,6 +371,7 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 	ctx := log.With().
 		Str("op", "Mknod").
 		Uint64("nodeID", in.NodeId).
+		Str("driveID", f.AliasDriveID(parent.DriveID())).
 		Str("path", path).
 		Logger()
 	if f.IsOffline() {
@@ -382,7 +385,6 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 
 	inode := NewInode(name, in.Mode, parent)
 	ctx.Debug().
-		Str("driveID", inode.DriveID()).
 		Str("parentID", parentID).
 		Str("childID", inode.ID()).
 		Str("mode", Octal(in.Mode)).
@@ -415,7 +417,7 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 		log.Debug().
 			Str("op", "Create").
 			Uint64("nodeID", in.NodeId).
-			Str("driveID", child.DriveID()).
+			Str("driveID", f.AliasDriveID(child.DriveID())).
 			Str("id", parentID).
 			Str("childID", child.ID()).
 			Str("path", child.Path()).
@@ -445,7 +447,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	ctx := log.With().
 		Str("op", "Open").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", driveID).
+		Str("driveID", f.AliasDriveID(driveID)).
 		Str("id", id).
 		Str("path", path).
 		Logger()
@@ -540,7 +542,7 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 	ctx := log.With().
 		Str("op", "Unlink").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", driveID).
+		Str("driveID", f.AliasDriveID(driveID)).
 		Str("id", parentID).
 		Str("childID", id).
 		Str("path", path).
@@ -572,7 +574,7 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	ctx := log.With().
 		Str("op", "Read").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", inode.DriveID()).
+		Str("driveID", f.AliasDriveID(inode.DriveID())).
 		Str("id", inode.ID()).
 		Str("path", path).
 		Logger()
@@ -628,7 +630,7 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 	ctx := log.With().
 		Str("op", "Write").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", inode.DriveID()).
+		Str("driveID", f.AliasDriveID(inode.DriveID())).
 		Str("id", id).
 		Str("path", inode.Path()).
 		Logger()
@@ -679,7 +681,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 	ctx := log.With().
 		Str("op", "Fsync").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", inode.DriveID()).
+		Str("driveID", f.AliasDriveID(inode.DriveID())).
 		Str("id", id).
 		Str("path", inode.Path()).
 		Logger()
@@ -717,6 +719,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 	log.Debug().
 		Str("op", "Flush").
 		Str("id", inode.ID()).
+		Str("driveID", f.AliasDriveID(inode.DriveID())).
 		Str("path", inode.Path()).
 		Uint64("nodeID", in.NodeId).
 		Msg("")
@@ -743,7 +746,7 @@ func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fu
 	log.Trace().
 		Str("op", "GetAttr").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", inode.DriveID()).
+		Str("driveID", f.AliasDriveID(inode.DriveID())).
 		Str("id", id).
 		Str("path", inode.Path()).
 		Msg("")
@@ -768,7 +771,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	ctx := log.With().
 		Str("op", "SetAttr").
 		Uint64("nodeID", in.NodeId).
-		Str("driveID", i.DriveItem.DriveID()).
+		Str("driveID", f.AliasDriveID(i.DriveItem.DriveID())).
 		Str("id", i.DriveItem.ID).
 		Str("path", path).
 		Logger()
@@ -854,9 +857,9 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 
 	ctx := log.With().
 		Str("op", "Rename").
-		Str("driveID", driveID).
+		Str("driveID", f.AliasDriveID(driveID)).
 		Str("id", id).
-		Str("parentDriveID", newParentDriveID).
+		Str("parentDriveID", f.AliasDriveID(newParentDriveID)).
 		Str("parentID", newParentID).
 		Str("path", path).
 		Str("dest", dest).
