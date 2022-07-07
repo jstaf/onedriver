@@ -190,6 +190,7 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 		inode.Lock()
 		inode.DriveItem.ID = id
 		inode.Unlock()
+		f.AssignNodeID(inode)
 	}
 
 	parentID := inode.ParentID()

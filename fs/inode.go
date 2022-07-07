@@ -178,7 +178,7 @@ func (i *Inode) DriveID() string {
 	return i.DriveItem.DriveID()
 }
 
-var pathRexp *regexp.Regexp = regexp.MustCompile(`^.+:/`)
+var pathRexp *regexp.Regexp = regexp.MustCompile(`^.+:/?`)
 
 // Path returns an inode's full Path. Used for debugging and logs only as it is
 // not guaranteed to be reliable.
@@ -196,7 +196,8 @@ func (i *Inode) Path() string {
 		return name
 	}
 
-	return pathRexp.ReplaceAllString(i.DriveItem.Parent.Path, "/")
+	path := pathRexp.ReplaceAllString(i.DriveItem.Parent.Path, "/") + "/" + name
+	return strings.Replace(path, "//", "/", -1)
 }
 
 // HasContent returns whether the file has been populated with data

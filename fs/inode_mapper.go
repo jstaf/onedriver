@@ -24,27 +24,33 @@ func (i *InodeMapper) MapNodeID(nodeID uint64) string {
 }
 
 // AssignNodeID assigns a numeric inode ID used by the kernel if one is not
-// already assigned. Will safely reassign the NodeID if the inode's NodeID is
-// wrong for some reason.
+// already assigned. Will reassign node
 func (i *InodeMapper) AssignNodeID(inode *Inode) uint64 {
 	inode.RLock()
 	nodeID := inode.nodeID
 	id := inode.DriveItem.ID
 	inode.RUnlock()
 
-	// if the existing id was unset or doesn't pull out the right inode, reassign
-	if i.MapNodeID(nodeID) == id {
-		return nodeID
+	if nodeID == 0 {
+		// existing nodeID was unset, assign one
+
+		// lock ordering is to satisfy deadlock detector
+		inode.Lock()
+		defer inode.Unlock()
+		i.Lock()
+		defer i.Unlock()
+
+		i.lastNodeID++
+		i.inodes = append(i.inodes, inode.DriveItem.ID)
+		inode.nodeID = i.lastNodeID
+		return i.lastNodeID
+	} else if oldID := i.MapNodeID(nodeID); oldID != id && isLocalID(oldID) {
+		// old ID has changed from a local id
+		// update the list of inodes to reflect the new ID
+		i.Lock()
+		i.inodes[nodeID-1] = id
+		i.Unlock()
 	}
-
-	// lock ordering is to satisfy deadlock detector
-	inode.Lock()
-	defer inode.Unlock()
-	i.Lock()
-	defer i.Unlock()
-
-	i.lastNodeID++
-	i.inodes = append(i.inodes, inode.DriveItem.ID)
-	inode.nodeID = i.lastNodeID
-	return i.lastNodeID
+	// return existing node id
+	return nodeID
 }
