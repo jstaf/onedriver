@@ -31,6 +31,7 @@ type Inode struct {
 	hasChanges bool     // used to trigger an upload on flush
 	subdir     uint32   // used purely by NLink()
 	mode       uint32   // do not set manually
+	immutable  bool     // cannot be written to, modified, or children added by fs opts
 }
 
 // SerializeableInode is like a Inode, but can be serialized for local storage
@@ -133,6 +134,21 @@ func (i *Inode) SetName(name string) {
 	i.Lock()
 	i.DriveItem.Name = name
 	i.Unlock()
+}
+
+// SetImmutable makes an inode immutable. Only used for special inodes that don't really
+// exist on the server (like the "Shared with me" folder).
+func (i *Inode) SetImmutable() {
+	i.Lock()
+	i.immutable = true
+	i.Unlock()
+}
+
+// IsImmutable returns true if this inode is supposed to be immutable and unchangeable.
+func (i *Inode) IsImmutable() bool {
+	i.RLock()
+	defer i.RUnlock()
+	return i.immutable
 }
 
 // NodeID returns the inodes ID in the filesystem

@@ -147,6 +147,10 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 		Str("mode", Octal(in.Mode)).
 		Logger()
 	ctx.Debug().Msg("")
+	if inode.IsImmutable() {
+		ctx.Warn().Msg("Cannot mkdir on an immutable inode, refusing op.")
+		return fuse.ENOTSUP
+	}
 
 	// create the new directory on the server
 	item, err := graph.Mkdir(name, driveID, id, f.auth)
@@ -378,6 +382,10 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 		ctx.Warn().Msg("We are offline. Refusing Mknod() to avoid data loss later.")
 		return fuse.EROFS
 	}
+	if parent.IsImmutable() {
+		ctx.Warn().Msg("Cannot create children of an immutable inode, refusing op.")
+		return fuse.ENOTSUP
+	}
 
 	if child, _ := f.GetChild(parentID, name, f.auth); child != nil {
 		return fuse.Status(syscall.EEXIST)
@@ -547,6 +555,10 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 		Str("childID", id).
 		Str("path", path).
 		Logger()
+	if child.IsImmutable() {
+		ctx.Warn().Msg("Cannot unlink an immutable inode, refusing op.")
+		return fuse.ENOTSUP
+	}
 	ctx.Debug().Msg("Unlinking inode.")
 
 	// if no ID, the item is local-only, and does not need to be deleted on the
@@ -645,6 +657,10 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 			ctx.Error().Msg("Open() failed, cannot write to uninitialized file!")
 			return 0, fuse.EIO
 		}
+	}
+	if inode.IsImmutable() {
+		ctx.Warn().Msg("Tried to write to an immutable inode, refusing op.")
+		return 0, fuse.ENOTSUP
 	}
 
 	inode.Lock()
@@ -776,6 +792,12 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 		Str("path", path).
 		Logger()
 
+	if i.immutable {
+		ctx.Warn().Msg("Tried to modify an immutable inode, refusing op.")
+		i.Unlock()
+		return fuse.ENOTSUP
+	}
+
 	// utimens
 	if mtime, valid := in.GetMTime(); valid {
 		ctx.Info().
@@ -848,6 +870,16 @@ func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name stri
 	dest := filepath.Join(newParentItem.Path(), newName)
 
 	inode, _ := f.GetChild(oldParentID, name, f.auth)
+	if inode.IsImmutable() {
+		log.Warn().
+			Str("op", "Rename").
+			Str("id", inode.ID()).
+			Str("path", path).
+			Str("dest", dest).
+			Msg("Tried to rename an immutable inode. Refusing op.")
+		return fuse.ENOTSUP
+	}
+
 	id, err := f.remoteID(inode)
 	driveID := inode.DriveID()
 
