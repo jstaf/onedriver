@@ -116,6 +116,8 @@ test: onedriver onedriver-launcher dmel.fa
 		gotest -race -v -parallel=8 -count=1 ./fs/graph/...
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
 		gotest -race -v -parallel=8 -count=1 ./fs
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
+		gotest -race -v -parallel=8 -count=1 ./fs/shared/...
 	go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
 	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1

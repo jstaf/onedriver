@@ -13,7 +13,7 @@ import (
 // We should see more than zero items when we run ls.
 func TestOfflineReaddir(t *testing.T) {
 	t.Parallel()
-	files, err := ioutil.ReadDir(TestDir)
+	files, err := ioutil.ReadDir(fs.TestDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestOfflineReaddir(t *testing.T) {
 // We should find the file named bagels (from TestEchoWritesToFile)
 func TestOfflineBagelDetection(t *testing.T) {
 	t.Parallel()
-	files, err := ioutil.ReadDir(TestDir)
+	files, err := ioutil.ReadDir(fs.TestDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestOfflineBagelDetection(t *testing.T) {
 // Does the contents of the bagels file match what it should?
 func TestOfflineBagelContents(t *testing.T) {
 	t.Parallel()
-	contents, err := ioutil.ReadFile(filepath.Join(TestDir, "bagels"))
+	contents, err := ioutil.ReadFile(filepath.Join(fs.TestDir, "bagels"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestOfflineBagelContents(t *testing.T) {
 // Creating a file should fail
 func TestOfflineFileCreation(t *testing.T) {
 	t.Parallel()
-	if ioutil.WriteFile(filepath.Join(TestDir, "donuts"), []byte("fail me"), 0644) == nil {
+	if ioutil.WriteFile(filepath.Join(fs.TestDir, "donuts"), []byte("fail me"), 0644) == nil {
 		t.Fatal("Writing a file while offline should fail.")
 	}
 }
@@ -79,7 +79,7 @@ func TestOfflineFileCreation(t *testing.T) {
 // Modifying a file offline should fail.
 func TestOfflineFileModification(t *testing.T) {
 	t.Parallel()
-	if ioutil.WriteFile(filepath.Join(TestDir, "bagels"), []byte("fail me too"), 0644) == nil {
+	if ioutil.WriteFile(filepath.Join(fs.TestDir, "bagels"), []byte("fail me too"), 0644) == nil {
 		t.Fatal("Modifying a file while offline should fail.")
 	}
 }
@@ -87,10 +87,10 @@ func TestOfflineFileModification(t *testing.T) {
 // Deleting a file offline should fail.
 func TestOfflineFileDeletion(t *testing.T) {
 	t.Parallel()
-	if os.Remove(filepath.Join(TestDir, "write.txt")) == nil {
+	if os.Remove(filepath.Join(fs.TestDir, "write.txt")) == nil {
 		t.Error("Deleting a file while offline should fail.")
 	}
-	if os.Remove(filepath.Join(TestDir, "empty")) == nil {
+	if os.Remove(filepath.Join(fs.TestDir, "empty")) == nil {
 		t.Error("Deleting an empty file while offline should fail.")
 	}
 }
@@ -98,7 +98,7 @@ func TestOfflineFileDeletion(t *testing.T) {
 // Creating a directory offline should fail.
 func TestOfflineMkdir(t *testing.T) {
 	t.Parallel()
-	if os.Mkdir(filepath.Join(TestDir, "offline_dir"), 0755) == nil {
+	if os.Mkdir(filepath.Join(fs.TestDir, "offline_dir"), 0755) == nil {
 		t.Fatal("Creating a directory should have failed offline.")
 	}
 }
@@ -106,7 +106,7 @@ func TestOfflineMkdir(t *testing.T) {
 // Deleting a directory offline should fail.
 func TestOfflineRmdir(t *testing.T) {
 	t.Parallel()
-	if os.Remove(filepath.Join(TestDir, "folder1")) == nil {
+	if os.Remove(filepath.Join(fs.TestDir, "folder1")) == nil {
 		t.Fatal("Removing a directory should have failed offline.")
 	}
 }

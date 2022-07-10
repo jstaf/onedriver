@@ -3,29 +3,24 @@ package fs
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
-	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	mountLoc     = "mount"
-	TestDir      = mountLoc + "/onedriver_tests"
 	DeltaDir     = TestDir + "/delta"
 	retrySeconds = 60 * time.Second //lint:ignore ST1011 a
 )
 
+// global variables required by tests to inject stuff into the filesystem and submit
+// authenticated requests
 var (
 	auth *graph.Auth
 	fs   *Filesystem
@@ -43,42 +38,22 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-uz", mountLoc).Run()
-	os.Mkdir(mountLoc, 0755)
+	ChdirToProjectRoot()
+	CleanupMountpoint()
+
 	// wipe all cached data from previous tests
 	toDelete, _ := filepath.Glob("test*.db")
 	for _, db := range toDelete {
 		os.Remove(db)
 	}
 
-	f, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f, TimeFormat: "15:04:05"})
+	f := SetupTestLogger()
 	defer f.Close()
 
 	auth = graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
-	fs = NewFilesystem(auth, "test.db")
-	server, _ := fuse.NewServer(
-		fs,
-		mountLoc,
-		&fuse.MountOptions{
-			Name:          "onedriver",
-			FsName:        "onedriver",
-			DisableXAttrs: true,
-			MaxBackground: 1024,
-		},
-	)
-
-	// setup sigint handler for graceful unmount on interrupt/terminate
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
-	go UnmountHandler(sigChan, server)
-
-	// mount fs in background thread
-	go server.Serve()
+	fs = SetupTestFilesystem("test.db", auth)
 
 	// cleanup from last run
 	log.Info().Msg("Setup test environment ---------------------------------")
@@ -97,29 +72,24 @@ func TestMain(m *testing.M) {
 	go fs.DeltaLoop(5 * time.Second)
 
 	// not created by default on onedrive for business
-	os.Mkdir(mountLoc+"/Documents", 0755)
+	os.Mkdir(MountLoc+"/Documents", 0755)
 
 	// we do not cd into the mounted directory or it will hang indefinitely on
 	// unmount with "device or resource busy"
-	log.Info().Msg("Test session start ---------------------------------")
 
 	// run tests
+	log.Info().Msg("Test session start ---------------------------------")
 	code := m.Run()
-
 	log.Info().Msg("Test session end -----------------------------------")
+
+	// cleanup
 	fmt.Printf("Waiting 5 seconds for any remaining uploads to complete")
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second)
 		fmt.Printf(".")
 	}
 	fmt.Printf("\n")
-
-	// unmount
-	if server.Unmount() != nil {
-		log.Error().Msg("Failed to unmount test fuse server, attempting lazy unmount")
-		exec.Command("fusermount", "-zu", "mount").Run()
-	}
-	fmt.Println("Successfully unmounted fuse server!")
+	CleanupMountpoint()
 	os.Exit(code)
 }
 
