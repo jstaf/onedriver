@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestUploadSession(t *testing.T) {
 	testDir, err := fs.GetPath("/onedriver_tests", auth)
 	require.NoError(t, err)
 
-	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
+	inode := NewInode("uploadSessionSmall.txt", 0644|fuse.S_IFREG, testDir)
 	data := []byte("our super special data")
 	inode.data = &data
 	inode.DriveItem.Size = uint64(len(data))

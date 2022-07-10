@@ -3,6 +3,7 @@ package fs
 import (
 	"testing"
 
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -10,8 +11,8 @@ import (
 func TestInodeMapping(t *testing.T) {
 	t.Parallel()
 	mapper := InodeMapper{}
-	inode := NewInode("inode1", 0644, nil)
-	inode2 := NewInode("inode2", 0644, nil)
+	inode := NewInode("inode1", 0644|fuse.S_IFREG, nil)
+	inode2 := NewInode("inode2", 0644|fuse.S_IFREG, nil)
 	nodeID1 := mapper.AssignNodeID(inode)
 	nodeID2 := mapper.AssignNodeID(inode2)
 	assert.EqualValues(t, 1, nodeID1, "Expected inode number 1")
@@ -24,7 +25,7 @@ func TestInodeMapping(t *testing.T) {
 func TestRepeatedInodeInsert(t *testing.T) {
 	t.Parallel()
 	mapper := InodeMapper{}
-	inode := NewInode("inode", 0644, nil)
+	inode := NewInode("inode", 0644|fuse.S_IFREG, nil)
 	originalID := mapper.AssignNodeID(inode)
 	for i := 0; i < 10; i++ {
 		newID := mapper.AssignNodeID(inode)
@@ -36,7 +37,7 @@ func TestRepeatedInodeInsert(t *testing.T) {
 func TestLocalIDReassignment(t *testing.T) {
 	t.Parallel()
 	mapper := InodeMapper{}
-	inode := NewInode("inode", 0644, nil)
+	inode := NewInode("inode", 0644|fuse.S_IFREG, nil)
 
 	originalNodeID := mapper.AssignNodeID(inode)
 
@@ -54,7 +55,7 @@ func TestLocalIDReassignment(t *testing.T) {
 func TestNodeIDOutOfBounds(t *testing.T) {
 	t.Parallel()
 	mapper := InodeMapper{}
-	mapper.AssignNodeID(NewInode("inode", 0644, nil))
+	mapper.AssignNodeID(NewInode("inode", 0644|fuse.S_IFREG, nil))
 	assert.Empty(t, mapper.MapNodeID(1000), "Out of bounds NodeID should return no ID")
 	assert.Empty(t, mapper.MapNodeID(0), "0 should be a nil NodeID")
 }

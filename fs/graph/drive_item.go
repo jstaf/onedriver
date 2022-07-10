@@ -242,3 +242,9 @@ func GetItemChildren(drive, id string, auth *Auth) ([]*DriveItem, error) {
 func GetItemChildrenPath(drive, path string, auth *Auth) ([]*DriveItem, error) {
 	return getItemChildren(childrenPath(drive, path), auth)
 }
+
+// GetSharedWithMe returns the items shared with the user. This is essentially a special
+// case of GetItemChildren called on a special endpoint.
+func GetItemsSharedWithMe(auth *Auth) ([]*DriveItem, error) {
+	return getItemChildren("/me/drive/sharedWithMe", auth)
+}

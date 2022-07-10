@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -104,18 +105,19 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	fs.uploads = NewUploadManager(2*time.Second, db, fs, auth)
 
 	if !fs.IsOffline() {
-		// .Trash-UID is used by "gio trash" for user trash, create it if it
-		// does not exist
-		trash := fmt.Sprintf(".Trash-%d", os.Getuid())
-		if child, _ := fs.GetChild(fs.root, trash, auth); child == nil {
-			item, err := graph.Mkdir(trash, graph.Me, fs.root, auth)
-			if err != nil {
-				log.Error().Err(err).
-					Msg("Could not create trash folder. " +
-						"Trashing items through the file browser may result in errors.")
-			} else {
-				fs.InsertID(item.ID, NewInodeDriveItem(item))
-			}
+		// create special folders and other initialization logic
+		fs.createXDGVolumeInfo(auth)
+
+		if err = fs.createTrash(auth); err != nil {
+			log.Error().Err(err).
+				Msg("Could not create trash folder. " +
+					"Trashing items through the file browser may result in errors.")
+		}
+
+		if err = fs.createSharedItems(auth); err != nil {
+			log.Error().Err(err).
+				Msg("Could not fetch shared items. " +
+					"The \"Shared with Me\" folder will appear empty for this run only.")
 		}
 
 		// using token=latest because we don't care about existing items - they'll
@@ -125,6 +127,76 @@ func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 
 	// deltaloop is started manually
 	return fs
+}
+
+// createXDGVolumeInfo creates .xdg-volume-info for a nice little onedrive logo in
+// the corner of the mountpoint and shows the account name in the nautilus sidebar
+func (f *Filesystem) createXDGVolumeInfo(auth *graph.Auth) {
+	if child, _ := f.GetPath("/.xdg-volume-info", auth); child != nil {
+		return
+	}
+	log.Info().Msg("Creating .xdg-volume-info")
+	user, err := graph.GetUser(auth)
+	if err != nil {
+		log.Error().Err(err).Msg("Could not create .xdg-volume-info")
+		return
+	}
+
+	xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
+	if _, err := os.Stat("/usr/share/icons/onedriver/onedriver.png"); err == nil {
+		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver/onedriver.png\n"
+	}
+
+	// just upload directly and shove it in the cache
+	// (since the fs isn't mounted yet)
+	resp, err := graph.Put(
+		graph.ResourcePath(graph.Me, "/.xdg-volume-info")+":/content",
+		auth,
+		strings.NewReader(xdgVolumeInfo),
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to write .xdg-volume-info")
+	}
+	root, _ := f.GetPath("/", auth) // cannot fail
+	inode := NewInode(".xdg-volume-info", 0644|fuse.S_IFREG, root)
+	if json.Unmarshal(resp, &inode) == nil {
+		f.InsertID(inode.ID(), inode)
+	}
+}
+
+// createTrash creates the trash folder (.Trash-$UID) that is used by "gio
+// trash" if it does not already exist.
+func (f *Filesystem) createTrash(auth *graph.Auth) error {
+	trash := fmt.Sprintf(".Trash-%d", os.Getuid())
+	if child, _ := f.GetChild(f.root, trash, auth); child == nil {
+		item, err := graph.Mkdir(trash, graph.Me, f.root, auth)
+		if err != nil {
+			return err
+		} else {
+			f.InsertID(item.ID, NewInodeDriveItem(item))
+		}
+	}
+	return nil
+}
+
+// createSharedItems create the shared items folder with a special stable id.
+// and TODO spawns delta threads for shared folders
+func (f *Filesystem) createSharedItems(auth *graph.Auth) error {
+	sharedFolder := NewInode("Shared with me", 0555|fuse.S_IFDIR, nil)
+	const sharedID = "shared"
+	sharedFolder.DriveItem.ID = sharedID
+	f.InsertChild(f.root, sharedFolder)
+	children, err := graph.GetItemsSharedWithMe(auth)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		f.InsertChild(sharedID, NewInodeDriveItem(child))
+	}
+	log.Info().
+		Int("numberShared", len(children)).
+		Msg("Successfully fetched shared items.")
+	return nil
 }
 
 // IsOffline returns whether or not the cache thinks its offline.
@@ -232,7 +304,16 @@ func (f *Filesystem) InsertID(id string, inode *Inode) uint64 {
 // InsertChild adds an item as a child of a specified parent ID.
 func (f *Filesystem) InsertChild(parentID string, child *Inode) uint64 {
 	child.Lock()
-	// should already be set, just double-checking here.
+	// double-check that we have a valid parent here
+	if child.DriveItem.Parent == nil {
+		if child.DriveItem.IsShared() {
+			child.DriveItem.Parent = child.DriveItem.RemoteItem.Parent
+		} else {
+			// defensive programming against future API changes...
+			// we assume all items have a parent
+			child.DriveItem.Parent = &graph.DriveItemParent{}
+		}
+	}
 	child.DriveItem.Parent.ID = parentID
 	id := child.DriveItem.ID
 	child.Unlock()

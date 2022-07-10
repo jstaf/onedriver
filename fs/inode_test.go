@@ -113,7 +113,7 @@ func TestDoubleCreate(t *testing.T) {
 		context.Background().Done(),
 		&fuse.CreateIn{
 			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
-			Mode:     0644,
+			Mode:     0644 | fuse.S_IFREG,
 		},
 		fname,
 		&fuse.CreateOut{},
@@ -132,7 +132,7 @@ func TestDoubleCreate(t *testing.T) {
 		context.Background().Done(),
 		&fuse.CreateIn{
 			InHeader: fuse.InHeader{NodeId: parent.NodeID()},
-			Mode:     0644,
+			Mode:     0644 | fuse.S_IFREG,
 		},
 		fname,
 		&fuse.CreateOut{},

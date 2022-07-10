@@ -24,7 +24,7 @@ func (i *InodeMapper) MapNodeID(nodeID uint64) string {
 }
 
 // AssignNodeID assigns a numeric inode ID used by the kernel if one is not
-// already assigned. Will reassign node
+// already assigned. Will reassign nodeIDs only if the old nodeID was a "local" ID.
 func (i *InodeMapper) AssignNodeID(inode *Inode) uint64 {
 	inode.RLock()
 	nodeID := inode.nodeID

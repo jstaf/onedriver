@@ -348,8 +348,8 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name stri
 		return fuse.ENOENT
 	}
 
-	out.NodeId = child.NodeID()
 	out.Attr = child.makeAttr()
+	out.NodeId = out.Attr.Ino
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
 	return fuse.OK

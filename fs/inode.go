@@ -42,7 +42,8 @@ type SerializeableInode struct {
 	Mode     uint32
 }
 
-// NewInode initializes a new Inode
+// NewInode initializes a new Inode. mode requires either the fuse.S_IFDIR or
+// fuse.S_IFREG bits to be set.
 func NewInode(name string, mode uint32, parent *Inode) *Inode {
 	itemParent := &graph.DriveItemParent{ID: "", Path: ""}
 	if parent != nil {
@@ -52,6 +53,11 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 		itemParent.DriveID = parent.DriveItem.Parent.DriveID
 		itemParent.DriveType = parent.DriveItem.Parent.DriveType
 		parent.RUnlock()
+	}
+
+	if mode&fuse.S_IFDIR+mode&fuse.S_IFREG == 0 {
+		// panic - this is a programming error on our part
+		panic("either the fuse.S_IFDIR or fuse.S_IFREG bits must be set")
 	}
 
 	var empty []byte
