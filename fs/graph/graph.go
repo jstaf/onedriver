@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -38,7 +39,17 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 
 	auth.Refresh()
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{
+		Transport: &http.Transport{
+			Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
 	request, _ := http.NewRequest(method, GraphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
