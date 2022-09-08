@@ -85,10 +85,15 @@ func activateCallback(app *gtk.Application) {
 	mountpointBtn.SetTooltipText("Add a new OneDrive account.")
 	mountpointBtn.Connect("clicked", func(button *gtk.Button) {
 		mount := ui.DirChooser("Select a mountpoint")
+		if mount == "" {
+			// File choser was canceled
+			return
+		}
 		if !ui.MountpointIsValid(mount) {
 			log.Error().Str("mountpoint", mount).
 				Msg("Mountpoint was not valid (or user cancelled the operation). " +
 					"Mountpoint must be an empty directory.")
+			showErrorDialog("Mountpoint was not valid, mountpoint must be an empty directory (there might be hidden files).", window)
 			return
 		}
 
@@ -152,6 +157,18 @@ func activateCallback(app *gtk.Application) {
 	})
 
 	window.ShowAll()
+}
+
+func showErrorDialog(msg string, parentWindow gtk.IWindow) {
+	messageDialog := gtk.MessageDialogNew(
+		parentWindow,
+		gtk.DIALOG_DESTROY_WITH_PARENT,
+		gtk.MESSAGE_ERROR,
+		gtk.BUTTONS_CLOSE,
+		msg,
+	)
+	_ = messageDialog.Run()
+	messageDialog.Destroy()
 }
 
 // xdgOpenDir opens a folder in the user's default file browser.
