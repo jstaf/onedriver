@@ -42,7 +42,7 @@ jobs:
 
       - name: Check go formatting
         run: |
-          go get golang.org/x/tools/cmd/goimports
+          go install golang.org/x/tools/cmd/goimports@latest
           [ -z "$(goimports -l .)" ]
 
       - name: Check that the app compiles successfully
@@ -62,7 +62,7 @@ jobs:
 
       - name: Run tests
         run: |
-          go get -u github.com/rakyll/gotest
+          go install github.com/rakyll/gotest@latest
           # cannot run systemd tests here because github actions runners don't have dbus setup +
           # if CGO is on, the UI tests will take foreverrrrr
           CGO_ENABLED=0 gotest -v -covermode=count -coverpkg=./ui/... -coverprofile=ui.coverage ./ui
@@ -85,7 +85,7 @@ jobs:
 
       - name: Combine test coverage into single file
         run: |
-          go get github.com/wadey/gocovmerge
+          go install github.com/wadey/gocovmerge@latest
           gocovmerge *.coverage > coverage.out
         if: always()
 
