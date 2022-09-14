@@ -85,15 +85,15 @@ func activateCallback(app *gtk.Application) {
 	mountpointBtn.SetTooltipText("Add a new OneDrive account.")
 	mountpointBtn.Connect("clicked", func(button *gtk.Button) {
 		mount := ui.DirChooser("Select a mountpoint")
-		if mount == "" {
-			// File choser was canceled
-			return
-		}
 		if !ui.MountpointIsValid(mount) {
 			log.Error().Str("mountpoint", mount).
 				Msg("Mountpoint was not valid (or user cancelled the operation). " +
 					"Mountpoint must be an empty directory.")
-			showErrorDialog("Mountpoint was not valid, mountpoint must be an empty directory (there might be hidden files).", window)
+			if mount != "" {
+				showErrorDialog(
+					"Mountpoint was not valid, mountpoint must be an empty directory "+
+						"(there might be hidden files).", window)
+			}
 			return
 		}
 
