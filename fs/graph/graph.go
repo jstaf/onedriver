@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/rs/zerolog/log"
 )
 
@@ -68,11 +69,8 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 			Msg("Authentication token invalid or new app permissions required, " +
 				"forcing reauth before retrying.")
 
-		reauth := newAuth(auth.path, false)
-		auth.AccessToken = reauth.AccessToken
-		auth.RefreshToken = reauth.RefreshToken
-		auth.ExpiresAt = reauth.ExpiresAt
-		auth.Account = reauth.Account
+		reauth := newAuth(auth.AuthConfig, auth.path, false)
+		mergo.Merge(auth, reauth, mergo.WithOverride)
 		request.Header.Set("Authorization", "bearer "+auth.AccessToken)
 	}
 	if response.StatusCode >= 500 || response.StatusCode == 401 {

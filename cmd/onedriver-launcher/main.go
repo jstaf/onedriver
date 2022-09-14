@@ -23,6 +23,9 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+// being lazy here
+var config *common.Config
+
 func usage() {
 	fmt.Printf(`onedriver-launcher - Manage and configure onedriver mountpoints
 
@@ -37,6 +40,11 @@ func main() {
 	logLevel := flag.StringP("log", "l", "debug",
 		"Set logging level/verbosity for the filesystem. "+
 			"Can be one of: fatal, error, warn, info, debug, trace")
+	cacheDir := flag.StringP("cache-dir", "c", "",
+		"Change the default cache directory used by onedriver. "+
+			"Will be created if it does not already exist.")
+	configPath := flag.StringP("config-file", "f", common.DefaultConfigPath(),
+		"A YAML-formatted configuration file used by onedriver.")
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	help := flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
@@ -51,8 +59,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	zerolog.SetGlobalLevel(common.StringToLevel(*logLevel))
+	config = common.LoadConfig(*configPath)
+	// command line options override config options
+	if *cacheDir != "" {
+		config.CacheDir = *cacheDir
+	}
+	if *logLevel != "" {
+		config.LogLevel = *logLevel
+	}
+
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
 
 	log.Info().Msgf("onedriver-launcher %s", common.Version())
 
@@ -112,7 +129,7 @@ func activateCallback(app *gtk.Application) {
 	})
 	header.PackStart(mountpointBtn)
 
-	mounts := ui.GetKnownMounts()
+	mounts := ui.GetKnownMounts(config.CacheDir)
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
 

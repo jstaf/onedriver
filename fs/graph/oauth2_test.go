@@ -50,3 +50,12 @@ func TestAuthRefresh(t *testing.T) {
 		t.Fatal("Auth could not be refreshed successfully!")
 	}
 }
+
+func TestAuthConfigMerge(t *testing.T) {
+	t.Parallel()
+
+	testConfig := AuthConfig{RedirectURL: "test"}
+	assert.NoError(t, testConfig.applyDefaults())
+	assert.Equal(t, "test", testConfig.RedirectURL)
+	assert.Equal(t, authClientID, testConfig.ClientID)
+}

@@ -111,6 +111,8 @@ test: onedriver onedriver-launcher dmel.fa
 	rm -f *.race* fusefs_tests.log
 	CGO_ENABLED=0 gotest -v -parallel=8 -count=1 $(shell go list ./ui/... | grep -v offline)
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
+		gotest -race -v -parallel=8 -count=1 ./cmd/...
+	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
 		gotest -race -v -parallel=8 -count=1 ./fs/graph/...
 	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
 		gotest -race -v -parallel=8 -count=1 ./fs
