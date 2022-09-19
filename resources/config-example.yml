@@ -6,11 +6,11 @@
 # - error - Things that onedriver doesn't like, but can continue running 
 #          (can possibly result in file corruption or inability to do something).
 # - fatal - Only log errors that kill the program (this log level is not recommended).
-logLevel: debug
+log: debug
 
-# cacheDirectory specifies which directory onedriver should store its data in.
+# cacheDir specifies which directory onedriver should store its data in.
 # This directory can get pretty large. "~" is a placeholder for your home directory.
-cacheDirectory: ~/.cache/onedriver
+cacheDir: ~/.cache/onedriver
 
 # Don't uncomment or change this unless you are a super duper expert and have
 # registered your own version of onedriver in Azure Active Directory. These are the

@@ -12,8 +12,8 @@ import (
 )
 
 type Config struct {
-	CacheDir         string `yaml:"cacheDirectory"`
-	LogLevel         string `yaml:"logLevel"`
+	CacheDir         string `yaml:"cacheDir"`
+	LogLevel         string `yaml:"log"`
 	graph.AuthConfig `yaml:"auth"`
 }
 

@@ -1,2 +1,2 @@
-logLevel: warn
-cacheDirectory: ~/somewhere/else
+log: warn
+cacheDir: ~/somewhere/else
