@@ -84,6 +84,13 @@ func main() {
 
 	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
 
+	// wipe cache if desired
+	if *wipeCache {
+		log.Info().Str("path", config.CacheDir).Msg("Removing cache.")
+		os.RemoveAll(config.CacheDir)
+		os.Exit(0)
+	}
+
 	// determine and validate mountpoint
 	if len(flag.Args()) == 0 {
 		flag.Usage()
@@ -105,13 +112,6 @@ func main() {
 	// compute cache name as systemd would
 	absMountPath, _ := filepath.Abs(mountpoint)
 	cachePath := filepath.Join(config.CacheDir, unit.UnitNamePathEscape(absMountPath))
-
-	// wipe cache if desired
-	if *wipeCache {
-		log.Info().Str("path", cachePath).Msg("Removing cache.")
-		os.RemoveAll(cachePath)
-		os.Exit(0)
-	}
 
 	// authenticate/re-authenticate if necessary
 	os.MkdirAll(cachePath, 0700)

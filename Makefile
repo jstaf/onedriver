@@ -15,7 +15,7 @@ all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
-	go build \
+	CGO_CFLAGS=-Wno-deprecated-declarations go build \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
 
