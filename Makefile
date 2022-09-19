@@ -20,7 +20,7 @@ onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
 		./cmd/onedriver
 
 
-onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
+onedriver-headless: $(shell find fs/ cmd/common/ -type f) cmd/onedriver/main.go
 	CGO_ENABLED=0 go build -o onedriver-headless \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
@@ -28,7 +28,7 @@ onedriver-headless: $(shell find fs/ -type f) cmd/onedriver/main.go
 
 # -Wno-deprecated-declarations is for gotk3, which uses deprecated methods for older
 # glib compatibility: https://github.com/gotk3/gotk3/issues/762#issuecomment-919035313
-onedriver-launcher: $(shell find ui/ -type f) cmd/onedriver-launcher/main.go
+onedriver-launcher: $(shell find ui/ cmd/common/ -type f) cmd/onedriver-launcher/main.go
 	CGO_CFLAGS=-Wno-deprecated-declarations go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver-launcher
