@@ -40,9 +40,8 @@ func MountpointIsValid(mountpoint string) bool {
 	return len(dirents) == 0
 }
 
-func GetAccountName(instance string) (string, error) {
-	cacheDir, _ := os.UserCacheDir()
-	tokenFile := fmt.Sprintf("%s/onedriver/%s/auth_tokens.json", cacheDir, instance)
+func GetAccountName(cacheDir, instance string) (string, error) {
+	tokenFile := fmt.Sprintf("%s/%s/auth_tokens.json", cacheDir, instance)
 
 	var auth graph.Auth
 	data, err := ioutil.ReadFile(tokenFile)

@@ -198,7 +198,7 @@ func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 
 	var label *gtk.Label
 	tildePath := ui.EscapeHome(mount)
-	accountName, err := ui.GetAccountName(escapedMount)
+	accountName, err := ui.GetAccountName(config.CacheDir, escapedMount)
 	if err != nil {
 		log.Error().
 			Err(err).
