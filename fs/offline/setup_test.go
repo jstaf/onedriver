@@ -7,7 +7,6 @@ package offline
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/jstaf/onedriver/fs"
@@ -20,12 +19,7 @@ func TestMain(m *testing.M) {
 	fs.ChdirToProjectRoot()
 	fs.CleanupMountpoint()
 
-	// attempt to unmount regardless of what happens (in case previous tests
-	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-uz", mountLoc).Run()
-	os.Mkdir(mountLoc, 0755)
-
-	auth = graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
+	auth := graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
 	inode, err := graph.GetItem("me", "root", auth)
 	if inode != nil || !graph.IsOffline(err) {
 		fmt.Println("These tests must be run offline.")

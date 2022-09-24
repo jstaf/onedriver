@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 	log.Info().Msg("Setup shared tests ------------------------------")
 
 	// reuses the cached data from the previous tests
-	auth := graph.Authenticate(".auth_tokens.json", false)
+	auth := graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
 	fs.SetupTestFilesystem("test.db", auth)
 
 	log.Info().Msg("Start shared tests ------------------------------")
