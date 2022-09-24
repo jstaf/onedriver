@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.12.0
+Version:       0.13.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -78,10 +78,13 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
-* Sun Sep 18 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
+* Sat Sep 24 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
 - The GUI has been rewritten in golang for ease of maintenance and code sharing with 
   the rest of the onedriver application.
 - onedriver can now be configured with a config file at "~/.config/onedriver/config.yml".
+- The onedriver CLI now stores its cache in the same path that the GUI expects,
+  meaning that invoking the onedriver filesystem directly and via the GUI will share the
+  cache as long as the mountpoint is the same.
 
 * Tue Nov 2 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.12.0
 - Major internal rewrite - onedriver now talks directly to the kernel instead of using
