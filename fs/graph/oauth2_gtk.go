@@ -1,3 +1,4 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package graph
@@ -17,8 +18,8 @@ import (
 
 // Fetch the auth code required as the first part of oauth2 authentication. Uses
 // webkit2gtk to create a popup browser.
-func getAuthCode(accountName string) string {
-	cAuthURL := C.CString(getAuthURL())
+func getAuthCode(a AuthConfig, accountName string) string {
+	cAuthURL := C.CString(getAuthURL(a))
 	cAccountName := C.CString(accountName)
 	cResponse := C.webkit_auth_window(cAuthURL, cAccountName)
 	response := C.GoString(cResponse)

@@ -8,30 +8,26 @@ URL:           https://github.com/jstaf/onedriver
 Source0:       https://github.com/jstaf/onedriver/archive/refs/tags/v%{version}.tar.gz
 
 %if 0%{?suse_version}
-BuildRequires: go >= 1.12
+BuildRequires: go >= 1.17
 %else
-BuildRequires: golang >= 1.12.0
+BuildRequires: golang >= 1.17.0
 %endif
 BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
-BuildRequires: json-glib-devel
 
 %if 0%{?suse_version}
 %if 0%{?suse_version} > 1500
 # tumbleweed
 Requires: libwebkit2gtk-4_1-0
-Requires: libjson-glib-1_0-0
 %else
 # leap 15.3
 Requires: libwebkit2gtk-4_0-37
-Requires: libjson-glib-1_0-0
 %endif
 # other EL distros
 %else
 Requires: webkit2gtk3
-Requires: json-glib
 %endif
 Requires: fuse
 Suggests: systemd
@@ -49,8 +45,8 @@ break.
 # done via sed because #cgo flags appear to ignore #ifdef
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
-GOOS=linux go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
-GOOS=linux go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
+go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
+go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
 gzip resources/onedriver.1
 
 %install
@@ -82,6 +78,11 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Sun Sep 18 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
+- The GUI has been rewritten in golang for ease of maintenance and code sharing with 
+  the rest of the onedriver application.
+- onedriver can now be configured with a config file at "~/.config/onedriver/config.yml".
+
 * Tue Nov 2 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.12.0
 - Major internal rewrite - onedriver now talks directly to the kernel instead of using
   go-fuse/fs as an intermediary. This makes metadata operations a bit faster.

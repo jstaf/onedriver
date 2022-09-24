@@ -49,7 +49,8 @@ var (
 func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
 	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
 	if err != nil {
-		log.Fatal().Err(err).Msg("Could not open DB")
+		log.Fatal().Err(err).
+			Msg("Could not open DB. Is it already in use by another mount?")
 	}
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(bucketContent)

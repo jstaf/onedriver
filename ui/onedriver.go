@@ -40,9 +40,8 @@ func MountpointIsValid(mountpoint string) bool {
 	return len(dirents) == 0
 }
 
-func GetAccountName(instance string) (string, error) {
-	cacheDir, _ := os.UserCacheDir()
-	tokenFile := fmt.Sprintf("%s/onedriver/%s/auth_tokens.json", cacheDir, instance)
+func GetAccountName(cacheDir, instance string) (string, error) {
+	tokenFile := fmt.Sprintf("%s/%s/auth_tokens.json", cacheDir, instance)
 
 	var auth graph.Auth
 	data, err := ioutil.ReadFile(tokenFile)
@@ -57,19 +56,23 @@ func GetAccountName(instance string) (string, error) {
 }
 
 // GetKnownMounts returns the currently known mountpoints
-func GetKnownMounts() []string {
+func GetKnownMounts(cacheDir string) []string {
 	mounts := make([]string, 0)
-	cacheDir, _ := os.UserCacheDir()
-	onedriverCache := filepath.Join(cacheDir, "onedriver")
-	os.MkdirAll(onedriverCache, 0700)
-	dirents, err := ioutil.ReadDir(onedriverCache)
+
+	if cacheDir == "" {
+		userCacheDir, _ := os.UserCacheDir()
+		cacheDir = filepath.Join(userCacheDir, "onedriver")
+	}
+	os.MkdirAll(cacheDir, 0700)
+	dirents, err := ioutil.ReadDir(cacheDir)
+
 	if err != nil {
 		log.Error().Err(err).Msg("Could not fetch known mountpoints.")
 		return mounts
 	}
 
 	for _, dirent := range dirents {
-		_, err := os.Stat(filepath.Join(onedriverCache, dirent.Name(), "auth_tokens.json"))
+		_, err := os.Stat(filepath.Join(cacheDir, dirent.Name(), "auth_tokens.json"))
 		if err == nil {
 			mounts = append(mounts, dirent.Name())
 		}

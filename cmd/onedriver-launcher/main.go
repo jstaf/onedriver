@@ -34,9 +34,14 @@ Valid options:
 }
 
 func main() {
-	logLevel := flag.StringP("log", "l", "debug",
+	logLevel := flag.StringP("log", "l", "",
 		"Set logging level/verbosity for the filesystem. "+
 			"Can be one of: fatal, error, warn, info, debug, trace")
+	cacheDir := flag.StringP("cache-dir", "c", "",
+		"Change the default cache directory used by onedriver. "+
+			"Will be created if it does not already exist.")
+	configPath := flag.StringP("config-file", "f", common.DefaultConfigPath(),
+		"A YAML-formatted configuration file used by onedriver.")
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	help := flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
@@ -51,8 +56,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	zerolog.SetGlobalLevel(common.StringToLevel(*logLevel))
+	// command line options override config options
+	config := common.LoadConfig(*configPath)
+	if *cacheDir != "" {
+		config.CacheDir = *cacheDir
+	}
+	if *logLevel != "" {
+		config.LogLevel = *logLevel
+	}
+
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
 
 	log.Info().Msgf("onedriver-launcher %s", common.Version())
 
@@ -61,13 +75,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Could not create application.")
 	}
 	app.Connect("activate", func(application *gtk.Application) {
-		activateCallback(application)
+		activateCallback(*config, application)
 	})
 	os.Exit(app.Run(nil))
 }
 
 // activateCallback is what actually sets up the application
-func activateCallback(app *gtk.Application) {
+func activateCallback(config common.Config, app *gtk.Application) {
 	window, _ := gtk.ApplicationWindowNew(app)
 	window.SetDefaultSize(550, 400)
 
@@ -109,7 +123,7 @@ func activateCallback(app *gtk.Application) {
 			return
 		}
 
-		row, sw := newMountRow(mount)
+		row, sw := newMountRow(config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 
@@ -117,13 +131,13 @@ func activateCallback(app *gtk.Application) {
 	})
 	header.PackStart(mountpointBtn)
 
-	mounts := ui.GetKnownMounts()
+	mounts := ui.GetKnownMounts(config.CacheDir)
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
 
 		log.Info().Str("mount", mount).Msg("Found existing mount.")
 
-		row, sw := newMountRow(mount)
+		row, sw := newMountRow(config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 	}
@@ -187,7 +201,7 @@ func xdgOpenDir(mount string) {
 }
 
 // newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
-func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
+func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	row, _ := gtk.ListBoxRowNew()
 	row.SetSelectable(true)
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 5)
@@ -198,7 +212,7 @@ func newMountRow(mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 
 	var label *gtk.Label
 	tildePath := ui.EscapeHome(mount)
-	accountName, err := ui.GetAccountName(escapedMount)
+	accountName, err := ui.GetAccountName(config.CacheDir, escapedMount)
 	if err != nil {
 		log.Error().
 			Err(err).

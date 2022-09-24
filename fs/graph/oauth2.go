@@ -12,20 +12,39 @@ import (
 	"strings"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
+// these are default values if not specified
 const (
+	authClientID    = "3470c3fa-bc10-45ab-a0a9-2d30836485d1"
 	authCodeURL     = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 	authTokenURL    = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 	authRedirectURL = "https://login.live.com/oauth20_desktop.srf"
-	authClientID    = "3470c3fa-bc10-45ab-a0a9-2d30836485d1"
-	authFile        = "auth_tokens.json"
 )
+
+func (a *AuthConfig) applyDefaults() error {
+	return mergo.Merge(a, AuthConfig{
+		ClientID:    authClientID,
+		CodeURL:     authCodeURL,
+		TokenURL:    authTokenURL,
+		RedirectURL: authRedirectURL,
+	})
+}
+
+// AuthConfig configures the authentication flow
+type AuthConfig struct {
+	ClientID    string `json:"clientID" yaml:"clientID"`
+	CodeURL     string `json:"codeURL" yaml:"codeURL"`
+	TokenURL    string `json:"tokenURL" yaml:"tokenURL"`
+	RedirectURL string `json:"redirectURL" yaml:"redirectURL"`
+}
 
 // Auth represents a set of oauth2 authentication tokens
 type Auth struct {
+	AuthConfig   `json:"config"`
 	Account      string `json:"account"`
 	ExpiresIn    int64  `json:"expires_in"` // only used for parsing
 	ExpiresAt    int64  `json:"expires_at"`
@@ -61,18 +80,22 @@ func (a *Auth) FromFile(file string) error {
 		return err
 	}
 	a.path = file
-	return json.Unmarshal(contents, a)
+	err = json.Unmarshal(contents, a)
+	if err != nil {
+		return err
+	}
+	return a.applyDefaults()
 }
 
 // Refresh auth tokens if expired.
 func (a *Auth) Refresh() {
 	if a.ExpiresAt <= time.Now().Unix() {
 		oldTime := a.ExpiresAt
-		postData := strings.NewReader("client_id=" + authClientID +
-			"&redirect_uri=" + authRedirectURL +
+		postData := strings.NewReader("client_id=" + a.ClientID +
+			"&redirect_uri=" + a.RedirectURL +
 			"&refresh_token=" + a.RefreshToken +
 			"&grant_type=refresh_token")
-		resp, err := http.Post(authTokenURL,
+		resp, err := http.Post(a.TokenURL,
 			"application/x-www-form-urlencoded",
 			postData)
 
@@ -101,7 +124,7 @@ func (a *Auth) Refresh() {
 				Bytes("response", body).
 				Int("http_code", resp.StatusCode).
 				Msg("Failed to renew access tokens. Attempting to reauthenticate.")
-			a = newAuth(a.path, false)
+			a = newAuth(a.AuthConfig, a.path, false)
 		} else {
 			a.ToFile(a.path)
 		}
@@ -109,18 +132,18 @@ func (a *Auth) Refresh() {
 }
 
 // Get the appropriate authentication URL for the Graph OAuth2 challenge.
-func getAuthURL() string {
-	return authCodeURL +
-		"?client_id=" + authClientID +
+func getAuthURL(a AuthConfig) string {
+	return a.CodeURL +
+		"?client_id=" + a.ClientID +
 		"&scope=" + url.PathEscape("user.read files.readwrite.all offline_access") +
 		"&response_type=code" +
-		"&redirect_uri=" + authRedirectURL
+		"&redirect_uri=" + a.RedirectURL
 }
 
 // getAuthCodeHeadless has the user perform authentication in their own browser
 // instead of WebKit2GTK and then input the auth code in the terminal.
-func getAuthCodeHeadless(accountName string) string {
-	fmt.Printf("Please visit the following URL:\n%s\n\n", getAuthURL())
+func getAuthCodeHeadless(a AuthConfig, accountName string) string {
+	fmt.Printf("Please visit the following URL:\n%s\n\n", getAuthURL(a))
 	fmt.Println("Please enter the redirect URL once you are redirected to a " +
 		"blank page (after \"Let this app access your info?\"):")
 	var response string
@@ -144,13 +167,13 @@ func parseAuthCode(url string) (string, error) {
 	return code[5:], nil
 }
 
-// Exchange an auth code for a set of access tokens
-func getAuthTokens(authCode string) *Auth {
-	postData := strings.NewReader("client_id=" + authClientID +
-		"&redirect_uri=" + authRedirectURL +
+// Exchange an auth code for a set of access tokens (returned as a new Auth struct).
+func getAuthTokens(a AuthConfig, authCode string) *Auth {
+	postData := strings.NewReader("client_id=" + a.ClientID +
+		"&redirect_uri=" + a.RedirectURL +
 		"&code=" + authCode +
 		"&grant_type=authorization_code")
-	resp, err := http.Post(authTokenURL,
+	resp, err := http.Post(a.TokenURL,
 		"application/x-www-form-urlencoded",
 		postData)
 	if err != nil {
@@ -164,6 +187,8 @@ func getAuthTokens(authCode string) *Auth {
 	if auth.ExpiresAt == 0 {
 		auth.ExpiresAt = time.Now().Unix() + auth.ExpiresIn
 	}
+	auth.AuthConfig = a
+
 	if auth.AccessToken == "" || auth.RefreshToken == "" {
 		var authErr AuthError
 		var fields zerolog.Logger
@@ -193,18 +218,20 @@ func getAuthTokens(authCode string) *Auth {
 // newAuth performs initial authentication flow and saves tokens to disk. The headless
 // parameter determines if we will try to auth directly in the terminal instead of
 // doing it via embedded browser.
-func newAuth(path string, headless bool) *Auth {
+func newAuth(config AuthConfig, path string, headless bool) *Auth {
+	// load the old account name
 	old := Auth{}
 	old.FromFile(path)
 
+	config.applyDefaults()
 	var code string
 	if headless {
-		code = getAuthCodeHeadless(old.Account)
+		code = getAuthCodeHeadless(config, old.Account)
 	} else {
 		// in a build without CGO, this will be the same as above
-		code = getAuthCode(old.Account)
+		code = getAuthCode(config, old.Account)
 	}
-	auth := getAuthTokens(code)
+	auth := getAuthTokens(config, code)
 
 	if user, err := GetUser(auth); err == nil {
 		auth.Account = user.UserPrincipalName
@@ -213,14 +240,15 @@ func newAuth(path string, headless bool) *Auth {
 	return auth
 }
 
-// Authenticate performs first-time authentication to Graph. If headless is true,
-// we will authenticate in the terminal.
-func Authenticate(path string, headless bool) *Auth {
+// Authenticate performs authentication to Graph or load auth/refreshes it
+// from an existing file. If headless is true, we will authenticate in the
+// terminal.
+func Authenticate(config AuthConfig, path string, headless bool) *Auth {
 	auth := &Auth{}
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		// no tokens found, gotta start oauth flow from beginning
-		auth = newAuth(path, headless)
+		auth = newAuth(config, path, headless)
 	} else {
 		// we already have tokens, no need to force a new auth flow
 		auth.FromFile(path)

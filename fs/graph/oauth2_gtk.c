@@ -62,7 +62,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                  "expected identity of the site that it was retrieved from.";
         break;
     case G_TLS_CERTIFICATE_NOT_ACTIVATED:
-        reason = "G_TLS_CERTIFICATE_NOT_ACTIVATED - The certificate’s activation time is "
+        reason = "G_TLS_CERTIFICATE_NOT_ACTIVATED - The certificate's activation time is "
                  "still in the future.";
         break;
     case G_TLS_CERTIFICATE_EXPIRED:
@@ -73,7 +73,7 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                  "to the GTlsConnection's certificate revocation list.";
         break;
     case G_TLS_CERTIFICATE_INSECURE:
-        reason = "G_TLS_CERTIFICATE_INSECURE - The certificate’s algorithm is considered "
+        reason = "G_TLS_CERTIFICATE_INSECURE - The certificate's algorithm is considered "
                  "insecure.";
         break;
     case G_TLS_CERTIFICATE_GENERIC_ERROR:

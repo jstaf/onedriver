@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/jstaf/onedriver/cmd/common"
 	"github.com/jstaf/onedriver/fs"
@@ -37,13 +38,17 @@ Valid options:
 }
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+
 	// setup cli parsing
 	authOnly := flag.BoolP("auth-only", "a", false,
 		"Authenticate to OneDrive and then exit.")
 	headless := flag.BoolP("no-browser", "n", false,
 		"This disables launching the built-in web browser during authentication. "+
 			"Follow the instructions in the terminal to authenticate to OneDrive.")
-	logLevel := flag.StringP("log", "l", "debug",
+	configPath := flag.StringP("config-file", "f", common.DefaultConfigPath(),
+		"A YAML-formatted configuration file used by onedriver.")
+	logLevel := flag.StringP("log", "l", "",
 		"Set logging level/verbosity for the filesystem. "+
 			"Can be one of: fatal, error, warn, info, debug, trace")
 	cacheDir := flag.StringP("cache-dir", "c", "",
@@ -51,7 +56,7 @@ func main() {
 			"Will be created if the path does not already exist.")
 	wipeCache := flag.BoolP("wipe-cache", "w", false,
 		"Delete the existing onedriver cache directory and then exit. "+
-			"Equivalent to resetting the program.")
+			"This is equivalent to resetting the program.")
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging. "+
 		"This logs communication between onedriver and the kernel.")
@@ -68,26 +73,21 @@ func main() {
 		os.Exit(0)
 	}
 
-	// determine cache directory and wipe if desired
-	dir := *cacheDir
-	if dir == "" {
-		xdgCacheDir, _ := os.UserCacheDir()
-		dir = filepath.Join(xdgCacheDir, "onedriver")
+	config := common.LoadConfig(*configPath)
+	// command line options override config options
+	if *cacheDir != "" {
+		config.CacheDir = *cacheDir
 	}
+	if *logLevel != "" {
+		config.LogLevel = *logLevel
+	}
+
+	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
+
+	// wipe cache if desired
 	if *wipeCache {
-		os.RemoveAll(dir)
-		os.Exit(0)
-	}
-
-	zerolog.SetGlobalLevel(common.StringToLevel(*logLevel))
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
-
-	// authenticate/re-authenticate if necessary
-	os.MkdirAll(dir, 0700)
-	authPath := filepath.Join(dir, "auth_tokens.json")
-	if *authOnly {
-		os.Remove(authPath)
-		graph.Authenticate(authPath, *headless)
+		log.Info().Str("path", config.CacheDir).Msg("Removing cache.")
+		os.RemoveAll(config.CacheDir)
 		os.Exit(0)
 	}
 
@@ -98,7 +98,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info().Msgf("onedriver %s", common.Version())
 	mountpoint := flag.Arg(0)
 	st, err := os.Stat(mountpoint)
 	if err != nil || !st.IsDir() {
@@ -110,9 +109,23 @@ func main() {
 		log.Fatal().Str("mountpoint", mountpoint).Msg("Mountpoint must be empty.")
 	}
 
+	// compute cache name as systemd would
+	absMountPath, _ := filepath.Abs(mountpoint)
+	cachePath := filepath.Join(config.CacheDir, unit.UnitNamePathEscape(absMountPath))
+
+	// authenticate/re-authenticate if necessary
+	os.MkdirAll(cachePath, 0700)
+	authPath := filepath.Join(cachePath, "auth_tokens.json")
+	if *authOnly {
+		os.Remove(authPath)
+		graph.Authenticate(config.AuthConfig, authPath, *headless)
+		os.Exit(0)
+	}
+
 	// create the filesystem
-	auth := graph.Authenticate(authPath, *headless)
-	filesystem := fs.NewFilesystem(auth, filepath.Join(dir, "onedriver.db"))
+	log.Info().Msgf("onedriver %s", common.Version())
+	auth := graph.Authenticate(config.AuthConfig, authPath, *headless)
+	filesystem := fs.NewFilesystem(auth, filepath.Join(cachePath, "onedriver.db"))
 	go filesystem.DeltaLoop(30 * time.Second)
 	xdgVolumeInfo(filesystem, auth)
 
@@ -134,6 +147,10 @@ func main() {
 	go fs.UnmountHandler(sigChan, server)
 
 	// serve filesystem
+	log.Info().
+		Str("cachePath", cachePath).
+		Str("mountpoint", absMountPath).
+		Msg("Serving filesystem.")
 	server.Serve()
 }
 
