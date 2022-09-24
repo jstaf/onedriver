@@ -34,7 +34,7 @@ Valid options:
 }
 
 func main() {
-	logLevel := flag.StringP("log", "l", "debug",
+	logLevel := flag.StringP("log", "l", "",
 		"Set logging level/verbosity for the filesystem. "+
 			"Can be one of: fatal, error, warn, info, debug, trace")
 	cacheDir := flag.StringP("cache-dir", "c", "",
