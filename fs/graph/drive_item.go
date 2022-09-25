@@ -114,7 +114,34 @@ func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
 
 // GetItemContent retrieves an item's content from the Graph endpoint.
 func GetItemContent(id string, auth *Auth) ([]byte, error) {
-	return Get("/me/drive/items/"+id+"/content", auth)
+	// determine the size of the item
+	item, err := GetItem(id, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	const downloadChunkSize = 10 * 1024 * 1024
+	downloadURL := fmt.Sprintf("/me/drive/items/%s/content", id)
+	if item.Size <= downloadChunkSize {
+		// simple one-shot download
+		return Get(downloadURL, auth)
+	}
+
+	// multipart download
+	contents := make([]byte, 0)
+	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
+		start := i * downloadChunkSize
+		end := start + downloadChunkSize
+		content, err := Get(downloadURL, auth, Header{
+			key:   "Range",
+			value: fmt.Sprintf("bytes=%d-%d", start, end),
+		})
+		if err != nil {
+			return nil, err
+		}
+		contents = append(contents, content...)
+	}
+	return contents, nil
 }
 
 // Remove removes a directory or file by ID

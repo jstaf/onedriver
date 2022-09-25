@@ -29,8 +29,13 @@ type graphError struct {
 	} `json:"error"`
 }
 
+// This is an additional header that can be specified to Request
+type Header struct {
+	key, value string
+}
+
 // Request performs an authenticated request to Microsoft Graph
-func Request(resource string, auth *Auth, method string, content io.Reader) ([]byte, error) {
+func Request(resource string, auth *Auth, method string, content io.Reader, headers ...Header) ([]byte, error) {
 	if auth == nil || auth.AccessToken == "" {
 		// a catch all condition to avoid wiping our auth by accident
 		log.Error().Msg("Auth was empty and we attempted to make a request with it!")
@@ -39,7 +44,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 
 	auth.Refresh()
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	request, _ := http.NewRequest(method, GraphURL+resource, content)
 	request.Header.Add("Authorization", "bearer "+auth.AccessToken)
 	switch method { // request type-specific code here
@@ -50,6 +55,9 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 		request.Header.Add("Content-Type", "application/json")
 	case "PUT":
 		request.Header.Add("Content-Type", "text/plain")
+	}
+	for _, header := range headers {
+		request.Header.Add(header.key, header.value)
 	}
 
 	response, err := client.Do(request)
@@ -94,28 +102,28 @@ func Request(resource string, auth *Auth, method string, content io.Reader) ([]b
 }
 
 // Get is a convenience wrapper around Request
-func Get(resource string, auth *Auth) ([]byte, error) {
-	return Request(resource, auth, "GET", nil)
+func Get(resource string, auth *Auth, headers ...Header) ([]byte, error) {
+	return Request(resource, auth, "GET", nil, headers...)
 }
 
 // Patch is a convenience wrapper around Request
-func Patch(resource string, auth *Auth, content io.Reader) ([]byte, error) {
-	return Request(resource, auth, "PATCH", content)
+func Patch(resource string, auth *Auth, content io.Reader, headers ...Header) ([]byte, error) {
+	return Request(resource, auth, "PATCH", content, headers...)
 }
 
 // Post is a convenience wrapper around Request
-func Post(resource string, auth *Auth, content io.Reader) ([]byte, error) {
-	return Request(resource, auth, "POST", content)
+func Post(resource string, auth *Auth, content io.Reader, headers ...Header) ([]byte, error) {
+	return Request(resource, auth, "POST", content, headers...)
 }
 
 // Put is a convenience wrapper around Request
-func Put(resource string, auth *Auth, content io.Reader) ([]byte, error) {
-	return Request(resource, auth, "PUT", content)
+func Put(resource string, auth *Auth, content io.Reader, headers ...Header) ([]byte, error) {
+	return Request(resource, auth, "PUT", content, headers...)
 }
 
 // Delete performs an HTTP delete
-func Delete(resource string, auth *Auth) error {
-	_, err := Request(resource, auth, "DELETE", nil)
+func Delete(resource string, auth *Auth, headers ...Header) error {
+	_, err := Request(resource, auth, "DELETE", nil, headers...)
 	return err
 }
 
