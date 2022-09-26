@@ -134,9 +134,17 @@ func TestUploadSessionLargeFS(t *testing.T) {
 
 	// poll endpoint to make sure it has a size greater than 0
 	size := uint64(len(contents))
+	var item *graph.DriveItem
 	assert.Eventually(t, func() bool {
-		item, _ := graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
+		item, _ = graph.GetItemPath("/onedriver_tests/dmel.fa", auth)
 		inode := NewInodeDriveItem(item)
 		return item != nil && inode.Size() == size
 	}, 120*time.Second, time.Second, "Upload session did not complete successfully!")
+
+	// test multipart downloads as a bonus part of the test
+	downloaded, err := graph.GetItemContent(item.ID, auth)
+	assert.NoError(t, err)
+	assert.Equal(t, graph.SHA1Hash(&contents), graph.SHA1Hash(&downloaded),
+		"Downloaded content did not match original content.")
+	os.WriteFile("dmel2.fa", downloaded, 0644)
 }

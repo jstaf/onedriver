@@ -131,7 +131,7 @@ func GetItemContent(id string, auth *Auth) ([]byte, error) {
 	contents := make([]byte, 0)
 	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
 		start := i * downloadChunkSize
-		end := start + downloadChunkSize
+		end := start + downloadChunkSize - 1
 		content, err := Get(downloadURL, auth, Header{
 			key:   "Range",
 			value: fmt.Sprintf("bytes=%d-%d", start, end),
