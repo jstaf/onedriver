@@ -146,5 +146,4 @@ func TestUploadSessionLargeFS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, graph.SHA1Hash(&contents), graph.SHA1Hash(&downloaded),
 		"Downloaded content did not match original content.")
-	os.WriteFile("dmel2.fa", downloaded, 0644)
 }
