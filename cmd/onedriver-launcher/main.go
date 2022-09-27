@@ -131,6 +131,25 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	})
 	header.PackStart(mountpointBtn)
 
+	// create a menubutton and assign a popover menu
+	settingsBtn, _ := gtk.MenuButtonNew()
+	icon, _ := gtk.ImageNewFromIconName("open-menu-symbolic", gtk.ICON_SIZE_BUTTON)
+	settingsBtn.SetImage(icon)
+	popover, _ := gtk.PopoverNew(settingsBtn)
+	settingsBtn.SetPopover(popover)
+	popover.SetBorderWidth(8)
+
+	// add buttons to menu
+	popoverBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 5)
+	about, _ := gtk.ModelButtonNew()
+	about.SetLabel("About onedriver")
+	popoverBox.PackStart(about, false, true, 0)
+	popoverBox.ShowAll()
+	popover.Add(popoverBox)
+	popover.SetPosition(gtk.POS_BOTTOM)
+
+	header.PackEnd(settingsBtn)
+
 	mounts := ui.GetKnownMounts(config.CacheDir)
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
