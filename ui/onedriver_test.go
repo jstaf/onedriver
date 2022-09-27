@@ -3,8 +3,10 @@ package ui
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -50,4 +52,16 @@ func TestHomeEscapeUnescape(t *testing.T) {
 		assert.Equal(t, test.unescaped, UnescapeHome(test.escaped),
 			"Did not correctly unescape home.")
 	}
+}
+
+func TestGetAccountName(t *testing.T) {
+	t.Parallel()
+
+	wd, _ := os.Getwd()
+	escaped := unit.UnitNamePathEscape(filepath.Join(wd, "mount"))
+
+	// we compute the cache directory manually to avoid an import cycle
+	cacheDir, _ := os.UserCacheDir()
+	_, err := GetAccountName(filepath.Join(cacheDir, "onedriver"), escaped)
+	assert.NoError(t, err)
 }
