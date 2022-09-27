@@ -104,9 +104,9 @@ func activateCallback(config common.Config, app *gtk.Application) {
 				Msg("Mountpoint was not valid (or user cancelled the operation). " +
 					"Mountpoint must be an empty directory.")
 			if mount != "" {
-				showErrorDialog(
+				showDialog(
 					"Mountpoint was not valid, mountpoint must be an empty directory "+
-						"(there might be hidden files).", window)
+						"(there might be hidden files).", gtk.MESSAGE_ERROR, window)
 			}
 			return
 		}
@@ -132,23 +132,37 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	header.PackStart(mountpointBtn)
 
 	// create a menubutton and assign a popover menu
-	settingsBtn, _ := gtk.MenuButtonNew()
+	menuBtn, _ := gtk.MenuButtonNew()
 	icon, _ := gtk.ImageNewFromIconName("open-menu-symbolic", gtk.ICON_SIZE_BUTTON)
-	settingsBtn.SetImage(icon)
-	popover, _ := gtk.PopoverNew(settingsBtn)
-	settingsBtn.SetPopover(popover)
+	menuBtn.SetImage(icon)
+	popover, _ := gtk.PopoverNew(menuBtn)
+	menuBtn.SetPopover(popover)
 	popover.SetBorderWidth(8)
 
 	// add buttons to menu
 	popoverBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 5)
+	settings, _ := gtk.ModelButtonNew()
+	settings.SetLabel("Settings")
+	settings.Connect("clicked", func(button *gtk.ModelButton) {
+		log.Info().Msg("clicked settings")
+	})
+	popoverBox.PackStart(settings, false, true, 0)
+
+	// print version and link to repo
 	about, _ := gtk.ModelButtonNew()
-	about.SetLabel("About onedriver")
+	about.SetLabel("About")
+	about.Connect("clicked", func(button *gtk.ModelButton) {
+		showDialog(
+			fmt.Sprintf("onedriver %s", common.Version()),
+			gtk.MESSAGE_INFO, window,
+		)
+	})
 	popoverBox.PackStart(about, false, true, 0)
+
 	popoverBox.ShowAll()
 	popover.Add(popoverBox)
 	popover.SetPosition(gtk.POS_BOTTOM)
-
-	header.PackEnd(settingsBtn)
+	header.PackEnd(menuBtn)
 
 	mounts := ui.GetKnownMounts(config.CacheDir)
 	for _, mount := range mounts {
@@ -192,15 +206,15 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	window.ShowAll()
 }
 
-func showErrorDialog(msg string, parentWindow gtk.IWindow) {
+func showDialog(msg string, messageType gtk.MessageType, parentWindow gtk.IWindow) {
 	messageDialog := gtk.MessageDialogNew(
 		parentWindow,
 		gtk.DIALOG_DESTROY_WITH_PARENT,
-		gtk.MESSAGE_ERROR,
+		messageType,
 		gtk.BUTTONS_CLOSE,
 		msg,
 	)
-	_ = messageDialog.Run()
+	messageDialog.Run()
 	messageDialog.Destroy()
 }
 
