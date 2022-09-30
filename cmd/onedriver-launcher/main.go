@@ -75,13 +75,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Could not create application.")
 	}
 	app.Connect("activate", func(application *gtk.Application) {
-		activateCallback(*config, application)
+		activateCallback(application, config, *configPath)
 	})
 	os.Exit(app.Run(nil))
 }
 
 // activateCallback is what actually sets up the application
-func activateCallback(config common.Config, app *gtk.Application) {
+func activateCallback(app *gtk.Application, config *common.Config, configPath string) {
 	window, _ := gtk.ApplicationWindowNew(app)
 	window.SetDefaultSize(550, 400)
 
@@ -104,7 +104,7 @@ func activateCallback(config common.Config, app *gtk.Application) {
 				Msg("Mountpoint was not valid (or user cancelled the operation). " +
 					"Mountpoint must be an empty directory.")
 			if mount != "" {
-				showDialog(
+				ui.Dialog(
 					"Mountpoint was not valid, mountpoint must be an empty directory "+
 						"(there might be hidden files).", gtk.MESSAGE_ERROR, window)
 			}
@@ -123,7 +123,7 @@ func activateCallback(config common.Config, app *gtk.Application) {
 			return
 		}
 
-		row, sw := newMountRow(config, mount)
+		row, sw := newMountRow(*config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 
@@ -144,12 +144,11 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	settings, _ := gtk.ModelButtonNew()
 	settings.SetLabel("Settings")
 	settings.Connect("clicked", func(button *gtk.ModelButton) {
-		log.Info().Msg("clicked settings")
+		newSettingsWindow(config, configPath)
 	})
 	popoverBox.PackStart(settings, false, true, 0)
 
 	// print version and link to repo
-
 	about, _ := gtk.ModelButtonNew()
 	about.SetLabel("About")
 	about.Connect("clicked", func(button *gtk.ModelButton) {
@@ -180,7 +179,7 @@ func activateCallback(config common.Config, app *gtk.Application) {
 
 		log.Info().Str("mount", mount).Msg("Found existing mount.")
 
-		row, sw := newMountRow(config, mount)
+		row, sw := newMountRow(*config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 	}
@@ -214,18 +213,6 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	})
 
 	window.ShowAll()
-}
-
-func showDialog(msg string, messageType gtk.MessageType, parentWindow gtk.IWindow) {
-	messageDialog := gtk.MessageDialogNew(
-		parentWindow,
-		gtk.DIALOG_DESTROY_WITH_PARENT,
-		messageType,
-		gtk.BUTTONS_CLOSE,
-		msg,
-	)
-	messageDialog.Run()
-	messageDialog.Destroy()
 }
 
 // xdgOpenDir opens a folder in the user's default file browser.
@@ -280,11 +267,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 			Str("unitName", unitName).
 			Msg("Request to delete mount.")
 
-		dialog, _ := gtk.DialogNewWithButtons("Remove mountpoint?", nil, gtk.DIALOG_MODAL,
-			[]interface{}{"Cancel", gtk.RESPONSE_REJECT},
-			[]interface{}{"Remove", gtk.RESPONSE_ACCEPT},
-		)
-		if dialog.Run() == gtk.RESPONSE_ACCEPT {
+		if ui.CancelDialog("Remove mountpoint?", nil) {
 			log.Info().
 				Str("signal", "clicked").
 				Str("mount", mount).
@@ -298,7 +281,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 
 			row.Destroy()
 		}
-		dialog.Destroy()
 	})
 	box.PackEnd(deleteMountpointBtn, false, false, 0)
 
@@ -361,4 +343,82 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	row.SetName(mount)
 	row.ShowAll()
 	return row, mountToggle
+}
+
+func newSettingsWindow(config *common.Config, configPath string) {
+	const offset = 15
+
+	settingsWindow, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	settingsWindow.SetResizable(false)
+	settingsWindow.SetTitle("Settings")
+
+	// log level settings
+	settingsRowLog, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
+	logLevelLabel, _ := gtk.LabelNew("Log level")
+	settingsRowLog.PackStart(logLevelLabel, false, false, 0)
+
+	logLevelSelector, _ := gtk.ComboBoxTextNew()
+	for i, entry := range common.LogLevels() {
+		logLevelSelector.AppendText(entry)
+		if entry == config.LogLevel {
+			logLevelSelector.SetActive(i)
+		}
+	}
+	logLevelSelector.Connect("changed", func(box *gtk.ComboBoxText) {
+		config.LogLevel = box.GetActiveText()
+		log.Debug().
+			Str("newLevel", config.LogLevel).
+			Msg("Log level changed.")
+		zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
+		config.WriteConfig(configPath)
+	})
+	settingsRowLog.PackEnd(logLevelSelector, false, false, 0)
+
+	// cache dir settings
+	settingsRowCacheDir, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
+	cacheDirLabel, _ := gtk.LabelNew("Cache directory")
+	settingsRowCacheDir.PackStart(cacheDirLabel, false, false, 0)
+
+	cacheDirPicker, _ := gtk.ButtonNew()
+	cacheDirPicker.SetLabel(ui.EscapeHome(config.CacheDir))
+	cacheDirPicker.SetSizeRequest(200, 0)
+	cacheDirPicker.Connect("clicked", func(button *gtk.Button) {
+		oldPath, _ := button.GetLabel()
+		path := ui.DirChooser("Select an empty directory to use for storage")
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("path", path).
+				Msg("Could not readdir on new cache directory.")
+			return
+		}
+		if len(entries) > 0 {
+			ui.Dialog("Directory must be empty!", gtk.MESSAGE_ERROR, settingsWindow)
+			log.Error().
+				Int("entries", len(entries)).
+				Str("path", path).
+				Msg("Directory must be empty!")
+			return
+		}
+		if !ui.CancelDialog("Unmount all drives to continue?", settingsWindow) {
+			return
+		}
+		log.Warn().
+			Str("oldPath", oldPath).
+			Str("newPath", path).
+			Msg("All drives will be unmounted to move cache directory.")
+
+		//TODO finish the op of moving files to the new cache directory here
+		button.SetLabel(path)
+	})
+	settingsRowCacheDir.PackEnd(cacheDirPicker, false, false, 0)
+
+	// assemble rows
+	settingsWindowBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, offset)
+	settingsWindowBox.SetBorderWidth(offset)
+	settingsWindowBox.PackStart(settingsRowLog, true, true, 0)
+	settingsWindowBox.PackStart(settingsRowCacheDir, true, true, 0)
+	settingsWindow.Add(settingsWindowBox)
+	settingsWindow.ShowAll()
 }

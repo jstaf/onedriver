@@ -59,3 +59,12 @@ func LoadConfig(path string) *Config {
 	config.CacheDir = ui.UnescapeHome(config.CacheDir)
 	return config
 }
+
+// Write config to a file
+func (c Config) WriteConfig(path string) {
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		log.Error().Err(err).Msg("Could not marshal config!")
+	}
+	os.WriteFile(path, out, 0600)
+}
