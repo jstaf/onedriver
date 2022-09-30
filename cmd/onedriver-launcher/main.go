@@ -149,13 +149,23 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	popoverBox.PackStart(settings, false, true, 0)
 
 	// print version and link to repo
+
 	about, _ := gtk.ModelButtonNew()
 	about.SetLabel("About")
 	about.Connect("clicked", func(button *gtk.ModelButton) {
-		showDialog(
-			fmt.Sprintf("onedriver %s", common.Version()),
-			gtk.MESSAGE_INFO, window,
-		)
+		aboutDialog, _ := gtk.AboutDialogNew()
+		aboutDialog.SetAuthors([]string{"Jeff Stafford", "https://github.com/jstaf"})
+		aboutDialog.SetWebsite("https://github.com/jstaf/onedriver")
+		aboutDialog.SetWebsiteLabel("github.com/jstaf/onedriver")
+		aboutDialog.SetVersion(fmt.Sprintf("onedriver %s", common.Version()))
+		aboutDialog.SetLicenseType(gtk.LICENSE_GPL_3_0)
+		logo, err := gtk.ImageNewFromFile("/usr/share/icons/onedriver/onedriver-128.png")
+		if err != nil {
+			log.Error().Err(err).Msg("Could not find logo.")
+		} else {
+			aboutDialog.SetLogo(logo.GetPixbuf())
+		}
+		aboutDialog.Run()
 	})
 	popoverBox.PackStart(about, false, true, 0)
 
