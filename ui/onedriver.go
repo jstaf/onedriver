@@ -55,7 +55,7 @@ func GetAccountName(cacheDir, instance string) (string, error) {
 	return auth.Account, nil
 }
 
-// GetKnownMounts returns the currently known mountpoints
+// GetKnownMounts returns the currently known mountpoints and returns their escaped name
 func GetKnownMounts(cacheDir string) []string {
 	mounts := make([]string, 0)
 

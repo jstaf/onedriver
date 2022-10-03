@@ -10,6 +10,7 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"unsafe"
 
 	"github.com/coreos/go-systemd/v22/unit"
@@ -231,6 +232,7 @@ func xdgOpenDir(mount string) {
 }
 
 // newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
+// mount is the path to the new mountpoint.
 func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	row, _ := gtk.ListBoxRowNew()
 	row.SetSelectable(true)
@@ -384,24 +386,9 @@ func newSettingsWindow(config *common.Config, configPath string) {
 	cacheDirPicker.SetSizeRequest(200, 0)
 	cacheDirPicker.Connect("clicked", func(button *gtk.Button) {
 		oldPath, _ := button.GetLabel()
+		oldPath = ui.UnescapeHome(oldPath)
 		path := ui.DirChooser("Select an empty directory to use for storage")
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("path", path).
-				Msg("Could not readdir on new cache directory.")
-			return
-		}
-		if len(entries) > 0 {
-			ui.Dialog("Directory must be empty!", gtk.MESSAGE_ERROR, settingsWindow)
-			log.Error().
-				Int("entries", len(entries)).
-				Str("path", path).
-				Msg("Directory must be empty!")
-			return
-		}
-		if !ui.CancelDialog("Unmount all drives to continue?", settingsWindow) {
+		if !ui.CancelDialog("Unmount all drives?", settingsWindow) {
 			return
 		}
 		log.Warn().
@@ -409,7 +396,40 @@ func newSettingsWindow(config *common.Config, configPath string) {
 			Str("newPath", path).
 			Msg("All drives will be unmounted to move cache directory.")
 
-		//TODO finish the op of moving files to the new cache directory here
+		// actually perform the stop+move op
+		for _, mount := range ui.GetKnownMounts(oldPath) {
+			unit := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, mount)
+			log.Info().
+				Str("mount", mount).
+				Str("unit", unit).
+				Msg("Disabling mount.")
+			err := systemd.UnitSetActive(unit, false)
+			if err != nil {
+				ui.Dialog("Could not disable mount: "+err.Error(),
+					gtk.MESSAGE_ERROR, settingsWindow)
+				log.Error().
+					Err(err).
+					Str("mount", mount).
+					Str("unit", unit).
+					Msg("Could not disable mount.")
+				return
+			}
+			err = os.Rename(filepath.Join(oldPath, mount), filepath.Join(path, mount))
+			if err != nil {
+				ui.Dialog("Could not move cache for mount: "+err.Error(),
+					gtk.MESSAGE_ERROR, settingsWindow)
+				log.Error().
+					Err(err).
+					Str("mount", mount).
+					Str("unit", unit).
+					Msg("Could not move cache for mount.")
+				return
+			}
+		}
+
+		// all done
+		config.CacheDir = path
+		config.WriteConfig(configPath)
 		button.SetLabel(path)
 	})
 	settingsRowCacheDir.PackEnd(cacheDirPicker, false, false, 0)
