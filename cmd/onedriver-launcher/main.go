@@ -145,7 +145,7 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 	settings, _ := gtk.ModelButtonNew()
 	settings.SetLabel("Settings")
 	settings.Connect("clicked", func(button *gtk.ModelButton) {
-		newSettingsWindow(config, configPath)
+		newSettingsWindow(config, configPath, switches)
 	})
 	popoverBox.PackStart(settings, false, true, 0)
 
@@ -347,7 +347,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	return row, mountToggle
 }
 
-func newSettingsWindow(config *common.Config, configPath string) {
+func newSettingsWindow(config *common.Config, configPath string, switches map[string]*gtk.Switch) {
 	const offset = 15
 
 	settingsWindow, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
@@ -398,22 +398,24 @@ func newSettingsWindow(config *common.Config, configPath string) {
 
 		// actually perform the stop+move op
 		for _, mount := range ui.GetKnownMounts(oldPath) {
-			unit := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, mount)
+			unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, mount)
 			log.Info().
 				Str("mount", mount).
-				Str("unit", unit).
+				Str("unit", unitName).
 				Msg("Disabling mount.")
-			err := systemd.UnitSetActive(unit, false)
+			err := systemd.UnitSetActive(unitName, false)
 			if err != nil {
 				ui.Dialog("Could not disable mount: "+err.Error(),
 					gtk.MESSAGE_ERROR, settingsWindow)
 				log.Error().
 					Err(err).
 					Str("mount", mount).
-					Str("unit", unit).
+					Str("unit", unitName).
 					Msg("Could not disable mount.")
 				return
 			}
+			switches[unit.UnitNamePathUnescape(mount)].SetActive(false)
+
 			err = os.Rename(filepath.Join(oldPath, mount), filepath.Join(path, mount))
 			if err != nil {
 				ui.Dialog("Could not move cache for mount: "+err.Error(),
@@ -421,7 +423,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 				log.Error().
 					Err(err).
 					Str("mount", mount).
-					Str("unit", unit).
+					Str("unit", unitName).
 					Msg("Could not move cache for mount.")
 				return
 			}
