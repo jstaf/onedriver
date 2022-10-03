@@ -145,7 +145,7 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 	settings, _ := gtk.ModelButtonNew()
 	settings.SetLabel("Settings")
 	settings.Connect("clicked", func(button *gtk.ModelButton) {
-		newSettingsWindow(config, configPath, switches)
+		newSettingsWindow(config, configPath)
 	})
 	popoverBox.PackStart(settings, false, true, 0)
 
@@ -347,7 +347,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	return row, mountToggle
 }
 
-func newSettingsWindow(config *common.Config, configPath string, switches map[string]*gtk.Switch) {
+func newSettingsWindow(config *common.Config, configPath string) {
 	const offset = 15
 
 	settingsWindow, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
@@ -388,21 +388,26 @@ func newSettingsWindow(config *common.Config, configPath string, switches map[st
 		oldPath, _ := button.GetLabel()
 		oldPath = ui.UnescapeHome(oldPath)
 		path := ui.DirChooser("Select an empty directory to use for storage")
-		if !ui.CancelDialog("Unmount all drives?", settingsWindow) {
+		if !ui.CancelDialog("Remount all drives?", settingsWindow) {
 			return
 		}
 		log.Warn().
 			Str("oldPath", oldPath).
 			Str("newPath", path).
-			Msg("All drives will be unmounted to move cache directory.")
+			Msg("All active drives will be remounted to move cache directory.")
 
 		// actually perform the stop+move op
+		isMounted := make([]string, 0)
 		for _, mount := range ui.GetKnownMounts(oldPath) {
 			unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, mount)
 			log.Info().
 				Str("mount", mount).
 				Str("unit", unitName).
 				Msg("Disabling mount.")
+			if mounted, _ := systemd.UnitIsActive(unitName); mounted {
+				isMounted = append(isMounted, unitName)
+			}
+
 			err := systemd.UnitSetActive(unitName, false)
 			if err != nil {
 				ui.Dialog("Could not disable mount: "+err.Error(),
@@ -414,7 +419,6 @@ func newSettingsWindow(config *common.Config, configPath string, switches map[st
 					Msg("Could not disable mount.")
 				return
 			}
-			switches[unit.UnitNamePathUnescape(mount)].SetActive(false)
 
 			err = os.Rename(filepath.Join(oldPath, mount), filepath.Join(path, mount))
 			if err != nil {
@@ -426,6 +430,17 @@ func newSettingsWindow(config *common.Config, configPath string, switches map[st
 					Str("unit", unitName).
 					Msg("Could not move cache for mount.")
 				return
+			}
+		}
+
+		// remount drives that were mounted before
+		for _, unitName := range isMounted {
+			err := systemd.UnitSetActive(unitName, true)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("unit", unitName).
+					Msg("Failed to restart unit.")
 			}
 		}
 
