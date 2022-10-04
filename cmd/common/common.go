@@ -21,6 +21,7 @@ func Version() string {
 	return fmt.Sprintf("v%s %s", version, commit[:clen])
 }
 
+// StringToLevel converts a string to a zerolog.LogLevel that can be used with zerolog
 func StringToLevel(input string) zerolog.Level {
 	level, err := zerolog.ParseLevel(input)
 	if err != nil {
@@ -28,4 +29,9 @@ func StringToLevel(input string) zerolog.Level {
 		return zerolog.DebugLevel
 	}
 	return level
+}
+
+// LogLevels returns the available logging levels
+func LogLevels() []string {
+	return []string{"trace", "debug", "info", "warn", "error", "fatal"}
 }

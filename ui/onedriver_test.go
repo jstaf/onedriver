@@ -3,6 +3,7 @@ package ui
 import (
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -62,6 +63,15 @@ func TestGetAccountName(t *testing.T) {
 
 	// we compute the cache directory manually to avoid an import cycle
 	cacheDir, _ := os.UserCacheDir()
+
+	// copy auth tokens to cache dir if it doesn't already exist
+	// (CI runners will not have this file yet)
+	os.MkdirAll(filepath.Join(cacheDir, "onedriver", escaped), 0700)
+	dest := filepath.Join(cacheDir, "onedriver", escaped, "auth_tokens.json")
+	if _, err := os.Stat(dest); err != nil {
+		exec.Command("cp", ".auth_tokens.json", dest).Run()
+	}
+
 	_, err := GetAccountName(filepath.Join(cacheDir, "onedriver"), escaped)
 	assert.NoError(t, err)
 }

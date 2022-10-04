@@ -71,6 +71,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(755, root, root) %{_bindir}/%{name}
 %attr(755, root, root) %{_bindir}/%{name}-launcher
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.png
+%attr(644, root, root) /usr/share/icons/%{name}/%{name}-128.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
 %attr(644, root, root) /usr/share/applications/%{name}.desktop
 %attr(644, root, root) /usr/lib/systemd/user/%{name}@.service

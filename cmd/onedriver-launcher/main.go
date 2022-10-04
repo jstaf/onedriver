@@ -10,6 +10,7 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"unsafe"
 
 	"github.com/coreos/go-systemd/v22/unit"
@@ -75,13 +76,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Could not create application.")
 	}
 	app.Connect("activate", func(application *gtk.Application) {
-		activateCallback(*config, application)
+		activateCallback(application, config, *configPath)
 	})
 	os.Exit(app.Run(nil))
 }
 
 // activateCallback is what actually sets up the application
-func activateCallback(config common.Config, app *gtk.Application) {
+func activateCallback(app *gtk.Application, config *common.Config, configPath string) {
 	window, _ := gtk.ApplicationWindowNew(app)
 	window.SetDefaultSize(550, 400)
 
@@ -104,9 +105,9 @@ func activateCallback(config common.Config, app *gtk.Application) {
 				Msg("Mountpoint was not valid (or user cancelled the operation). " +
 					"Mountpoint must be an empty directory.")
 			if mount != "" {
-				showErrorDialog(
+				ui.Dialog(
 					"Mountpoint was not valid, mountpoint must be an empty directory "+
-						"(there might be hidden files).", window)
+						"(there might be hidden files).", gtk.MESSAGE_ERROR, window)
 			}
 			return
 		}
@@ -123,7 +124,7 @@ func activateCallback(config common.Config, app *gtk.Application) {
 			return
 		}
 
-		row, sw := newMountRow(config, mount)
+		row, sw := newMountRow(*config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 
@@ -131,13 +132,55 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	})
 	header.PackStart(mountpointBtn)
 
+	// create a menubutton and assign a popover menu
+	menuBtn, _ := gtk.MenuButtonNew()
+	icon, _ := gtk.ImageNewFromIconName("open-menu-symbolic", gtk.ICON_SIZE_BUTTON)
+	menuBtn.SetImage(icon)
+	popover, _ := gtk.PopoverNew(menuBtn)
+	menuBtn.SetPopover(popover)
+	popover.SetBorderWidth(8)
+
+	// add buttons to menu
+	popoverBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 5)
+	settings, _ := gtk.ModelButtonNew()
+	settings.SetLabel("Settings")
+	settings.Connect("clicked", func(button *gtk.ModelButton) {
+		newSettingsWindow(config, configPath)
+	})
+	popoverBox.PackStart(settings, false, true, 0)
+
+	// print version and link to repo
+	about, _ := gtk.ModelButtonNew()
+	about.SetLabel("About")
+	about.Connect("clicked", func(button *gtk.ModelButton) {
+		aboutDialog, _ := gtk.AboutDialogNew()
+		aboutDialog.SetAuthors([]string{"Jeff Stafford", "https://github.com/jstaf"})
+		aboutDialog.SetWebsite("https://github.com/jstaf/onedriver")
+		aboutDialog.SetWebsiteLabel("github.com/jstaf/onedriver")
+		aboutDialog.SetVersion(fmt.Sprintf("onedriver %s", common.Version()))
+		aboutDialog.SetLicenseType(gtk.LICENSE_GPL_3_0)
+		logo, err := gtk.ImageNewFromFile("/usr/share/icons/onedriver/onedriver-128.png")
+		if err != nil {
+			log.Error().Err(err).Msg("Could not find logo.")
+		} else {
+			aboutDialog.SetLogo(logo.GetPixbuf())
+		}
+		aboutDialog.Run()
+	})
+	popoverBox.PackStart(about, false, true, 0)
+
+	popoverBox.ShowAll()
+	popover.Add(popoverBox)
+	popover.SetPosition(gtk.POS_BOTTOM)
+	header.PackEnd(menuBtn)
+
 	mounts := ui.GetKnownMounts(config.CacheDir)
 	for _, mount := range mounts {
 		mount = unit.UnitNamePathUnescape(mount)
 
 		log.Info().Str("mount", mount).Msg("Found existing mount.")
 
-		row, sw := newMountRow(config, mount)
+		row, sw := newMountRow(*config, mount)
 		switches[mount] = sw
 		listbox.Insert(row, -1)
 	}
@@ -173,18 +216,6 @@ func activateCallback(config common.Config, app *gtk.Application) {
 	window.ShowAll()
 }
 
-func showErrorDialog(msg string, parentWindow gtk.IWindow) {
-	messageDialog := gtk.MessageDialogNew(
-		parentWindow,
-		gtk.DIALOG_DESTROY_WITH_PARENT,
-		gtk.MESSAGE_ERROR,
-		gtk.BUTTONS_CLOSE,
-		msg,
-	)
-	_ = messageDialog.Run()
-	messageDialog.Destroy()
-}
-
 // xdgOpenDir opens a folder in the user's default file browser.
 // Should be invoked as a goroutine to not block the main app.
 func xdgOpenDir(mount string) {
@@ -201,6 +232,7 @@ func xdgOpenDir(mount string) {
 }
 
 // newMountRow constructs a new ListBoxRow with the controls for an individual mountpoint.
+// mount is the path to the new mountpoint.
 func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Switch) {
 	row, _ := gtk.ListBoxRowNew()
 	row.SetSelectable(true)
@@ -237,11 +269,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 			Str("unitName", unitName).
 			Msg("Request to delete mount.")
 
-		dialog, _ := gtk.DialogNewWithButtons("Remove mountpoint?", nil, gtk.DIALOG_MODAL,
-			[]interface{}{"Cancel", gtk.RESPONSE_REJECT},
-			[]interface{}{"Remove", gtk.RESPONSE_ACCEPT},
-		)
-		if dialog.Run() == gtk.RESPONSE_ACCEPT {
+		if ui.CancelDialog("Remove mountpoint?", nil) {
 			log.Info().
 				Str("signal", "clicked").
 				Str("mount", mount).
@@ -255,7 +283,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 
 			row.Destroy()
 		}
-		dialog.Destroy()
 	})
 	box.PackEnd(deleteMountpointBtn, false, false, 0)
 
@@ -318,4 +345,117 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	row.SetName(mount)
 	row.ShowAll()
 	return row, mountToggle
+}
+
+func newSettingsWindow(config *common.Config, configPath string) {
+	const offset = 15
+
+	settingsWindow, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	settingsWindow.SetResizable(false)
+	settingsWindow.SetTitle("Settings")
+
+	// log level settings
+	settingsRowLog, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
+	logLevelLabel, _ := gtk.LabelNew("Log level")
+	settingsRowLog.PackStart(logLevelLabel, false, false, 0)
+
+	logLevelSelector, _ := gtk.ComboBoxTextNew()
+	for i, entry := range common.LogLevels() {
+		logLevelSelector.AppendText(entry)
+		if entry == config.LogLevel {
+			logLevelSelector.SetActive(i)
+		}
+	}
+	logLevelSelector.Connect("changed", func(box *gtk.ComboBoxText) {
+		config.LogLevel = box.GetActiveText()
+		log.Debug().
+			Str("newLevel", config.LogLevel).
+			Msg("Log level changed.")
+		zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
+		config.WriteConfig(configPath)
+	})
+	settingsRowLog.PackEnd(logLevelSelector, false, false, 0)
+
+	// cache dir settings
+	settingsRowCacheDir, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
+	cacheDirLabel, _ := gtk.LabelNew("Cache directory")
+	settingsRowCacheDir.PackStart(cacheDirLabel, false, false, 0)
+
+	cacheDirPicker, _ := gtk.ButtonNew()
+	cacheDirPicker.SetLabel(ui.EscapeHome(config.CacheDir))
+	cacheDirPicker.SetSizeRequest(200, 0)
+	cacheDirPicker.Connect("clicked", func(button *gtk.Button) {
+		oldPath, _ := button.GetLabel()
+		oldPath = ui.UnescapeHome(oldPath)
+		path := ui.DirChooser("Select an empty directory to use for storage")
+		if !ui.CancelDialog("Remount all drives?", settingsWindow) {
+			return
+		}
+		log.Warn().
+			Str("oldPath", oldPath).
+			Str("newPath", path).
+			Msg("All active drives will be remounted to move cache directory.")
+
+		// actually perform the stop+move op
+		isMounted := make([]string, 0)
+		for _, mount := range ui.GetKnownMounts(oldPath) {
+			unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, mount)
+			log.Info().
+				Str("mount", mount).
+				Str("unit", unitName).
+				Msg("Disabling mount.")
+			if mounted, _ := systemd.UnitIsActive(unitName); mounted {
+				isMounted = append(isMounted, unitName)
+			}
+
+			err := systemd.UnitSetActive(unitName, false)
+			if err != nil {
+				ui.Dialog("Could not disable mount: "+err.Error(),
+					gtk.MESSAGE_ERROR, settingsWindow)
+				log.Error().
+					Err(err).
+					Str("mount", mount).
+					Str("unit", unitName).
+					Msg("Could not disable mount.")
+				return
+			}
+
+			err = os.Rename(filepath.Join(oldPath, mount), filepath.Join(path, mount))
+			if err != nil {
+				ui.Dialog("Could not move cache for mount: "+err.Error(),
+					gtk.MESSAGE_ERROR, settingsWindow)
+				log.Error().
+					Err(err).
+					Str("mount", mount).
+					Str("unit", unitName).
+					Msg("Could not move cache for mount.")
+				return
+			}
+		}
+
+		// remount drives that were mounted before
+		for _, unitName := range isMounted {
+			err := systemd.UnitSetActive(unitName, true)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("unit", unitName).
+					Msg("Failed to restart unit.")
+			}
+		}
+
+		// all done
+		config.CacheDir = path
+		config.WriteConfig(configPath)
+		button.SetLabel(path)
+	})
+	settingsRowCacheDir.PackEnd(cacheDirPicker, false, false, 0)
+
+	// assemble rows
+	settingsWindowBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, offset)
+	settingsWindowBox.SetBorderWidth(offset)
+	settingsWindowBox.PackStart(settingsRowLog, true, true, 0)
+	settingsWindowBox.PackStart(settingsRowCacheDir, true, true, 0)
+	settingsWindow.Add(settingsWindowBox)
+	settingsWindow.ShowAll()
 }

@@ -40,6 +40,7 @@ install: onedriver onedriver-launcher
 	mkdir /usr/share/icons/onedriver/
 	cp resources/onedriver.svg /usr/share/icons/onedriver/
 	cp resources/onedriver.png /usr/share/icons/onedriver/
+	cp resources/onedriver-128.png /usr/share/icons/onedriver/
 	cp resources/onedriver.desktop /usr/share/applications/
 	cp resources/onedriver@.service /etc/systemd/user/
 	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
