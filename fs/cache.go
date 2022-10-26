@@ -23,6 +23,7 @@ type Filesystem struct {
 
 	metadata  sync.Map
 	db        *bolt.DB
+	content   string
 	auth      *graph.Auth
 	root      string // the id of the filesystem's root item
 	deltaLink string
@@ -46,22 +47,49 @@ var (
 )
 
 // NewFilesystem creates a new filesystem
-func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
-	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
+func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
+	// prepare cache
+	db, err := bolt.Open(
+		filepath.Join(cacheDir, "onedriver.db"),
+		0600,
+		&bolt.Options{Timeout: time.Second * 5},
+	)
 	if err != nil {
 		log.Fatal().Err(err).
 			Msg("Could not open DB. Is it already in use by another mount?")
 	}
+	contentDir := filepath.Join(cacheDir, "content")
+	os.Mkdir(contentDir, 0700)
 	db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(bucketContent)
 		tx.CreateBucketIfNotExists(bucketMetadata)
 		tx.CreateBucketIfNotExists(bucketDelta)
-		return nil
+
+		// migrate old content bucket to the local filesystem
+		b := tx.Bucket(bucketContent)
+		if b != nil {
+			log.Info().Msg("Found old content bucket, migrating to new db format.")
+			err := b.ForEach(func(k []byte, v []byte) error {
+				log.Info().Bytes("key", k).Msg("Migrating file.")
+				err := os.WriteFile(filepath.Join(contentDir, string(k)), v, 0600)
+				if err != nil {
+					return err
+				}
+				return b.Delete(k)
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("Migration failed.")
+			}
+		}
+		log.Info().Msg("Migration complete.")
+		return tx.DeleteBucket(bucketContent)
 	})
+
+	// ok, ready to start fs
 	fs := &Filesystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
 		auth:          auth,
 		db:            db,
+		content:       contentDir,
 		opendirs:      make(map[uint64][]*Inode),
 	}
 
@@ -515,47 +543,23 @@ func (f *Filesystem) MovePath(oldParent, newParent, oldName, newName string, aut
 
 // GetContent reads a file's content from disk.
 func (f *Filesystem) GetContent(id string) []byte {
-	var content []byte // nil
-	f.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		if tmp := b.Get([]byte(id)); tmp != nil {
-			content = make([]byte, len(tmp))
-			copy(content, tmp)
-		}
-		return nil
-	})
+	content, _ := os.ReadFile(filepath.Join(f.content, id))
 	return content
 }
 
 // InsertContent writes file content to disk.
 func (f *Filesystem) InsertContent(id string, content []byte) error {
-	return f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		return b.Put([]byte(id), content)
-	})
+	return os.WriteFile(filepath.Join(f.content, id), content, 0600)
 }
 
 // DeleteContent deletes content from disk.
 func (f *Filesystem) DeleteContent(id string) error {
-	return f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		return b.Delete([]byte(id))
-	})
+	return os.Remove(filepath.Join(f.content, id))
 }
 
 // MoveContent moves content from one ID to another
 func (f *Filesystem) MoveContent(oldID string, newID string) {
-	f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		content := b.Get([]byte(oldID))
-		if content == nil {
-			// already moved, or content never existed - nothing more for us to do
-			return nil
-		}
-		err := b.Put([]byte(newID), content)
-		b.Delete([]byte(oldID))
-		return err
-	})
+	os.Rename(filepath.Join(f.content, oldID), filepath.Join(f.content, newID))
 }
 
 // SerializeAll dumps all inode metadata currently in the cache to disk. This

@@ -125,7 +125,7 @@ func main() {
 	// create the filesystem
 	log.Info().Msgf("onedriver %s", common.Version())
 	auth := graph.Authenticate(config.AuthConfig, authPath, *headless)
-	filesystem := fs.NewFilesystem(auth, filepath.Join(cachePath, "onedriver.db"))
+	filesystem := fs.NewFilesystem(auth, cachePath)
 	go filesystem.DeltaLoop(30 * time.Second)
 	xdgVolumeInfo(filesystem, auth)
 
