@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -17,8 +18,9 @@ import (
 )
 
 const (
-	mountLoc = "mount"
-	TestDir  = mountLoc + "/onedriver_tests"
+	mountLoc  = "mount"
+	testDBLoc = "tmp"
+	TestDir   = mountLoc + "/onedriver_tests"
 )
 
 var auth *graph.Auth
@@ -50,7 +52,7 @@ func TestMain(m *testing.M) {
 
 	// reuses the cached data from the previous tests
 	server, _ := fuse.NewServer(
-		fs.NewFilesystem(auth, "test.db"),
+		fs.NewFilesystem(auth, filepath.Join(testDBLoc, "test")),
 		mountLoc,
 		&fuse.MountOptions{
 			Name:          "onedriver",

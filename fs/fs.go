@@ -15,7 +15,6 @@ import (
 
 const timeout = time.Second
 
-// getInodeContent returns a copy of the inode's content. Ensures that data is non-nil.
 func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
 	i.RLock()
 	defer i.RUnlock()
@@ -25,7 +24,7 @@ func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
 		copy(data, *i.data)
 		return &data
 	}
-	data := f.GetContent(i.DriveItem.ID)
+	data := f.content.Get(i.DriveItem.ID)
 	return &data
 }
 
@@ -459,7 +458,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	}
 
 	// try grabbing from disk
-	if content := f.GetContent(id); content != nil {
+	if content := f.content.Get(id); content != nil {
 		// verify content against what we're supposed to have
 		var hashMatch bool
 		inode.RLock()
@@ -547,7 +546,7 @@ func (f *Filesystem) Unlink(cancel <-chan struct{}, in *fuse.InHeader, name stri
 	}
 
 	f.DeleteID(id)
-	f.DeleteContent(id)
+	f.content.Delete(id)
 	return fuse.OK
 }
 
@@ -712,7 +711,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 	// wipe data from memory to avoid mem bloat over time
 	inode.Lock()
 	if inode.data != nil {
-		f.InsertContent(inode.DriveItem.ID, *inode.data)
+		f.content.Insert(inode.DriveItem.ID, *inode.data)
 		inode.data = nil
 	}
 	inode.Unlock()
@@ -790,7 +789,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 			Uint64("newSize", size).
 			Msg("")
 		if i.data == nil {
-			data := f.GetContent(i.DriveItem.ID)
+			data := f.content.Get(i.DriveItem.ID)
 			i.data = &data
 		}
 

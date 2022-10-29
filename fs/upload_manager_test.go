@@ -59,7 +59,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 
 	// now we create a new UploadManager from scratch, with the file injected
 	// into its db and confirm that the file gets uploaded
-	db, err := bolt.Open("test_upload_disk_serialization.db", 0644, nil)
+	db, err := bolt.Open(filepath.Join(testDBLoc, "test_upload_disk_serialization.db"), 0644, nil)
 	require.NoError(t, err)
 	db.Update(func(tx *bolt.Tx) error {
 		b, _ := tx.CreateBucket(bucketUploads)

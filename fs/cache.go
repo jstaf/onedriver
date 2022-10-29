@@ -23,7 +23,7 @@ type Filesystem struct {
 
 	metadata  sync.Map
 	db        *bolt.DB
-	content   string
+	content   *LoopbackCache
 	auth      *graph.Auth
 	root      string // the id of the filesystem's root item
 	deltaLink string
@@ -48,15 +48,19 @@ var (
 
 // NewFilesystem creates a new filesystem
 func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
-	// prepare cache
+	// prepare cache directory
+	if _, err := os.Stat(cacheDir); err != nil {
+		if err = os.Mkdir(cacheDir, 0700); err != nil {
+			log.Fatal().Err(err).Msg("Could not create cache directory.")
+		}
+	}
 	db, err := bolt.Open(
 		filepath.Join(cacheDir, "onedriver.db"),
 		0600,
 		&bolt.Options{Timeout: time.Second * 5},
 	)
 	if err != nil {
-		log.Fatal().Err(err).
-			Msg("Could not open DB. Is it already in use by another mount?")
+		log.Fatal().Err(err).Msg("Could not open DB. Is it already in use by another mount?")
 	}
 	contentDir := filepath.Join(cacheDir, "content")
 	os.Mkdir(contentDir, 0700)
@@ -87,9 +91,9 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 	// ok, ready to start fs
 	fs := &Filesystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
-		auth:          auth,
+		content:       NewLoopbackCache(contentDir),
 		db:            db,
-		content:       contentDir,
+		auth:          auth,
 		opendirs:      make(map[uint64][]*Inode),
 	}
 
@@ -519,7 +523,7 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 	if inode.IsDir() {
 		return nil
 	}
-	f.MoveContent(oldID, newID)
+	f.content.Move(oldID, newID)
 	return nil
 }
 
@@ -539,27 +543,6 @@ func (f *Filesystem) MovePath(oldParent, newParent, oldName, newName string, aut
 	inode.Parent.ID = parent.DriveItem.ID
 	f.InsertID(id, inode)
 	return nil
-}
-
-// GetContent reads a file's content from disk.
-func (f *Filesystem) GetContent(id string) []byte {
-	content, _ := os.ReadFile(filepath.Join(f.content, id))
-	return content
-}
-
-// InsertContent writes file content to disk.
-func (f *Filesystem) InsertContent(id string, content []byte) error {
-	return os.WriteFile(filepath.Join(f.content, id), content, 0600)
-}
-
-// DeleteContent deletes content from disk.
-func (f *Filesystem) DeleteContent(id string) error {
-	return os.Remove(filepath.Join(f.content, id))
-}
-
-// MoveContent moves content from one ID to another
-func (f *Filesystem) MoveContent(oldID string, newID string) {
-	os.Rename(filepath.Join(f.content, oldID), filepath.Join(f.content, newID))
 }
 
 // SerializeAll dumps all inode metadata currently in the cache to disk. This

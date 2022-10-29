@@ -15,13 +15,13 @@ all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
-	CGO_CFLAGS=-Wno-deprecated-declarations go build \
+	CGO_CFLAGS=-Wno-deprecated-declarations go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
 
 
 onedriver-headless: $(shell find fs/ cmd/common/ -type f) cmd/onedriver/main.go
-	CGO_ENABLED=0 go build -o onedriver-headless \
+	CGO_ENABLED=0 go build -v -o onedriver-headless \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
 

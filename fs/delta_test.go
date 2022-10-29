@@ -185,7 +185,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 func TestDeltaContentChangeBoth(t *testing.T) {
 	t.Parallel()
 
-	cache := NewFilesystem(auth, "test_delta_content_change_both.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_content_change_both"))
 	inode := NewInode("both_content_changed.txt", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/both_content_changed.txt", nil, inode)
 	original := []byte("initial content")
@@ -229,7 +229,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	} else {
 		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
 	}
-	cache.InsertContent(inode.DriveItem.ID, *inode.data)
+	cache.content.Insert(inode.DriveItem.ID, *inode.data)
 	inode.data = nil
 	inode.hasChanges = false
 
@@ -261,7 +261,7 @@ func TestDeltaBadContentInCache(t *testing.T) {
 		return false
 	}, retrySeconds, time.Second)
 
-	fs.InsertContent(id, []byte("wrong contents"))
+	fs.content.Insert(id, []byte("wrong contents"))
 	contents, err := ioutil.ReadFile(filepath.Join(DeltaDir, "corrupted"))
 	require.NoError(t, err)
 	if bytes.HasPrefix(contents, []byte("wrong")) {
@@ -294,7 +294,7 @@ func TestDeltaFolderDeletion(t *testing.T) {
 // We should only perform a delta deletion of a folder if it was nonempty
 func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_delta_folder_deletion_nonempty.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_folder_deletion_nonempty"))
 	dir := NewInode("folder", 0755|fuse.S_IFDIR, nil)
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, dir)
@@ -345,7 +345,7 @@ func TestDeltaNoModTimeUpdate(t *testing.T) {
 // https://github.com/jstaf/onedriver/issues/111
 func TestDeltaMissingHash(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_delta_missing_hash.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_missing_hash"))
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, file)
 
