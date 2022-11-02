@@ -11,7 +11,7 @@ onedriver (0.13.0-1) focal; urgency=low
   * onedriver now prefers multipart downloads for files >10MB instead of a single massive 
     GET request. This should significantly improve reliability when working with large files.
 
- -- Jeff Stafford <jeff.stafford@protonmail.com> Tue, Nov 1 22:00:00 -0400
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Tue, 1 Nov 2022 22:00:00 -0400
 
 onedriver (0.12.0-1) focal; urgency=low
 
