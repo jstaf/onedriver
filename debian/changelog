@@ -3,11 +3,15 @@ onedriver (0.13.0-1) focal; urgency=low
   * The GUI has been rewritten in golang for ease of maintenance and code sharing with 
     the rest of the onedriver application.
   * onedriver can now be configured with a config file at "~/.config/onedriver/config.yml".
+  * There is now a configuration menu in the GUI. You can now set a couple configuration
+    options that were previously only possible with "systemctl edit".
   * The onedriver CLI now stores its cache in the same path that the GUI expects,
     meaning that invoking the onedriver filesystem directly and via the GUI will share the
     cache as long as the mountpoint is the same.
+  * onedriver now prefers multipart downloads for files >10MB instead of a single massive 
+    GET request. This should significantly improve reliability when working with large files.
 
- -- Jeff Stafford <jeff.stafford@protonmail.com>  Sat, Sep 24 16:00:00 -0400
+ -- Jeff Stafford <jeff.stafford@protonmail.com> Tue, Nov 1 22:00:00 -0400
 
 onedriver (0.12.0-1) focal; urgency=low
 
