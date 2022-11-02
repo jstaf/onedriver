@@ -1,6 +1,7 @@
 package common
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -34,7 +35,7 @@ func LoadConfig(path string) *Config {
 		LogLevel: "debug",
 	}
 
-	conf, err := os.ReadFile(path)
+	conf, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -66,5 +67,5 @@ func (c Config) WriteConfig(path string) {
 	if err != nil {
 		log.Error().Err(err).Msg("Could not marshal config!")
 	}
-	os.WriteFile(path, out, 0600)
+	ioutil.WriteFile(path, out, 0600)
 }
