@@ -34,8 +34,8 @@ Suggests: systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
-metadata are downloaded on-demand with the goal of having no local state to
-break.
+metadata are downloaded on-demand instead of syncing the entire drive to
+your local computer.
 
 %prep
 %autosetup
@@ -45,8 +45,8 @@ break.
 # done via sed because #cgo flags appear to ignore #ifdef
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
-go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
-go build -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
+go build -v -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
+go build -v -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
 gzip resources/onedriver.1
 
 %install
@@ -59,6 +59,7 @@ mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
 cp %{name}-launcher %{buildroot}/%{_bindir}
 cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
+cp resources/%{name}-128.png %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
 cp resources/%{name}.desktop %{buildroot}/usr/share/applications
 cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
@@ -79,13 +80,17 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
-* Sat Sep 24 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
+* Tue Nov 1 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
 - The GUI has been rewritten in golang for ease of maintenance and code sharing with 
   the rest of the onedriver application.
 - onedriver can now be configured with a config file at "~/.config/onedriver/config.yml".
+- There is now a configuration menu in the GUI. You can now set a couple configuration
+  options that were previously only possible with "systemctl edit".
 - The onedriver CLI now stores its cache in the same path that the GUI expects,
   meaning that invoking the onedriver filesystem directly and via the GUI will share the
   cache as long as the mountpoint is the same.
+- onedriver now prefers multipart downloads for files >10MB instead of a single massive 
+  GET request. This should significantly improve reliability when working with large files.
 
 * Tue Nov 2 2021 Jeff Stafford <jeff.stafford@protonmail.com> - 0.12.0
 - Major internal rewrite - onedriver now talks directly to the kernel instead of using
