@@ -1,6 +1,6 @@
 Name:          onedriver
 Version:       0.13.0
-Release:       1%{?dist}
+Release:       2%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPLv3
@@ -45,8 +45,15 @@ your local computer.
 # done via sed because #cgo flags appear to ignore #ifdef
 sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
 %endif
-go build -v -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver
-go build -v -mod=vendor -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" ./cmd/onedriver-launcher
+if rpm -q pango | grep -q 1.42; then
+  BUILD_TAGS=-tags=pango_1_42,gtk_3_22
+fi
+go build -v -mod=vendor $BUILD_TAGS \
+  -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" \
+  ./cmd/onedriver
+go build -v -mod=vendor $BUILD_TAGS \
+  -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" \
+  ./cmd/onedriver-launcher
 gzip resources/onedriver.1
 
 %install
