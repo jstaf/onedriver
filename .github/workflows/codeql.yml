@@ -35,7 +35,7 @@ jobs:
 
     # Autobuild attempts to build any compiled languages  (C/C++, C#, Go, or Java).
     - name: Build onedriver
-      run: make onedriver
+      run: CGO_ENABLED=0 make onedriver
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
