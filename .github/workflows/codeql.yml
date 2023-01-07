@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp', 'go' ]
+        language: [ 'go' ]
 
     steps:
     - name: Checkout repository
