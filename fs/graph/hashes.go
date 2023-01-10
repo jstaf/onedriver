@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/jstaf/onedriver/fs/graph/quickxorhash"
@@ -15,12 +16,26 @@ func SHA1Hash(data *[]byte) string {
 	return strings.ToUpper(fmt.Sprintf("%x", sha1.Sum(*data)))
 }
 
+// SHA1HashStream hashes the contents of a stream.
+func SHA1HashStream(reader io.Reader) string {
+	hash := sha1.New()
+	io.Copy(hash, reader)
+	return strings.ToUpper(fmt.Sprintf("%x", hash.Sum(nil)))
+}
+
 // QuickXORHash computes the Microsoft-specific QuickXORHash. Reusing rclone's
 // implementation until I get the chance to rewrite/add test cases to remove the
 // dependency.
 func QuickXORHash(data *[]byte) string {
 	hash := quickxorhash.Sum(*data)
 	return base64.StdEncoding.EncodeToString(hash[:])
+}
+
+// QuickXORHashStream hashes a stream.
+func QuickXORHashStream(reader io.Reader) string {
+	hash := quickxorhash.New()
+	io.Copy(hash, reader)
+	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
 }
 
 // VerifyChecksum checks to see if a DriveItem's checksum matches what it's
