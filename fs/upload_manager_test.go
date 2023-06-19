@@ -101,13 +101,13 @@ func TestRepeatedUploads(t *testing.T) {
 		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
 		require.NoError(t, err)
 
-		content, err := graph.GetItemContent(item.ID, auth)
+		content, _, err := graph.GetItemContent(item.ID, auth)
 		require.NoError(t, err)
 
 		if !bytes.Equal(content, uploadme) {
 			// wait and retry once
 			time.Sleep(5 * time.Second)
-			content, err := graph.GetItemContent(item.ID, auth)
+			content, _, err := graph.GetItemContent(item.ID, auth)
 			require.NoError(t, err)
 			if !bytes.Equal(content, uploadme) {
 				t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)

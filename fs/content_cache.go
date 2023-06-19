@@ -1,8 +1,10 @@
 package fs
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -36,6 +38,15 @@ func (l *LoopbackCache) Insert(id string, content []byte) error {
 	return os.WriteFile(l.contentPath(id), content, 0600)
 }
 
+// InsertStream inserts a stream of data
+func (l *LoopbackCache) InsertStream(id string, reader io.Reader) (int64, error) {
+	fd, err := l.Open(id)
+	if err != nil {
+		return 0, err
+	}
+	return io.Copy(fd, reader)
+}
+
 // DeleteContent deletes content from disk.
 func (l *LoopbackCache) Delete(id string) error {
 	return os.Remove(l.contentPath(id))
@@ -53,12 +64,17 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 		return fd.(*os.File), nil
 	}
 
-	fd, err := os.OpenFile(l.contentPath(id), os.O_RDWR, 0700)
+	fd, err := os.OpenFile(l.contentPath(id), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
+	// Since we explicitly want to store *os.Files, we need to prevent the Go
+	// GC from trying to be "helpful" and closing files for us behind the
+	// scenes.
+	// https://github.com/hanwen/go-fuse/issues/371#issuecomment-694799535
+	runtime.SetFinalizer(fd, nil)
 	l.fds.Store(id, fd)
-	return fd, err
+	return fd, nil
 }
 
 func (l *LoopbackCache) Close(id string) {
@@ -68,20 +84,11 @@ func (l *LoopbackCache) Close(id string) {
 	}
 }
 
-// Write performs a normal file write. Returns number of bytes read and error.
-func (l *LoopbackCache) Write(id string, offset int64, data []byte) (int, error) {
-	fd, err := l.Open(id)
+// Size returns the size of the object in the cache
+func (l *LoopbackCache) Size(id string) int64 {
+	st, err := os.Stat(l.contentPath(id))
 	if err != nil {
-		return 0, err
+		return -1
 	}
-	return fd.WriteAt(data, offset)
-}
-
-// Read performs a normal file read. Returns number of bytes read and any error encountered.
-func (l LoopbackCache) Read(id string, offset int64, output []byte) (int, error) {
-	fd, err := l.Open(id)
-	if err != nil {
-		return 0, err
-	}
-	return fd.ReadAt(output, offset)
+	return st.Size()
 }

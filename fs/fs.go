@@ -19,9 +19,8 @@ func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
 	i.RLock()
 	defer i.RUnlock()
 
-	if i.data != nil {
-		data := make([]byte, i.DriveItem.Size)
-		copy(data, *i.data)
+	if i.fd != nil {
+		data := f.content.Get(i.DriveItem.ID)
 		return &data
 	}
 	data := f.content.Get(i.DriveItem.ID)
@@ -414,7 +413,7 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 			Str("path", child.Path()).
 			Str("mode", Octal(in.Mode)).
 			Msg("Child inode already exists, truncating.")
-		child.data = nil
+		child.fd = nil
 		child.DriveItem.Size = 0
 		child.hasChanges = true
 		return fuse.OK
@@ -458,7 +457,14 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	}
 
 	// try grabbing from disk
-	if content := f.content.Get(id); content != nil {
+	size := f.content.Size(id) // -1 if cache file does not yet exist
+	fd, err := f.content.Open(id)
+	if err != nil {
+		ctx.Error().Err(err).Msg("Could not create cache file.")
+		return fuse.EBADF
+	}
+	if size >= 0 {
+		// we have something on disk-
 		// verify content against what we're supposed to have
 		var hashMatch bool
 		inode.RLock()
@@ -468,9 +474,9 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 			// we just accept the cached content.
 			hashMatch = true
 		} else if driveType == graph.DriveTypePersonal {
-			hashMatch = inode.VerifyChecksum(graph.SHA1Hash(&content))
+			hashMatch = inode.VerifyChecksum(graph.SHA1HashStream(fd))
 		} else if driveType == graph.DriveTypeBusiness || driveType == graph.DriveTypeSharepoint {
-			hashMatch = inode.VerifyChecksum(graph.QuickXORHash(&content))
+			hashMatch = inode.VerifyChecksum(graph.QuickXORHashStream(fd))
 		} else {
 			hashMatch = true
 			ctx.Warn().Str("driveType", driveType).
@@ -484,9 +490,8 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 			inode.Lock()
 			defer inode.Unlock()
-			// this check is here in case the API file sizes are WRONG (it happens)
-			inode.DriveItem.Size = uint64(len(content))
-			inode.data = &content
+			// we check size ourselves in case the API file sizes are WRONG (it happens)
+			inode.DriveItem.Size = uint64(size)
 			return fuse.OK
 		}
 		ctx.Info().Str("drivetype", driveType).
@@ -499,7 +504,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	// didn't have it on disk, now try api
 	ctx.Info().Msg("Fetching remote content for item from API.")
 
-	body, err := graph.GetItemContent(id, f.auth)
+	size, err = graph.GetItemContentStream(id, f.auth, fd)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
@@ -508,8 +513,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	inode.Lock()
 	defer inode.Unlock()
 	// this check is here in case the API file sizes are WRONG (it happens)
-	inode.DriveItem.Size = uint64(len(body))
-	inode.data = &body
+	inode.DriveItem.Size = uint64(size)
 	return fuse.OK
 }
 
@@ -557,13 +561,16 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 		return fuse.ReadResultData(make([]byte, 0)), fuse.EBADF
 	}
 
+	id := inode.ID()
 	path := inode.Path()
 	ctx := log.With().
 		Str("op", "Read").
 		Uint64("nodeID", in.NodeId).
-		Str("id", inode.ID()).
+		Str("id", id).
 		Str("path", path).
+		Int("bufsize", len(buf)).
 		Logger()
+	ctx.Trace().Msg("")
 	if !inode.HasContent() {
 		ctx.Warn().Msg("Read called on a closed file descriptor! Reopening file for op.")
 		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader}, &fuse.OpenOut{})
@@ -572,33 +579,7 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 	// we are locked for the remainder of this op
 	inode.RLock()
 	defer inode.RUnlock()
-	if inode.data == nil {
-		// file got flushed somehow in between here and when this function was called
-		return fuse.ReadResultData(make([]byte, 0)), fuse.EAGAIN
-	}
-
-	off := in.Offset
-	end := int(off) + int(len(buf))
-	oend := end
-	size := len(*inode.data) // worse than using i.Size(), but some edge cases require it
-	if int(off) > size {
-		ctx.Error().
-			Uint64("bufsize", uint64(end)-off).
-			Int("fileSize", size).
-			Uint64("offset", off).
-			Msg("Offset was beyond file end (Onedrive metadata was wrong!). Refusing op.")
-		return fuse.ReadResultData(make([]byte, 0)), fuse.EINVAL
-	}
-	if end > size {
-		end = size
-	}
-	ctx.Trace().
-		Uint64("originalBufsize", uint64(oend)-off).
-		Uint64("bufsize", uint64(end)-off).
-		Int("fileSize", size).
-		Uint64("offset", off).
-		Msg("")
-	return fuse.ReadResultData((*inode.data)[off:end]), 0
+	return fuse.ReadResultFd(inode.fd.Fd(), int64(in.Offset), int(in.Size)), fuse.OK
 }
 
 // Write to an Inode like a file. Note that changes are 100% local until
@@ -618,10 +599,10 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 		Str("id", id).
 		Uint64("nodeID", in.NodeId).
 		Str("path", inode.Path()).
-		Logger()
-	ctx.Trace().
 		Int("bufsize", nWrite).
-		Int("offset", offset).Msg("")
+		Int("offset", offset).
+		Logger()
+	ctx.Trace().Msg("")
 
 	if !inode.HasContent() {
 		ctx.Warn().Msg("Write called on a closed file descriptor! Reopening file for write op.")
@@ -634,24 +615,16 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 
 	inode.Lock()
 	defer inode.Unlock()
-	currentSize := int(inode.DriveItem.Size) - 1
-	if offset > currentSize {
-		// the start of our write actually begins AFTER the current file ending...
-		// fill the gap with 0s
-		*inode.data = append(*inode.data, make([]byte, offset-currentSize)...)
+	n, err := inode.fd.WriteAt(data, int64(offset))
+	if err != nil {
+		ctx.Error().Err(err).Msg("Error during write")
+		return uint32(n), fuse.EIO
 	}
 
-	if offset+nWrite > currentSize {
-		// we've exceeded the file size, overwrite via append
-		*inode.data = append((*inode.data)[:offset], data...)
-	} else {
-		// writing inside the current file, overwrite in place
-		copy((*inode.data)[offset:], data)
-	}
-	// probably a better way to do this, but whatever
-	inode.DriveItem.Size = uint64(len(*inode.data))
+	st, _ := inode.fd.Stat()
+	inode.DriveItem.Size = uint64(st.Size())
 	inode.hasChanges = true
-	return uint32(nWrite), fuse.OK
+	return uint32(n), fuse.OK
 }
 
 // Fsync is a signal to ensure writes to the Inode are flushed to stable
@@ -676,10 +649,12 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 
 		// recompute hashes when saving new content
 		inode.DriveItem.File = &graph.File{}
+		fd, _ := f.content.Open(id)
 		if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-			inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(inode.data)
+			//TODO do hashes in-place on-disk
+			inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
 		} else {
-			inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
+			inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
 		}
 		inode.Unlock()
 
@@ -700,19 +675,20 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		return fuse.EBADF
 	}
 
-	log.Debug().
+	id := inode.ID()
+	log.Trace().
 		Str("op", "Flush").
-		Str("id", inode.ID()).
+		Str("id", id).
 		Str("path", inode.Path()).
 		Uint64("nodeID", in.NodeId).
 		Msg("")
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
 
-	// wipe data from memory to avoid mem bloat over time
+	// close file
 	inode.Lock()
-	if inode.data != nil {
-		f.content.Insert(inode.DriveItem.ID, *inode.data)
-		inode.data = nil
+	if inode.fd != nil {
+		f.content.Close(id)
+		inode.fd = nil
 	}
 	inode.Unlock()
 	return 0
@@ -788,18 +764,10 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 			Uint64("oldSize", i.DriveItem.Size).
 			Uint64("newSize", size).
 			Msg("")
-		if i.data == nil {
-			data := f.content.Get(i.DriveItem.ID)
-			i.data = &data
+		if i.fd == nil {
+			i.fd, _ = f.content.Open(i.DriveItem.ID)
 		}
-
-		if size > i.DriveItem.Size {
-			// unlikely to be hit, but implementing just in case
-			extra := make([]byte, size-i.DriveItem.Size)
-			*i.data = append(*i.data, extra...)
-		} else {
-			*i.data = (*i.data)[:size]
-		}
+		i.fd.Truncate(int64(size))
 		i.DriveItem.Size = size
 		i.hasChanges = true
 	}

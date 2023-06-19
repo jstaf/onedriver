@@ -4,6 +4,7 @@ package fs
 import (
 	"bytes"
 	"context"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -21,7 +22,9 @@ func (i *Inode) setContent(newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
 	now := time.Now()
 	i.DriveItem.ModTime = &now
-	i.data = &newContent
+	tmp, _ := os.CreateTemp("", "onedriver-test-")
+	i.fd = tmp
+	i.fd.Write(newContent)
 
 	if i.DriveItem.File == nil {
 		i.DriveItem.File = &graph.File{}
@@ -157,12 +160,13 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	require.NoError(t, err)
 	newContent := []byte("because it has been changed remotely!")
 	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, inode.data)
+	data, _ := io.ReadAll(inode.fd)
+	session, err := NewUploadSession(inode, &data)
 	require.NoError(t, err)
 	require.NoError(t, session.Upload(auth))
 
 	time.Sleep(time.Second * 10)
-	body, _ := graph.GetItemContent(inode.ID(), auth)
+	body, _, _ := graph.GetItemContent(inode.ID(), auth)
 	if !bytes.Equal(body, newContent) {
 		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
 	}
@@ -225,12 +229,11 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	// a flush)
 	inode.DriveItem.File = &graph.File{}
 	if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(inode.data)
+		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(inode.fd)
 	} else {
-		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
+		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(inode.fd)
 	}
-	cache.content.Insert(inode.DriveItem.ID, *inode.data)
-	inode.data = nil
+	cache.content.Close(inode.DriveItem.ID)
 	inode.hasChanges = false
 
 	// should now change the file
