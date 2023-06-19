@@ -235,7 +235,6 @@ func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
 			// as they will be null anyways
 			local.DriveItem.File = delta.File
 			local.hasChanges = false
-			local.fd = nil
 			return nil
 		}
 	}

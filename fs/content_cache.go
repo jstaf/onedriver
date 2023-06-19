@@ -57,6 +57,18 @@ func (l *LoopbackCache) Move(oldID string, newID string) error {
 	return os.Rename(l.contentPath(oldID), l.contentPath(newID))
 }
 
+// HasContent is used to find if we have a file or not in cache (in any state)
+func (l *LoopbackCache) HasContent(id string) bool {
+	// is it already open?
+	_, ok := l.fds.Load(id)
+	if ok {
+		return ok
+	}
+	// is it on disk?
+	_, err := os.Stat(l.contentPath(id))
+	return err == nil
+}
+
 // OpenContent returns a filehandle for subsequent access
 func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	if fd, ok := l.fds.Load(id); ok {

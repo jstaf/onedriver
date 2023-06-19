@@ -18,11 +18,6 @@ const timeout = time.Second
 func (f *Filesystem) getInodeContent(i *Inode) *[]byte {
 	i.RLock()
 	defer i.RUnlock()
-
-	if i.fd != nil {
-		data := f.content.Get(i.DriveItem.ID)
-		return &data
-	}
 	data := f.content.Get(i.DriveItem.ID)
 	return &data
 }
@@ -413,7 +408,8 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 			Str("path", child.Path()).
 			Str("mode", Octal(in.Mode)).
 			Msg("Child inode already exists, truncating.")
-		child.fd = nil
+		f.content.Delete(child.ID())
+		f.content.Open(child.ID())
 		child.DriveItem.Size = 0
 		child.hasChanges = true
 		return fuse.OK
@@ -451,7 +447,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	ctx.Debug().Msg("")
 
-	if inode.HasContent() {
+	if f.content.HasContent(id) {
 		// we already have data, likely the file is already opened somewhere
 		return fuse.OK
 	}
@@ -571,15 +567,17 @@ func (f *Filesystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (
 		Int("bufsize", len(buf)).
 		Logger()
 	ctx.Trace().Msg("")
-	if !inode.HasContent() {
-		ctx.Warn().Msg("Read called on a closed file descriptor! Reopening file for op.")
-		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader}, &fuse.OpenOut{})
+
+	fd, err := f.content.Open(id)
+	if err != nil {
+		ctx.Error().Err(err).Msg("Cache Open() failed.")
+		return fuse.ReadResultData(make([]byte, 0)), fuse.EIO
 	}
 
 	// we are locked for the remainder of this op
 	inode.RLock()
 	defer inode.RUnlock()
-	return fuse.ReadResultFd(inode.fd.Fd(), int64(in.Offset), int(in.Size)), fuse.OK
+	return fuse.ReadResultFd(fd.Fd(), int64(in.Offset), int(in.Size)), fuse.OK
 }
 
 // Write to an Inode like a file. Note that changes are 100% local until
@@ -604,24 +602,21 @@ func (f *Filesystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte
 		Logger()
 	ctx.Trace().Msg("")
 
-	if !inode.HasContent() {
-		ctx.Warn().Msg("Write called on a closed file descriptor! Reopening file for write op.")
-		f.Open(cancel, &fuse.OpenIn{InHeader: in.InHeader, Flags: in.WriteFlags}, &fuse.OpenOut{})
-		if !inode.HasContent() {
-			ctx.Error().Msg("Open() failed, cannot write to uninitialized file!")
-			return 0, fuse.EIO
-		}
+	fd, err := f.content.Open(id)
+	if err != nil {
+		ctx.Error().Msg("Cache Open() failed.")
+		return 0, fuse.EIO
 	}
 
 	inode.Lock()
 	defer inode.Unlock()
-	n, err := inode.fd.WriteAt(data, int64(offset))
+	n, err := fd.WriteAt(data, int64(offset))
 	if err != nil {
 		ctx.Error().Err(err).Msg("Error during write")
 		return uint32(n), fuse.EIO
 	}
 
-	st, _ := inode.fd.Stat()
+	st, _ := fd.Stat()
 	inode.DriveItem.Size = uint64(st.Size())
 	inode.hasChanges = true
 	return uint32(n), fuse.OK
@@ -651,7 +646,6 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		inode.DriveItem.File = &graph.File{}
 		fd, _ := f.content.Open(id)
 		if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-			//TODO do hashes in-place on-disk
 			inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
 		} else {
 			inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
@@ -683,14 +677,7 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		Uint64("nodeID", in.NodeId).
 		Msg("")
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
-
-	// close file
-	inode.Lock()
-	if inode.fd != nil {
-		f.content.Close(id)
-		inode.fd = nil
-	}
-	inode.Unlock()
+	f.content.Close(id)
 	return 0
 }
 
@@ -764,10 +751,8 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 			Uint64("oldSize", i.DriveItem.Size).
 			Uint64("newSize", size).
 			Msg("")
-		if i.fd == nil {
-			i.fd, _ = f.content.Open(i.DriveItem.ID)
-		}
-		i.fd.Truncate(int64(size))
+		fd, _ := f.content.Open(i.DriveItem.ID)
+		fd.Truncate(int64(size))
 		i.DriveItem.Size = size
 		i.hasChanges = true
 	}
