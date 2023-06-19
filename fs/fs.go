@@ -419,8 +419,7 @@ func (f *Filesystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name stri
 }
 
 // Open fetches a Inodes's content and initializes the .Data field with actual
-// data from the server. Data is loaded into memory on Open, and persisted to
-// disk on Flush.
+// data from the server.
 func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) fuse.Status {
 	id := f.TranslateID(in.NodeId)
 	inode := f.GetID(id)
@@ -447,69 +446,59 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	ctx.Debug().Msg("")
 
-	if f.content.HasContent(id) {
-		// we already have data, likely the file is already opened somewhere
-		return fuse.OK
-	}
-
 	// try grabbing from disk
-	size := f.content.Size(id) // -1 if cache file does not yet exist
 	fd, err := f.content.Open(id)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Could not create cache file.")
-		return fuse.EBADF
+		return fuse.EIO
 	}
-	if size >= 0 {
-		// we have something on disk-
-		// verify content against what we're supposed to have
-		var hashMatch bool
-		inode.RLock()
-		driveType := inode.DriveItem.Parent.DriveType
-		if isLocalID(id) {
-			// only check hashes if the file has been uploaded before, otherwise
-			// we just accept the cached content.
-			hashMatch = true
-		} else if driveType == graph.DriveTypePersonal {
-			hashMatch = inode.VerifyChecksum(graph.SHA1HashStream(fd))
-		} else if driveType == graph.DriveTypeBusiness || driveType == graph.DriveTypeSharepoint {
-			hashMatch = inode.VerifyChecksum(graph.QuickXORHashStream(fd))
-		} else {
-			hashMatch = true
-			ctx.Warn().Str("driveType", driveType).
-				Msg("Could not determine drive type, not checking hashes.")
-		}
-		inode.RUnlock()
 
-		if hashMatch {
-			// disk content is only used if the checksums match
-			ctx.Info().Msg("Found content in cache.")
-
-			inode.Lock()
-			defer inode.Unlock()
-			// we check size ourselves in case the API file sizes are WRONG (it happens)
-			inode.DriveItem.Size = uint64(size)
-			return fuse.OK
-		}
-		ctx.Info().Str("drivetype", driveType).
-			Msg("Not using cached item due to file hash mismatch.")
-	} else if isLocalID(id) {
-		ctx.Error().Msg("Item has a local ID, and we failed to find the cached local content!")
-		return fuse.ENODATA
+	if isLocalID(id) {
+		// just use whatever's present if we're the only ones who have it
+		return fuse.OK
 	}
+
+	// we have something on disk-
+	// verify content against what we're supposed to have
+	var hashMatch bool
+	inode.RLock()
+	driveType := inode.DriveItem.Parent.DriveType
+	if driveType == graph.DriveTypePersonal {
+		hashMatch = inode.VerifyChecksum(graph.SHA1HashStream(fd))
+	} else if driveType == graph.DriveTypeBusiness || driveType == graph.DriveTypeSharepoint {
+		hashMatch = inode.VerifyChecksum(graph.QuickXORHashStream(fd))
+	} else {
+		hashMatch = true
+		ctx.Warn().Str("driveType", driveType).
+			Msg("Could not determine drive type, not checking hashes.")
+	}
+	inode.RUnlock()
+
+	if hashMatch {
+		// disk content is only used if the checksums match
+		ctx.Info().Msg("Found content in cache.")
+
+		inode.Lock()
+		defer inode.Unlock()
+		// we check size ourselves in case the API file sizes are WRONG (it happens)
+		st, _ := fd.Stat()
+		inode.DriveItem.Size = uint64(st.Size())
+		return fuse.OK
+	}
+	ctx.Info().Str("drivetype", driveType).
+		Msg("Not using cached item due to file hash mismatch.")
 
 	// didn't have it on disk, now try api
 	ctx.Info().Msg("Fetching remote content for item from API.")
 
-	size, err = graph.GetItemContentStream(id, f.auth, fd)
+	inode.Lock()
+	defer inode.Unlock()
+	size, err := graph.GetItemContentStream(id, f.auth, fd)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
-
-	inode.Lock()
-	defer inode.Unlock()
-	// this check is here in case the API file sizes are WRONG (it happens)
-	inode.DriveItem.Size = uint64(size)
+	inode.DriveItem.Size = size
 	return fuse.OK
 }
 
@@ -644,7 +633,11 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 
 		// recompute hashes when saving new content
 		inode.DriveItem.File = &graph.File{}
-		fd, _ := f.content.Open(id)
+		fd, err := f.content.Open(id)
+		if err != nil {
+			ctx.Error().Err(err).Msg("Could not get fd.")
+		}
+		fd.Sync()
 		if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
 			inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
 		} else {

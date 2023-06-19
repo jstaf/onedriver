@@ -114,15 +114,15 @@ func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
 }
 
 // GetItemContent retrieves an item's content from the Graph endpoint.
-func GetItemContent(id string, auth *Auth) ([]byte, int64, error) {
+func GetItemContent(id string, auth *Auth) ([]byte, uint64, error) {
 	buf := bytes.NewBuffer(make([]byte, 0))
 	n, err := GetItemContentStream(id, auth, buf)
-	return buf.Bytes(), n, err
+	return buf.Bytes(), uint64(n), err
 }
 
 // GetItemContentStream is the same as GetItemContent, but writes data to an output
 // reader
-func GetItemContentStream(id string, auth *Auth, output io.Writer) (int64, error) {
+func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, error) {
 	// determine the size of the item
 	item, err := GetItem(id, auth)
 	if err != nil {
@@ -138,11 +138,11 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (int64, error
 			return 0, err
 		}
 		n, err := output.Write(content)
-		return int64(n), err
+		return uint64(n), err
 	}
 
 	// multipart download
-	var n int64
+	var n uint64
 	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
 		start := i * downloadChunkSize
 		end := start + downloadChunkSize - 1
@@ -154,7 +154,7 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (int64, error
 			return n, err
 		}
 		written, err := output.Write(content)
-		n += int64(written)
+		n += uint64(written)
 		if err != nil {
 			return n, err
 		}

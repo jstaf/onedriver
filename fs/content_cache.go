@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // LoopbackCache stores the content for files under a folder as regular files
@@ -57,6 +59,12 @@ func (l *LoopbackCache) Move(oldID string, newID string) error {
 	return os.Rename(l.contentPath(oldID), l.contentPath(newID))
 }
 
+// IsOpen returns true if the file is already opened somewhere
+func (l *LoopbackCache) IsOpen(id string) bool {
+	_, ok := l.fds.Load(id)
+	return ok
+}
+
 // HasContent is used to find if we have a file or not in cache (in any state)
 func (l *LoopbackCache) HasContent(id string) bool {
 	// is it already open?
@@ -80,6 +88,11 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, err = fd.Stat()
+	if err != nil {
+		log.Error().Err(err).Msg("but why")
+	}
+
 	// Since we explicitly want to store *os.Files, we need to prevent the Go
 	// GC from trying to be "helpful" and closing files for us behind the
 	// scenes.
@@ -91,16 +104,9 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 
 func (l *LoopbackCache) Close(id string) {
 	if fd, ok := l.fds.Load(id); ok {
-		fd.(*os.File).Close()
+		file := fd.(*os.File)
+		file.Sync()
+		file.Close()
 		l.fds.Delete(id)
 	}
-}
-
-// Size returns the size of the object in the cache
-func (l *LoopbackCache) Size(id string) int64 {
-	st, err := os.Stat(l.contentPath(id))
-	if err != nil {
-		return -1
-	}
-	return st.Size()
 }
