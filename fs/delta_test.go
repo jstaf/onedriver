@@ -17,12 +17,12 @@ import (
 )
 
 // a helper function for use with tests
-func (i *Inode) setContent(newContent []byte) {
+func (i *Inode) setContent(f *Filesystem, newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
 	now := time.Now()
 	i.DriveItem.ModTime = &now
 
-	fs.content.Insert(i.ID(), newContent)
+	f.content.Insert(i.ID(), newContent)
 
 	if i.DriveItem.File == nil {
 		i.DriveItem.File = &graph.File{}
@@ -157,7 +157,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	inode := NewInodeDriveItem(item)
 	require.NoError(t, err)
 	newContent := []byte("because it has been changed remotely!")
-	inode.setContent(newContent)
+	inode.setContent(fs, newContent)
 	data := fs.content.Get(inode.ID())
 	session, err := NewUploadSession(inode, &data)
 	require.NoError(t, err)
@@ -191,7 +191,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	inode := NewInode("both_content_changed.txt", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/both_content_changed.txt", nil, inode)
 	original := []byte("initial content")
-	inode.setContent(original)
+	inode.setContent(cache, original)
 
 	// write to, but do not close the file to simulate an in-use local file
 	local := []byte("local write content")

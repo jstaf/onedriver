@@ -22,7 +22,7 @@ func TestUploadSession(t *testing.T) {
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
 	data := []byte("our super special data")
-	inode.setContent(data)
+	inode.setContent(fs, data)
 	mtime := inode.ModTime()
 
 	session, err := NewUploadSession(inode, &data)
@@ -49,7 +49,7 @@ func TestUploadSession(t *testing.T) {
 
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
-	inode.setContent(newData)
+	inode.setContent(fs, newData)
 
 	session2, err := NewUploadSession(inode, &newData)
 	require.NoError(t, err)

@@ -44,7 +44,11 @@ var (
 	bucketContent  = []byte("content")
 	bucketMetadata = []byte("metadata")
 	bucketDelta    = []byte("delta")
+	bucketVersion  = []byte("version")
 )
+
+// so we can tell what format the db has
+const fsVersion = "1"
 
 // NewFilesystem creates a new filesystem
 func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
@@ -62,20 +66,24 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Could not open DB. Is it already in use by another mount?")
 	}
-	contentDir := filepath.Join(cacheDir, "content")
-	os.Mkdir(contentDir, 0700)
+
+	content := NewLoopbackCache(filepath.Join(cacheDir, "content"))
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(bucketMetadata)
 		tx.CreateBucketIfNotExists(bucketDelta)
+		versionBucket, _ := tx.CreateBucketIfNotExists(bucketVersion)
 
 		// migrate old content bucket to the local filesystem
 		b := tx.Bucket(bucketContent)
 		if b != nil {
-			log.Info().Msg("Found old content bucket, migrating to new db format.")
+			oldVersion := "0"
+			log.Info().
+				Str("oldVersion", oldVersion).
+				Str("version", fsVersion).
+				Msg("Migrating to new db format.")
 			err := b.ForEach(func(k []byte, v []byte) error {
-				log.Info().Bytes("key", k).Msg("Migrating file.")
-				err := os.WriteFile(filepath.Join(contentDir, string(k)), v, 0600)
-				if err != nil {
+				log.Info().Bytes("key", k).Msg("Migrating file content.")
+				if err := content.Insert(string(k), v); err != nil {
 					return err
 				}
 				return b.Delete(k)
@@ -83,15 +91,19 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 			if err != nil {
 				log.Error().Err(err).Msg("Migration failed.")
 			}
+			tx.DeleteBucket(bucketContent)
+			log.Info().
+				Str("oldVersion", oldVersion).
+				Str("version", fsVersion).
+				Msg("Migrations complete.")
 		}
-		log.Info().Msg("Migration complete.")
-		return tx.DeleteBucket(bucketContent)
+		return versionBucket.Put([]byte("version"), []byte(fsVersion))
 	})
 
 	// ok, ready to start fs
 	fs := &Filesystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
-		content:       NewLoopbackCache(contentDir),
+		content:       content,
 		db:            db,
 		auth:          auth,
 		opendirs:      make(map[uint64][]*Inode),
