@@ -11,8 +11,7 @@ RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 CGO_CFLAGS := CGO_CFLAGS=-Wno-deprecated-declarations
 
 # test-specific variables
-TEST_UID := $(shell id -u)
-TEST_GID := $(shell id -g)
+TEST_UID := $(shell whoami)
 GORACE := GORACE="log_path=fusefs_tests.race strip_path_prefix=1"
 
 all: onedriver onedriver-launcher
@@ -109,7 +108,7 @@ dmel.fa:
 
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
-# permission to mount the fuse filesystem.
+# permission to deny network access to onedriver during the test.
 test: onedriver onedriver-launcher dmel.fa
 	rm -f *.race* fusefs_tests.log
 	CGO_ENABLED=0 gotest -v -parallel=8 -count=1 $(shell go list ./ui/... | grep -v offline)
@@ -118,7 +117,7 @@ test: onedriver onedriver-launcher dmel.fa
 	$(CGO_CFLAGS) $(GORACE) gotest -race -v -parallel=8 -count=1 ./fs
 	$(CGO_CFLAGS) go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
-	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
+	sudo unshare -n sudo -u $(TEST_UID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
 # will literally purge everything: all built artifacts, all logs, all tests,
