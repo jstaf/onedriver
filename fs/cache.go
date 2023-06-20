@@ -23,6 +23,7 @@ type Filesystem struct {
 
 	metadata  sync.Map
 	db        *bolt.DB
+	content   *LoopbackCache
 	auth      *graph.Auth
 	root      string // the id of the filesystem's root item
 	deltaLink string
@@ -43,25 +44,68 @@ var (
 	bucketContent  = []byte("content")
 	bucketMetadata = []byte("metadata")
 	bucketDelta    = []byte("delta")
+	bucketVersion  = []byte("version")
 )
 
+// so we can tell what format the db has
+const fsVersion = "1"
+
 // NewFilesystem creates a new filesystem
-func NewFilesystem(auth *graph.Auth, dbpath string) *Filesystem {
-	db, err := bolt.Open(dbpath, 0600, &bolt.Options{Timeout: time.Second * 5})
-	if err != nil {
-		log.Fatal().Err(err).
-			Msg("Could not open DB. Is it already in use by another mount?")
+func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
+	// prepare cache directory
+	if _, err := os.Stat(cacheDir); err != nil {
+		if err = os.Mkdir(cacheDir, 0700); err != nil {
+			log.Fatal().Err(err).Msg("Could not create cache directory.")
+		}
 	}
+	db, err := bolt.Open(
+		filepath.Join(cacheDir, "onedriver.db"),
+		0600,
+		&bolt.Options{Timeout: time.Second * 5},
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Could not open DB. Is it already in use by another mount?")
+	}
+
+	content := NewLoopbackCache(filepath.Join(cacheDir, "content"))
 	db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(bucketContent)
 		tx.CreateBucketIfNotExists(bucketMetadata)
 		tx.CreateBucketIfNotExists(bucketDelta)
-		return nil
+		versionBucket, _ := tx.CreateBucketIfNotExists(bucketVersion)
+
+		// migrate old content bucket to the local filesystem
+		b := tx.Bucket(bucketContent)
+		if b != nil {
+			oldVersion := "0"
+			log.Info().
+				Str("oldVersion", oldVersion).
+				Str("version", fsVersion).
+				Msg("Migrating to new db format.")
+			err := b.ForEach(func(k []byte, v []byte) error {
+				log.Info().Bytes("key", k).Msg("Migrating file content.")
+				if err := content.Insert(string(k), v); err != nil {
+					return err
+				}
+				return b.Delete(k)
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("Migration failed.")
+			}
+			tx.DeleteBucket(bucketContent)
+			log.Info().
+				Str("oldVersion", oldVersion).
+				Str("version", fsVersion).
+				Msg("Migrations complete.")
+		}
+		return versionBucket.Put([]byte("version"), []byte(fsVersion))
 	})
+
+	// ok, ready to start fs
 	fs := &Filesystem{
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
-		auth:          auth,
+		content:       content,
 		db:            db,
+		auth:          auth,
 		opendirs:      make(map[uint64][]*Inode),
 	}
 
@@ -491,7 +535,7 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 	if inode.IsDir() {
 		return nil
 	}
-	f.MoveContent(oldID, newID)
+	f.content.Move(oldID, newID)
 	return nil
 }
 
@@ -511,51 +555,6 @@ func (f *Filesystem) MovePath(oldParent, newParent, oldName, newName string, aut
 	inode.Parent.ID = parent.DriveItem.ID
 	f.InsertID(id, inode)
 	return nil
-}
-
-// GetContent reads a file's content from disk.
-func (f *Filesystem) GetContent(id string) []byte {
-	var content []byte // nil
-	f.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		if tmp := b.Get([]byte(id)); tmp != nil {
-			content = make([]byte, len(tmp))
-			copy(content, tmp)
-		}
-		return nil
-	})
-	return content
-}
-
-// InsertContent writes file content to disk.
-func (f *Filesystem) InsertContent(id string, content []byte) error {
-	return f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		return b.Put([]byte(id), content)
-	})
-}
-
-// DeleteContent deletes content from disk.
-func (f *Filesystem) DeleteContent(id string) error {
-	return f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		return b.Delete([]byte(id))
-	})
-}
-
-// MoveContent moves content from one ID to another
-func (f *Filesystem) MoveContent(oldID string, newID string) {
-	f.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketContent)
-		content := b.Get([]byte(oldID))
-		if content == nil {
-			// already moved, or content never existed - nothing more for us to do
-			return nil
-		}
-		err := b.Put([]byte(newID), content)
-		b.Delete([]byte(oldID))
-		return err
-	})
 }
 
 // SerializeAll dumps all inode metadata currently in the cache to disk. This

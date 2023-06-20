@@ -21,6 +21,7 @@ import (
 
 const (
 	mountLoc     = "mount"
+	testDBLoc    = "tmp"
 	TestDir      = mountLoc + "/onedriver_tests"
 	DeltaDir     = TestDir + "/delta"
 	retrySeconds = 60 * time.Second //lint:ignore ST1011 a
@@ -49,10 +50,8 @@ func TestMain(m *testing.M) {
 	exec.Command("fusermount", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 	// wipe all cached data from previous tests
-	toDelete, _ := filepath.Glob("test*.db")
-	for _, db := range toDelete {
-		os.Remove(db)
-	}
+	os.RemoveAll(testDBLoc)
+	os.Mkdir(testDBLoc, 0755)
 
 	f, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
@@ -60,7 +59,7 @@ func TestMain(m *testing.M) {
 	defer f.Close()
 
 	auth = graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
-	fs = NewFilesystem(auth, "test.db")
+	fs = NewFilesystem(auth, filepath.Join(testDBLoc, "test"))
 	server, _ := fuse.NewServer(
 		fs,
 		mountLoc,

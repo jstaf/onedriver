@@ -22,11 +22,10 @@ func TestUploadSession(t *testing.T) {
 
 	inode := NewInode("uploadSessionSmall.txt", 0644, testDir)
 	data := []byte("our super special data")
-	inode.data = &data
-	inode.DriveItem.Size = uint64(len(data))
+	inode.setContent(fs, data)
 	mtime := inode.ModTime()
 
-	session, err := NewUploadSession(inode, inode.data)
+	session, err := NewUploadSession(inode, &data)
 	require.NoError(t, err)
 	err = session.Upload(auth)
 	require.NoError(t, err)
@@ -38,7 +37,7 @@ func TestUploadSession(t *testing.T) {
 		t.Errorf("session modtime changed - before: %d - after: %d", mtime, sessionMtime)
 	}
 
-	resp, err := graph.GetItemContent(session.ID, auth)
+	resp, _, err := graph.GetItemContent(session.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(data, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, resp)
@@ -50,15 +49,14 @@ func TestUploadSession(t *testing.T) {
 
 	// we overwrite and upload again to test uploading with the new remote id
 	newData := []byte("new data is extra long so it covers the old one completely")
-	inode.data = &newData
-	inode.DriveItem.Size = uint64(len(newData))
+	inode.setContent(fs, newData)
 
-	session2, err := NewUploadSession(inode, inode.data)
+	session2, err := NewUploadSession(inode, &newData)
 	require.NoError(t, err)
 	err = session2.Upload(auth)
 	require.NoError(t, err)
 
-	resp, err = graph.GetItemContent(session.ID, auth)
+	resp, _, err = graph.GetItemContent(session.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(newData, resp) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", newData, resp)
@@ -80,7 +78,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, err := graph.GetItemContent(item.ID, auth)
+	content, _, err := graph.GetItemContent(item.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
@@ -97,7 +95,7 @@ func TestUploadSessionSmallFS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, err = graph.GetItemContent(item2.ID, auth)
+	content, _, err = graph.GetItemContent(item2.ID, auth)
 	require.NoError(t, err)
 	if !bytes.Equal(content, data) {
 		t.Fatalf("Data mismatch. Original content: %s\nRemote content: %s\n", data, content)
@@ -142,7 +140,7 @@ func TestUploadSessionLargeFS(t *testing.T) {
 	}, 120*time.Second, time.Second, "Upload session did not complete successfully!")
 
 	// test multipart downloads as a bonus part of the test
-	downloaded, err := graph.GetItemContent(item.ID, auth)
+	downloaded, _, err := graph.GetItemContent(item.ID, auth)
 	assert.NoError(t, err)
 	assert.Equal(t, graph.SHA1Hash(&contents), graph.SHA1Hash(&downloaded),
 		"Downloaded content did not match original content.")

@@ -59,7 +59,7 @@ func TestUploadDiskSerialization(t *testing.T) {
 
 	// now we create a new UploadManager from scratch, with the file injected
 	// into its db and confirm that the file gets uploaded
-	db, err := bolt.Open("test_upload_disk_serialization.db", 0644, nil)
+	db, err := bolt.Open(filepath.Join(testDBLoc, "test_upload_disk_serialization.db"), 0644, nil)
 	require.NoError(t, err)
 	db.Update(func(tx *bolt.Tx) error {
 		b, _ := tx.CreateBucket(bucketUploads)
@@ -101,13 +101,13 @@ func TestRepeatedUploads(t *testing.T) {
 		item, err := graph.GetItemPath("/onedriver_tests/repeated_upload.txt", auth)
 		require.NoError(t, err)
 
-		content, err := graph.GetItemContent(item.ID, auth)
+		content, _, err := graph.GetItemContent(item.ID, auth)
 		require.NoError(t, err)
 
 		if !bytes.Equal(content, uploadme) {
 			// wait and retry once
 			time.Sleep(5 * time.Second)
-			content, err := graph.GetItemContent(item.ID, auth)
+			content, _, err := graph.GetItemContent(item.ID, auth)
 			require.NoError(t, err)
 			if !bytes.Equal(content, uploadme) {
 				t.Fatalf("Upload failed - got \"%s\", wanted \"%s\"", content, uploadme)

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // DriveTypePersonal and friends represent the possible different values for a
@@ -113,35 +116,61 @@ func GetItemPath(path string, auth *Auth) (*DriveItem, error) {
 }
 
 // GetItemContent retrieves an item's content from the Graph endpoint.
-func GetItemContent(id string, auth *Auth) ([]byte, error) {
+func GetItemContent(id string, auth *Auth) ([]byte, uint64, error) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+	n, err := GetItemContentStream(id, auth, buf)
+	return buf.Bytes(), uint64(n), err
+}
+
+// GetItemContentStream is the same as GetItemContent, but writes data to an output
+// reader
+func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, error) {
 	// determine the size of the item
 	item, err := GetItem(id, auth)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	const downloadChunkSize = 10 * 1024 * 1024
 	downloadURL := fmt.Sprintf("/me/drive/items/%s/content", id)
 	if item.Size <= downloadChunkSize {
 		// simple one-shot download
-		return Get(downloadURL, auth)
+		content, err := Get(downloadURL, auth)
+		if err != nil {
+			return 0, err
+		}
+		n, err := output.Write(content)
+		return uint64(n), err
 	}
 
 	// multipart download
-	contents := make([]byte, 0)
+	var n uint64
 	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
 		start := i * downloadChunkSize
 		end := start + downloadChunkSize - 1
+		log.Info().
+			Str("id", item.ID).
+			Str("name", item.Name).
+			Msgf("Downloading bytes %d-%d/%d.", start, end, item.Size)
 		content, err := Get(downloadURL, auth, Header{
 			key:   "Range",
 			value: fmt.Sprintf("bytes=%d-%d", start, end),
 		})
 		if err != nil {
-			return nil, err
+			return n, err
 		}
-		contents = append(contents, content...)
+		written, err := output.Write(content)
+		n += uint64(written)
+		if err != nil {
+			return n, err
+		}
 	}
-	return contents, nil
+	log.Info().
+		Str("id", item.ID).
+		Str("name", item.Name).
+		Uint64("size", n).
+		Msgf("Download completed!")
+	return n, nil
 }
 
 // Remove removes a directory or file by ID

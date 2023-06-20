@@ -17,11 +17,12 @@ import (
 )
 
 // a helper function for use with tests
-func (i *Inode) setContent(newContent []byte) {
+func (i *Inode) setContent(f *Filesystem, newContent []byte) {
 	i.DriveItem.Size = uint64(len(newContent))
 	now := time.Now()
 	i.DriveItem.ModTime = &now
-	i.data = &newContent
+
+	f.content.Insert(i.ID(), newContent)
 
 	if i.DriveItem.File == nil {
 		i.DriveItem.File = &graph.File{}
@@ -156,13 +157,14 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 	inode := NewInodeDriveItem(item)
 	require.NoError(t, err)
 	newContent := []byte("because it has been changed remotely!")
-	inode.setContent(newContent)
-	session, err := NewUploadSession(inode, inode.data)
+	inode.setContent(fs, newContent)
+	data := fs.content.Get(inode.ID())
+	session, err := NewUploadSession(inode, &data)
 	require.NoError(t, err)
 	require.NoError(t, session.Upload(auth))
 
 	time.Sleep(time.Second * 10)
-	body, _ := graph.GetItemContent(inode.ID(), auth)
+	body, _, _ := graph.GetItemContent(inode.ID(), auth)
 	if !bytes.Equal(body, newContent) {
 		t.Fatalf("Failed to upload test file. Remote content: \"%s\"", body)
 	}
@@ -185,11 +187,11 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 func TestDeltaContentChangeBoth(t *testing.T) {
 	t.Parallel()
 
-	cache := NewFilesystem(auth, "test_delta_content_change_both.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_content_change_both"))
 	inode := NewInode("both_content_changed.txt", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/both_content_changed.txt", nil, inode)
 	original := []byte("initial content")
-	inode.setContent(original)
+	inode.setContent(cache, original)
 
 	// write to, but do not close the file to simulate an in-use local file
 	local := []byte("local write content")
@@ -224,13 +226,13 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	// act as if the file is now flushed (these are the ops that would happen during
 	// a flush)
 	inode.DriveItem.File = &graph.File{}
+	fd, _ := fs.content.Open(inode.ID())
 	if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(inode.data)
+		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
 	} else {
-		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(inode.data)
+		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
 	}
-	cache.InsertContent(inode.DriveItem.ID, *inode.data)
-	inode.data = nil
+	cache.content.Close(inode.DriveItem.ID)
 	inode.hasChanges = false
 
 	// should now change the file
@@ -261,7 +263,7 @@ func TestDeltaBadContentInCache(t *testing.T) {
 		return false
 	}, retrySeconds, time.Second)
 
-	fs.InsertContent(id, []byte("wrong contents"))
+	fs.content.Insert(id, []byte("wrong contents"))
 	contents, err := ioutil.ReadFile(filepath.Join(DeltaDir, "corrupted"))
 	require.NoError(t, err)
 	if bytes.HasPrefix(contents, []byte("wrong")) {
@@ -294,7 +296,7 @@ func TestDeltaFolderDeletion(t *testing.T) {
 // We should only perform a delta deletion of a folder if it was nonempty
 func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_delta_folder_deletion_nonempty.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_folder_deletion_nonempty"))
 	dir := NewInode("folder", 0755|fuse.S_IFDIR, nil)
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, dir)
@@ -345,7 +347,7 @@ func TestDeltaNoModTimeUpdate(t *testing.T) {
 // https://github.com/jstaf/onedriver/issues/111
 func TestDeltaMissingHash(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_delta_missing_hash.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_delta_missing_hash"))
 	file := NewInode("file", 0644|fuse.S_IFREG, nil)
 	cache.InsertPath("/folder", nil, file)
 

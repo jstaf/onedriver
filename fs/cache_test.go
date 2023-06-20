@@ -3,6 +3,7 @@ package fs
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ import (
 
 func TestRootGet(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_root_get.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_root_get"))
 	root, err := cache.GetPath("/", auth)
 	require.NoError(t, err)
 	assert.Equal(t, "/", root.Path(), "Root path did not resolve correctly.")
@@ -19,7 +20,7 @@ func TestRootGet(t *testing.T) {
 
 func TestRootChildrenUpdate(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_root_children_update.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_root_children_update"))
 	children, err := cache.GetChildrenPath("/", auth)
 	require.NoError(t, err)
 
@@ -30,7 +31,7 @@ func TestRootChildrenUpdate(t *testing.T) {
 
 func TestSubdirGet(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_subdir_get.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_subdir_get"))
 	documents, err := cache.GetPath("/Documents", auth)
 	require.NoError(t, err)
 	assert.Equal(t, "Documents", documents.Name(), "Failed to fetch \"/Documents\".")
@@ -38,7 +39,7 @@ func TestSubdirGet(t *testing.T) {
 
 func TestSubdirChildrenUpdate(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_subdir_children_update.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_subdir_children_update"))
 	children, err := cache.GetChildrenPath("/Documents", auth)
 	require.NoError(t, err)
 
@@ -54,7 +55,7 @@ func TestSubdirChildrenUpdate(t *testing.T) {
 
 func TestSamePointer(t *testing.T) {
 	t.Parallel()
-	cache := NewFilesystem(auth, "test_same_pointer.db")
+	cache := NewFilesystem(auth, filepath.Join(testDBLoc, "test_same_pointer"))
 	item, _ := cache.GetPath("/Documents", auth)
 	item2, _ := cache.GetPath("/Documents", auth)
 	if item != item2 {

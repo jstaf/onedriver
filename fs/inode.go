@@ -26,7 +26,6 @@ type Inode struct {
 	graph.DriveItem
 	nodeID     uint64   // filesystem node id
 	children   []string // a slice of ids, nil when uninitialized
-	data       *[]byte  // empty by default
 	hasChanges bool     // used to trigger an upload on flush
 	subdir     uint32   // used purely by NLink()
 	mode       uint32   // do not set manually
@@ -53,7 +52,6 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 		parent.RUnlock()
 	}
 
-	var empty []byte
 	currentTime := time.Now()
 	return &Inode{
 		DriveItem: graph.DriveItem{
@@ -63,7 +61,6 @@ func NewInode(name string, mode uint32, parent *Inode) *Inode {
 			ModTime: &currentTime,
 		},
 		children: make([]string, 0),
-		data:     &empty,
 		mode:     mode,
 	}
 }
@@ -197,13 +194,6 @@ func (i *Inode) Path() string {
 	}
 	prepath := strings.TrimPrefix(i.DriveItem.Parent.Path+"/"+name, "/drive/root:")
 	return strings.Replace(prepath, "//", "/", -1)
-}
-
-// HasContent returns whether the file has been populated with data
-func (i *Inode) HasContent() bool {
-	i.RLock()
-	defer i.RUnlock()
-	return i.data != nil
 }
 
 // HasChanges returns true if the file has local changes that haven't been

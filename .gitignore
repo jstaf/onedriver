@@ -5,6 +5,7 @@ compile_flags.txt
 .date
 mount/
 build/
+tmp/
 *.json
 *.bak
 *.log*

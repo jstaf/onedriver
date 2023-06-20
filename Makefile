@@ -6,30 +6,31 @@ RELEASE := $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: 
 DIST := $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
 RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 
-# test-specific variables
-TEST_UID := $(shell id -u)
-TEST_GID := $(shell id -g)
+# -Wno-deprecated-declarations is for gotk3, which uses deprecated methods for older
+# glib compatibility: https://github.com/gotk3/gotk3/issues/762#issuecomment-919035313
+CGO_CFLAGS := CGO_CFLAGS=-Wno-deprecated-declarations
 
+# test-specific variables
+TEST_UID := $(shell whoami)
+GORACE := GORACE="log_path=fusefs_tests.race strip_path_prefix=1"
 
 all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
-	CGO_CFLAGS=-Wno-deprecated-declarations go build \
+	$(CGO_CFLAGS) go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
 
 
 onedriver-headless: $(shell find fs/ cmd/common/ -type f) cmd/onedriver/main.go
-	CGO_ENABLED=0 go build -o onedriver-headless \
+	CGO_ENABLED=0 go build -v -o onedriver-headless \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
 
 
-# -Wno-deprecated-declarations is for gotk3, which uses deprecated methods for older
-# glib compatibility: https://github.com/gotk3/gotk3/issues/762#issuecomment-919035313
 onedriver-launcher: $(shell find ui/ cmd/common/ -type f) cmd/onedriver-launcher/main.go
-	CGO_CFLAGS=-Wno-deprecated-declarations go build -v \
+	$(CGO_CFLAGS) go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver-launcher
 
@@ -107,19 +108,16 @@ dmel.fa:
 
 # For offline tests, the test binary is built online, then network access is
 # disabled and tests are run. sudo is required - otherwise we don't have
-# permission to mount the fuse filesystem.
+# permission to deny network access to onedriver during the test.
 test: onedriver onedriver-launcher dmel.fa
 	rm -f *.race* fusefs_tests.log
 	CGO_ENABLED=0 gotest -v -parallel=8 -count=1 $(shell go list ./ui/... | grep -v offline)
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
-		gotest -race -v -parallel=8 -count=1 ./cmd/...
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
-		gotest -race -v -parallel=8 -count=1 ./fs/graph/...
-	GORACE="log_path=fusefs_tests.race strip_path_prefix=1" \
-		gotest -race -v -parallel=8 -count=1 ./fs
-	go test -c ./fs/offline
+	$(CGO_CFLAGS) gotest -v -parallel=8 -count=1 ./cmd/...
+	$(CGO_CFLAGS) $(GORACE) gotest -race -v -parallel=8 -count=1 ./fs/graph/...
+	$(CGO_CFLAGS) $(GORACE) gotest -race -v -parallel=8 -count=1 ./fs
+	$(CGO_CFLAGS) go test -c ./fs/offline
 	@echo "sudo is required to run tests of offline functionality:"
-	sudo unshare -n -S $(TEST_UID) -G $(TEST_GID) ./offline.test -test.v -test.parallel=8 -test.count=1
+	sudo unshare -n sudo -u $(TEST_UID) ./offline.test -test.v -test.parallel=8 -test.count=1
 
 
 # will literally purge everything: all built artifacts, all logs, all tests,

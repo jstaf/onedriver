@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 }
 
 // test that we can create a file and rename it
-//TODO this can fail if a server-side rename undoes the second local rename
+// TODO this can fail if a server-side rename undoes the second local rename
 func TestRenameMove(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "rename.txt")
@@ -459,6 +459,9 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		fname,
 	).CombinedOutput()
 	require.NoError(t, err, out)
+	// libreoffice document conversion can fail with an exit code of 0,
+	// so we need to actually check the command output
+	require.NotContains(t, string(out), "Error:")
 
 	assert.Eventually(t, func() bool {
 		item, err := graph.GetItemPath("/onedriver_tests/libreoffice.docx", auth)
