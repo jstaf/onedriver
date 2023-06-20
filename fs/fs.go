@@ -465,19 +465,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	// stay locked until end to prevent multiple Opens() from competing for
 	// downloads of the same file.
 
-	var hashMatch bool
-	driveType := inode.DriveItem.Parent.DriveType
-	if driveType == graph.DriveTypePersonal {
-		hashMatch = inode.VerifyChecksum(graph.SHA1HashStream(fd))
-	} else if driveType == graph.DriveTypeBusiness || driveType == graph.DriveTypeSharepoint {
-		hashMatch = inode.VerifyChecksum(graph.QuickXORHashStream(fd))
-	} else {
-		hashMatch = true
-		ctx.Warn().Str("driveType", driveType).
-			Msg("Could not determine drive type, not checking hashes.")
-	}
-
-	if hashMatch {
+	if inode.VerifyChecksum(graph.QuickXORHashStream(fd)) {
 		// disk content is only used if the checksums match
 		ctx.Info().Msg("Found content in cache.")
 
@@ -486,11 +474,10 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		inode.DriveItem.Size = uint64(st.Size())
 		return fuse.OK
 	}
-	ctx.Info().Str("drivetype", driveType).
-		Msg("Not using cached item due to file hash mismatch.")
 
-	// didn't have it on disk, now try api
-	ctx.Info().Msg("Fetching remote content for item from API.")
+	ctx.Info().Msg(
+		"Not using cached item due to file hash mismatch, fetching content from API.",
+	)
 	size, err := graph.GetItemContentStream(id, f.auth, fd)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
@@ -636,11 +623,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 			ctx.Error().Err(err).Msg("Could not get fd.")
 		}
 		fd.Sync()
-		if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-			inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
-		} else {
-			inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
-		}
+		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
 		inode.Unlock()
 
 		if err := f.uploads.QueueUpload(inode); err != nil {

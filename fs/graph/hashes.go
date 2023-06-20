@@ -2,6 +2,7 @@ package graph
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -9,6 +10,16 @@ import (
 
 	"github.com/jstaf/onedriver/fs/graph/quickxorhash"
 )
+
+func SHA256Hash(data *[]byte) string {
+	return strings.ToUpper(fmt.Sprintf("%x", sha256.Sum256(*data)))
+}
+
+func SHA256HashStream(reader io.Reader) string {
+	hash := sha256.New()
+	io.Copy(hash, reader)
+	return strings.ToUpper(fmt.Sprintf("%x", hash.Sum(nil)))
+}
 
 // SHA1Hash returns the SHA1 hash of some data as a string
 func SHA1Hash(data *[]byte) string {
@@ -47,9 +58,7 @@ func (d *DriveItem) VerifyChecksum(checksum string) bool {
 	}
 	// all checksums are converted to upper to avoid casing issues from whatever
 	// the API decides to return at this point in time.
-	checksum = strings.ToUpper(checksum)
-	return strings.ToUpper(d.File.Hashes.SHA1Hash) == checksum ||
-		strings.ToUpper(d.File.Hashes.QuickXorHash) == checksum
+	return strings.EqualFold(d.File.Hashes.QuickXorHash, checksum)
 }
 
 // ETagIsMatch returns true if the etag matches the one in the DriveItem
