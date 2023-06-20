@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 // LoopbackCache stores the content for files under a folder as regular files
@@ -87,10 +85,6 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	fd, err := os.OpenFile(l.contentPath(id), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
-	}
-	_, err = fd.Stat()
-	if err != nil {
-		log.Error().Err(err).Msg("but why")
 	}
 
 	// Since we explicitly want to store *os.Files, we need to prevent the Go

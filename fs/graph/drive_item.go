@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // DriveTypePersonal and friends represent the possible different values for a
@@ -146,6 +148,10 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, erro
 	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
 		start := i * downloadChunkSize
 		end := start + downloadChunkSize - 1
+		log.Info().
+			Str("id", item.ID).
+			Str("name", item.Name).
+			Msgf("Downloading bytes %d-%d/%d.", start, end, item.Size)
 		content, err := Get(downloadURL, auth, Header{
 			key:   "Range",
 			value: fmt.Sprintf("bytes=%d-%d", start, end),
@@ -159,6 +165,11 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, erro
 			return n, err
 		}
 	}
+	log.Info().
+		Str("id", item.ID).
+		Str("name", item.Name).
+		Uint64("size", n).
+		Msgf("Download completed!")
 	return n, nil
 }
 
