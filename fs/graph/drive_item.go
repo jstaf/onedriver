@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -55,6 +56,19 @@ type Deleted struct {
 	State string `json:"state,omitempty"`
 }
 
+// Thumbnail contains the thumbnail download URLs
+// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/thumbnail
+type Thumbnail struct {
+	URL string `json:"url"`
+}
+
+// ThumbnailSet contains a group of thumbnails
+// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/thumbnailset
+type ThumbnailSet struct {
+	Medium Thumbnail `json:"medium"`
+	Small  Thumbnail `json:"small"`
+}
+
 // DriveItem contains the data fields from the Graph API
 // https://docs.microsoft.com/en-us/onedrive/developer/rest-api/resources/driveitem
 type DriveItem struct {
@@ -66,6 +80,7 @@ type DriveItem struct {
 	Folder           *Folder          `json:"folder,omitempty"`
 	File             *File            `json:"file,omitempty"`
 	Deleted          *Deleted         `json:"deleted,omitempty"`
+	Thumbnails       *ThumbnailSet    `json:"thumbnails,omitempty"`
 	ConflictBehavior string           `json:"@microsoft.graph.conflictBehavior,omitempty"`
 	ETag             string           `json:"eTag,omitempty"`
 }
@@ -254,4 +269,20 @@ func GetItemChildren(id string, auth *Auth) ([]*DriveItem, error) {
 // GetItemChildrenPath fetches all children of an item denoted by path.
 func GetItemChildrenPath(path string, auth *Auth) ([]*DriveItem, error) {
 	return getItemChildren(childrenPath(path), auth)
+}
+
+func GetItemThumbnail(id string, auth *Auth) ([]byte, error) {
+	thumbnails := ThumbnailSet{}
+	body, err := Get(IDPath(id)+"?$expand=thumbnails", auth)
+	if err != nil {
+		return make([]byte, 0), err
+	}
+	json.Unmarshal(body, &thumbnails)
+
+	resp, err := http.Get(thumbnails.Medium.URL)
+	if err != nil {
+		return make([]byte, 0), err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
