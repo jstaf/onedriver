@@ -460,8 +460,12 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	// we have something on disk-
 	// verify content against what we're supposed to have
+	inode.Lock()
+	defer inode.Unlock()
+	// stay locked until end to prevent multiple Opens() from competing for
+	// downloads of the same file.
+
 	var hashMatch bool
-	inode.RLock()
 	driveType := inode.DriveItem.Parent.DriveType
 	if driveType == graph.DriveTypePersonal {
 		hashMatch = inode.VerifyChecksum(graph.SHA1HashStream(fd))
@@ -472,14 +476,11 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		ctx.Warn().Str("driveType", driveType).
 			Msg("Could not determine drive type, not checking hashes.")
 	}
-	inode.RUnlock()
 
 	if hashMatch {
 		// disk content is only used if the checksums match
 		ctx.Info().Msg("Found content in cache.")
 
-		inode.Lock()
-		defer inode.Unlock()
 		// we check size ourselves in case the API file sizes are WRONG (it happens)
 		st, _ := fd.Stat()
 		inode.DriveItem.Size = uint64(st.Size())
@@ -490,9 +491,6 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	// didn't have it on disk, now try api
 	ctx.Info().Msg("Fetching remote content for item from API.")
-
-	inode.Lock()
-	defer inode.Unlock()
 	size, err := graph.GetItemContentStream(id, f.auth, fd)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
