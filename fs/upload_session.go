@@ -48,7 +48,6 @@ type UploadSession struct {
 	ExpirationDateTime time.Time `json:"expirationDateTime"`
 	Size               uint64    `json:"size,omitempty"`
 	Data               []byte    `json:"data,omitempty"`
-	SHA1Hash           string    `json:"sha1hash,omitempty"`
 	QuickXORHash       string    `json:"quickxorhash,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
@@ -116,9 +115,7 @@ func NewUploadSession(inode *Inode, data *[]byte) (*UploadSession, error) {
 	}
 	inode.RUnlock()
 
-	// compute both hashes for now, session does not know the drivetype
 	session.Size = uint64(len(*data)) // just in case it somehow differs
-	session.SHA1Hash = graph.SHA1Hash(data)
 	session.QuickXORHash = graph.QuickXORHash(data)
 	return &session, nil
 }
@@ -324,7 +321,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// if we are absolutely pounding the microsoft API, a remote item may sometimes
 		// come back without checksums, so we check the size of the uploaded item instead.
 		return u.setState(uploadErrored, errors.New("size mismatch when remote checksums did not exist"))
-	} else if !remote.VerifyChecksum(u.SHA1Hash) && !remote.VerifyChecksum(u.QuickXORHash) {
+	} else if !remote.VerifyChecksum(u.QuickXORHash) {
 		return u.setState(uploadErrored, errors.New("remote checksum did not match"))
 	}
 	// update the UploadSession's ID in the event that we exchange a local for a remote ID

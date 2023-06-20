@@ -213,11 +213,7 @@ func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
 		sameContent := false
 		if !delta.IsDir() && delta.File != nil {
 			local.RLock()
-			if delta.Parent.DriveType == graph.DriveTypePersonal {
-				sameContent = local.VerifyChecksum(delta.File.Hashes.SHA1Hash)
-			} else {
-				sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
-			}
+			sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
 			local.RUnlock()
 		}
 

@@ -142,6 +142,6 @@ func TestUploadSessionLargeFS(t *testing.T) {
 	// test multipart downloads as a bonus part of the test
 	downloaded, _, err := graph.GetItemContent(item.ID, auth)
 	assert.NoError(t, err)
-	assert.Equal(t, graph.SHA1Hash(&contents), graph.SHA1Hash(&downloaded),
+	assert.Equal(t, graph.QuickXORHash(&contents), graph.QuickXORHash(&downloaded),
 		"Downloaded content did not match original content.")
 }

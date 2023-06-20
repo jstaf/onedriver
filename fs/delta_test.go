@@ -28,11 +28,7 @@ func (i *Inode) setContent(f *Filesystem, newContent []byte) {
 		i.DriveItem.File = &graph.File{}
 	}
 
-	if i.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-		i.DriveItem.File.Hashes.SHA1Hash = graph.SHA1Hash(&newContent)
-	} else {
-		i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(&newContent)
-	}
+	i.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHash(&newContent)
 }
 
 // In this test, we create a directory through the API, and wait to see if
@@ -216,7 +212,6 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	fakeDelta.ETag = "sldfjlsdjflkdj"
 	fakeDelta.File.Hashes = graph.Hashes{
 		QuickXorHash: graph.QuickXORHash(&original),
-		SHA1Hash:     graph.SHA1Hash(&original),
 	}
 
 	// should do nothing
@@ -227,11 +222,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 	// a flush)
 	inode.DriveItem.File = &graph.File{}
 	fd, _ := fs.content.Open(inode.ID())
-	if inode.DriveItem.Parent.DriveType == graph.DriveTypePersonal {
-		inode.DriveItem.File.Hashes.SHA1Hash = graph.SHA1HashStream(fd)
-	} else {
-		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
-	}
+	inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
 	cache.content.Close(inode.DriveItem.ID)
 	inode.hasChanges = false
 
