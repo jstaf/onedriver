@@ -476,3 +476,18 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 		"Could not find /onedriver_tests/libreoffice.docx post-upload!",
 	)
 }
+
+// TestDisallowedFilenames verifies that we can't create any of the disallowed filenames
+// from https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa
+func TestDisallowedFilenames(t *testing.T) {
+	t.Parallel()
+	contents := []byte("this should not work")
+	assert.Error(t, os.WriteFile(filepath.Join(TestDir, "disallowed: filename.txt"), contents, 0644))
+	assert.Error(t, os.WriteFile(filepath.Join(TestDir, "disallowed_vti_text.txt"), contents, 0644))
+	assert.Error(t, os.WriteFile(filepath.Join(TestDir, "disallowed_<_text.txt"), contents, 0644))
+	assert.Error(t, os.WriteFile(filepath.Join(TestDir, "COM0"), contents, 0644))
+	assert.Error(t, os.Mkdir(filepath.Join(TestDir, "disallowed:folder"), 0755))
+	assert.Error(t, os.Mkdir(filepath.Join(TestDir, "disallowed_vti_folder"), 0755))
+	assert.Error(t, os.Mkdir(filepath.Join(TestDir, "disallowed>folder"), 0755))
+	assert.Error(t, os.Mkdir(filepath.Join(TestDir, "desktop.ini"), 0755))
+}
