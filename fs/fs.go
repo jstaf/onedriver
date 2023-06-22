@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -87,6 +88,32 @@ func (f *Filesystem) remoteID(i *Inode) (string, error) {
 	return originalID, nil
 }
 
+var disallowedRexp = regexp.MustCompile(`(?i)LPT[0-9]|COM[0-9]|_vti_|["*:<>?\/\\\|]`)
+
+// isNameRestricted returns true if the name is disallowed according to the doc here:
+// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa
+func isNameRestricted(name string) bool {
+	if strings.EqualFold(name, "CON") {
+		return true
+	}
+	if strings.EqualFold(name, "AUX") {
+		return true
+	}
+	if strings.EqualFold(name, "PRN") {
+		return true
+	}
+	if strings.EqualFold(name, "NUL") {
+		return true
+	}
+	if strings.EqualFold(name, ".lock") {
+		return true
+	}
+	if strings.EqualFold(name, "desktop.ini") {
+		return true
+	}
+	return disallowedRexp.FindStringIndex(name) != nil
+}
+
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) fuse.Status {
@@ -122,6 +149,10 @@ func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse
 
 // Mkdir creates a directory.
 func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) fuse.Status {
+	if isNameRestricted(name) {
+		return fuse.EINVAL
+	}
+
 	inode := f.GetNodeID(in.NodeId)
 	if inode == nil {
 		return fuse.ENOENT
@@ -345,6 +376,10 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name stri
 
 // Mknod creates a regular file. The server doesn't have this yet.
 func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) fuse.Status {
+	if isNameRestricted(name) {
+		return fuse.EINVAL
+	}
+
 	parentID := f.TranslateID(in.NodeId)
 	if parentID == "" {
 		return fuse.EBADF
@@ -739,6 +774,10 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 
 // Rename renames and/or moves an inode.
 func (f *Filesystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, name string, newName string) fuse.Status {
+	if isNameRestricted(newName) {
+		return fuse.EINVAL
+	}
+
 	oldParentID := f.TranslateID(in.NodeId)
 	oldParentItem := f.GetNodeID(in.NodeId)
 	if oldParentID == "" || oldParentItem == nil {
