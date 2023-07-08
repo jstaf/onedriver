@@ -41,9 +41,9 @@ your local computer.
 %autosetup
 
 %build
-%if 0%{?suse_version} > 1500
+%if 0%{?suse_version} <= 1500
 # done via sed because #cgo flags appear to ignore #ifdef
-sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
+sed -i 's/webkit2gtk-4.1/webkit2gtk-4.0/g' fs/graph/oauth2_gtk.go
 %endif
 if rpm -q pango | grep -q 1.42; then
   BUILD_TAGS=-tags=pango_1_42,gtk_3_22
@@ -78,6 +78,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/%{name}
 %attr(755, root, root) %{_bindir}/%{name}-launcher
+%dir /usr/share/icons/%{name}
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}-128.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
@@ -87,6 +88,12 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Sat Jul 8 2023 Jeff Stafford <jeff.stafford@protonmail.com> - 0.14.0
+- We now use quickxorhash checksums for both personal and business accounts.
+- The cache for file contents has been moved out of boltdb and onto the local filesystem.
+  This makes accessing, reading, and writing files faster than before.
+- onedriver no longer allows you to create filenames that are not allowed by OneDrive.
+
 * Tue Nov 1 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
 - The GUI has been rewritten in golang for ease of maintenance and code sharing with 
   the rest of the onedriver application.
