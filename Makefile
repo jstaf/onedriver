@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, install
+.PHONY: all, test, srpm, rpm, dsc, changes, deb, clean, install, uninstall
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -18,6 +18,7 @@ all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
+	bash cgo-helper.sh 
 	$(CGO_CFLAGS) go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
@@ -38,13 +39,24 @@ onedriver-launcher: $(shell find ui/ cmd/common/ -type f) cmd/onedriver-launcher
 install: onedriver onedriver-launcher
 	cp onedriver /usr/bin/
 	cp onedriver-launcher /usr/bin/
-	mkdir /usr/share/icons/onedriver/
-	cp resources/onedriver.svg /usr/share/icons/onedriver/
-	cp resources/onedriver.png /usr/share/icons/onedriver/
-	cp resources/onedriver-128.png /usr/share/icons/onedriver/
-	cp resources/onedriver.desktop /usr/share/applications/
-	cp resources/onedriver@.service /etc/systemd/user/
-	gzip -c resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
+	mkdir -p /usr/share/icons/onedriver/
+	cp pkg/resources/onedriver.svg /usr/share/icons/onedriver/
+	cp pkg/resources/onedriver.png /usr/share/icons/onedriver/
+	cp pkg/resources/onedriver-128.png /usr/share/icons/onedriver/
+	cp pkg/resources/onedriver.desktop /usr/share/applications/
+	cp pkg/resources/onedriver@.service /etc/systemd/user/
+	gzip -c pkg/resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
+	mandb
+
+
+uninstall:
+	rm -f \
+		/usr/bin/onedriver \
+		/usr/bin/onedriver-launcher \
+		/etc/systemd/user/onedriver@.service \
+		/usr/share/applications/onedriver.desktop \
+		/usr/share/man/man1/onedriver.1.gz
+	rm -rf /usr/share/icons/onedriver
 	mandb
 
 
@@ -56,6 +68,7 @@ v$(VERSION).tar.gz: $(shell git ls-files)
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(VERSION)
+	mv onedriver-$(VERSION)/pkg/debian onedriver-$(VERSION)
 	go mod vendor
 	cp -R vendor/ onedriver-$(VERSION)
 	tar -czf $@ onedriver-$(VERSION)

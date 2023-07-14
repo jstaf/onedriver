@@ -3,7 +3,7 @@ Version:       0.14.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
-License:       GPLv3
+License:       GPL-3.0-or-later
 URL:           https://github.com/jstaf/onedriver
 Source0:       https://github.com/jstaf/onedriver/archive/refs/tags/v%{version}.tar.gz
 
@@ -16,21 +16,7 @@ BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
-
-%if 0%{?suse_version}
-%if 0%{?suse_version} > 1500
-# tumbleweed
-Requires: libwebkit2gtk-4_1-0
-%else
-# leap 15.3
-Requires: libwebkit2gtk-4_0-37
-%endif
-# other EL distros
-%else
-Requires: webkit2gtk3
-%endif
 Requires: fuse
-Suggests: systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
@@ -41,10 +27,7 @@ your local computer.
 %autosetup
 
 %build
-%if 0%{?suse_version} > 1500
-# done via sed because #cgo flags appear to ignore #ifdef
-sed -i 's/webkit2gtk-4.0/webkit2gtk-4.1/g' fs/graph/oauth2_gtk.go
-%endif
+bash cgo-helper.sh
 if rpm -q pango | grep -q 1.42; then
   BUILD_TAGS=-tags=pango_1_42,gtk_3_22
 fi
@@ -54,7 +37,7 @@ go build -v -mod=vendor $BUILD_TAGS \
 go build -v -mod=vendor $BUILD_TAGS \
   -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" \
   ./cmd/onedriver-launcher
-gzip resources/onedriver.1
+gzip pkg/resources/onedriver.1
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -65,12 +48,12 @@ mkdir -p %{buildroot}/usr/lib/systemd/user
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
 cp %{name}-launcher %{buildroot}/%{_bindir}
-cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}-128.png %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}.desktop %{buildroot}/usr/share/applications
-cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
-cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
+cp pkg/resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}-128.png %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}.desktop %{buildroot}/usr/share/applications
+cp pkg/resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
+cp pkg/resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 
 # fix for el8 build in mock
 %define _empty_manifest_terminate_build 0
@@ -78,6 +61,7 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %defattr(-,root,root,-)
 %attr(755, root, root) %{_bindir}/%{name}
 %attr(755, root, root) %{_bindir}/%{name}-launcher
+%dir /usr/share/icons/%{name}
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}-128.png
 %attr(644, root, root) /usr/share/icons/%{name}/%{name}.svg
@@ -87,6 +71,12 @@ cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Fri Jul 14 2023 Jeff Stafford <jeff.stafford@protonmail.com> - 0.14.0
+- We now use quickxorhash checksums for both personal and business accounts.
+- The cache for file contents has been moved out of boltdb and onto the local filesystem.
+  This makes accessing, reading, and writing files faster than before.
+- onedriver no longer allows you to create filenames that are not allowed by OneDrive.
+
 * Tue Nov 1 2022 Jeff Stafford <jeff.stafford@protonmail.com> - 0.13.0
 - The GUI has been rewritten in golang for ease of maintenance and code sharing with 
   the rest of the onedriver application.

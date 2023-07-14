@@ -8,11 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const configTestDir = "pkg/resources/test"
+
 // We should load config correctly.
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
 
-	conf := LoadConfig("resources/test/config-test.yml")
+	conf := LoadConfig(filepath.Join(configTestDir, "config-test.yml"))
 
 	home, _ := os.UserHomeDir()
 	assert.Equal(t, filepath.Join(home, "somewhere/else"), conf.CacheDir)
@@ -22,7 +24,7 @@ func TestLoadConfig(t *testing.T) {
 func TestConfigMerge(t *testing.T) {
 	t.Parallel()
 
-	conf := LoadConfig("resources/test/config-test-merge.yml")
+	conf := LoadConfig(filepath.Join(configTestDir, "config-test-merge.yml"))
 
 	assert.Equal(t, "debug", conf.LogLevel)
 	assert.Equal(t, "/some/directory", conf.CacheDir)
@@ -32,7 +34,7 @@ func TestConfigMerge(t *testing.T) {
 func TestLoadNonexistentConfig(t *testing.T) {
 	t.Parallel()
 
-	conf := LoadConfig("resources/test/does-not-exist.yml")
+	conf := LoadConfig(filepath.Join(configTestDir, "does-not-exist.yml"))
 
 	home, _ := os.UserHomeDir()
 	assert.Equal(t, filepath.Join(home, ".cache/onedriver"), conf.CacheDir)
