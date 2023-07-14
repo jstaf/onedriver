@@ -41,10 +41,7 @@ your local computer.
 %autosetup
 
 %build
-%if 0%{?suse_version} <= 1500
-# done via sed because #cgo flags appear to ignore #ifdef
-sed -i 's/webkit2gtk-4.1/webkit2gtk-4.0/g' fs/graph/oauth2_gtk.go
-%endif
+bash cgo-helper.sh
 if rpm -q pango | grep -q 1.42; then
   BUILD_TAGS=-tags=pango_1_42,gtk_3_22
 fi
@@ -65,12 +62,12 @@ mkdir -p %{buildroot}/usr/lib/systemd/user
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{name} %{buildroot}/%{_bindir}
 cp %{name}-launcher %{buildroot}/%{_bindir}
-cp resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}-128.png %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
-cp resources/%{name}.desktop %{buildroot}/usr/share/applications
-cp resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
-cp resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
+cp pkg/resources/%{name}.png %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}-128.png %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}.svg %{buildroot}/usr/share/icons/%{name}
+cp pkg/resources/%{name}.desktop %{buildroot}/usr/share/applications
+cp pkg/resources/%{name}@.service %{buildroot}/usr/lib/systemd/user
+cp pkg/resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 
 # fix for el8 build in mock
 %define _empty_manifest_terminate_build 0

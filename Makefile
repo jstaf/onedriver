@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, changes, dsc, deb, clean, install
+.PHONY: all, test, srpm, dsc, clean, install
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -18,6 +18,7 @@ all: onedriver onedriver-launcher
 
 
 onedriver: $(shell find fs/ -type f) cmd/onedriver/main.go
+	bash cgo-helper.sh 
 	$(CGO_CFLAGS) go build -v \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell git rev-parse HEAD)" \
 		./cmd/onedriver
@@ -56,6 +57,8 @@ v$(VERSION).tar.gz: $(shell git ls-files)
 	git rev-parse HEAD > .commit
 	echo .commit >> filelist.txt
 	rsync -a --files-from=filelist.txt . onedriver-$(VERSION)
+	mv onedriver-$(VERSION)/pkg/debian onedriver-$(VERSION)
+	rmdir onedriver-$(VERSION)/pkg
 	go mod vendor
 	cp -R vendor/ onedriver-$(VERSION)
 	tar -czf $@ onedriver-$(VERSION)

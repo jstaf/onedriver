@@ -13,6 +13,7 @@ override_dh_auto_clean:
 
 
 override_dh_auto_build:
+	bash cgo-helper.sh
 	# GOCACHE will be for a nonexistent user in pbuilder otherwise
 	GOCACHE=/tmp/go-cache go build -v -mod=vendor \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell cat .commit)" \
@@ -26,10 +27,10 @@ override_dh_auto_build:
 override_dh_auto_install:
 	install -D -m 0755 onedriver $$(pwd)/debian/onedriver/usr/bin/onedriver
 	install -D -m 0755 onedriver-launcher $$(pwd)/debian/onedriver/usr/bin/onedriver-launcher
-	install -D -m 0644 resources/onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.png
-	install -D -m 0644 resources/onedriver-128.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver-128.png
-	install -D -m 0644 resources/onedriver.svg $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.svg
-	install -D -m 0644 resources/onedriver.desktop $$(pwd)/debian/onedriver/usr/share/applications/onedriver.desktop
-	install -D -m 0644 resources/onedriver@.service $$(pwd)/debian/onedriver/usr/lib/systemd/user/onedriver@.service
-	install -D -m 0644 resources/onedriver.1.gz $$(pwd)/debian/onedriver/usr/share/man/man1/onedriver.1.gz
+	install -D -m 0644 pkg/resources/onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.png
+	install -D -m 0644 pkg/resources/onedriver-128.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver-128.png
+	install -D -m 0644 pkg/resources/onedriver.svg $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.svg
+	install -D -m 0644 pkg/resources/onedriver.desktop $$(pwd)/debian/onedriver/usr/share/applications/onedriver.desktop
+	install -D -m 0644 pkg/resources/onedriver@.service $$(pwd)/debian/onedriver/usr/lib/systemd/user/onedriver@.service
+	install -D -m 0644 pkg/resources/onedriver.1.gz $$(pwd)/debian/onedriver/usr/share/man/man1/onedriver.1.gz
 
