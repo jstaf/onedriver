@@ -5,6 +5,8 @@ onedriver (0.14.0-1) jammy; urgency=low
     This makes accessing, reading, and writing files faster than before.
   * onedriver no longer allows you to create filenames that are not allowed by OneDrive.
 
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Fri, 14 Jul 2023 01:00:00 -0400
+
 onedriver (0.13.0-1) focal; urgency=low
 
   * The GUI has been rewritten in golang for ease of maintenance and code sharing with 
