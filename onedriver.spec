@@ -3,7 +3,7 @@ Version:       0.14.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
-License:       GPLv3
+License:       GPL-3.0-or-later
 URL:           https://github.com/jstaf/onedriver
 Source0:       https://github.com/jstaf/onedriver/archive/refs/tags/v%{version}.tar.gz
 
@@ -16,21 +16,7 @@ BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
-
-%if 0%{?suse_version}
-%if 0%{?suse_version} > 1500
-# tumbleweed
-Requires: libwebkit2gtk-4_1-0
-%else
-# leap 15.3
-Requires: libwebkit2gtk-4_0-37
-%endif
-# other EL distros
-%else
-Requires: webkit2gtk3
-%endif
 Requires: fuse
-Suggests: systemd
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and
@@ -51,7 +37,7 @@ go build -v -mod=vendor $BUILD_TAGS \
 go build -v -mod=vendor $BUILD_TAGS \
   -ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(cat .commit)" \
   ./cmd/onedriver-launcher
-gzip resources/onedriver.1
+gzip pkg/resources/onedriver.1
 
 %install
 rm -rf $RPM_BUILD_ROOT
