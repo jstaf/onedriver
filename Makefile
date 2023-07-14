@@ -55,7 +55,7 @@ uninstall:
 		/usr/bin/onedriver-launcher \
 		/etc/systemd/user/onedriver@.service \
 		/usr/share/applications/onedriver.desktop \
-		/usr/share/man/man1/onedriver.1.gz \
+		/usr/share/man/man1/onedriver.1.gz
 	rm -rf /usr/share/icons/onedriver
 	mandb
 
