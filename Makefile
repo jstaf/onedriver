@@ -1,8 +1,8 @@
-.PHONY: all, test, srpm, dsc, clean, install
+.PHONY: all, test, srpm, rpm, dsc, changes, deb, clean, install, uninstall
 
 # autocalculate software/package versions
-VERSION := $(shell grep Version pkg/onedriver.spec | sed 's/Version: *//g')
-RELEASE := $(shell grep -oP "Release: *[0-9]+" pkg/onedriver.spec | sed 's/Release: *//g')
+VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+RELEASE := $(shell grep -oP "Release: *[0-9]+" onedriver.spec | sed 's/Release: *//g')
 DIST := $(shell rpm --eval "%{?dist}" 2> /dev/null || echo 1)
 RPM_FULL_VERSION = $(VERSION)-$(RELEASE)$(DIST)
 
@@ -39,13 +39,24 @@ onedriver-launcher: $(shell find ui/ cmd/common/ -type f) cmd/onedriver-launcher
 install: onedriver onedriver-launcher
 	cp onedriver /usr/bin/
 	cp onedriver-launcher /usr/bin/
-	mkdir /usr/share/icons/onedriver/
+	mkdir -p /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver.svg /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver.png /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver-128.png /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver.desktop /usr/share/applications/
 	cp pkg/resources/onedriver@.service /etc/systemd/user/
 	gzip -c pkg/resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
+	mandb
+
+
+uninstall:
+	rm -f \
+		/usr/bin/onedriver \
+		/usr/bin/onedriver-launcher \
+		/etc/systemd/user/onedriver@.service \
+		/usr/share/applications/onedriver.desktop \
+		/usr/share/man/man1/onedriver.1.gz \
+	rm -rf /usr/share/icons/onedriver
 	mandb
 
 
