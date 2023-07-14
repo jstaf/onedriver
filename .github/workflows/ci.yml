@@ -62,6 +62,7 @@ jobs:
           go install github.com/rakyll/gotest@latest
           # cannot run systemd tests here because github actions runners don't have dbus setup +
           # if CGO is on, the UI tests will take foreverrrrr
+          bash cgo-helper.sh
           CGO_ENABLED=0 gotest -v -covermode=count -coverpkg=./ui/... -coverprofile=ui.coverage ./ui
           gotest -v -covermode=count -coverpkg=./cmd/common -coverprofile=common.coverage ./cmd/common
           gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=quickxorhash.coverage ./fs/graph/quickxorhash
@@ -89,7 +90,7 @@ jobs:
       - name: Convert coverage to lcov
         uses: jandelgado/gcov2lcov-action@v1.0.5
         if: always()
-          
+
       - name: Send test coverage to Coveralls
         uses: coverallsapp/github-action@v1.1.2
         with:
@@ -106,10 +107,10 @@ jobs:
     if: always()
     runs-on: ubuntu-20.04
     steps:
-    - name: Coveralls finished
-      uses: coverallsapp/github-action@v1.1.2
-      with:
-        github-token: ${{ secrets.github_token }}
-        parallel-finished: true
-      # decreased coverage isn't a failure
-      continue-on-error: true
+      - name: Coveralls finished
+        uses: coverallsapp/github-action@v1.1.2
+        with:
+          github-token: ${{ secrets.github_token }}
+          parallel-finished: true
+        # decreased coverage isn't a failure
+        continue-on-error: true
