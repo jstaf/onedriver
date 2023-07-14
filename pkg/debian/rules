@@ -21,7 +21,7 @@ override_dh_auto_build:
 	GOCACHE=/tmp/go-cache go build -v -mod=vendor \
 		-ldflags="-X github.com/jstaf/onedriver/cmd/common.commit=$(shell cat .commit)" \
 		./cmd/onedriver-launcher
-	gzip resources/onedriver.1
+	gzip pkg/resources/onedriver.1
 
 
 override_dh_auto_install:
