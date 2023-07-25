@@ -3,7 +3,7 @@
 # are installed so this script is here to autodetect which webkit2gtk c headers
 # we have access to
 
-if [ "$CGO_ENABLED" -eq 0 ]; then
+if [ -n "$CGO_ENABLED" ] && [ "$CGO_ENABLED" -eq 0 ]; then
     exit 0
 fi
 
