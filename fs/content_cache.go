@@ -75,14 +75,13 @@ func (l *LoopbackCache) HasContent(id string) bool {
 	return err == nil
 }
 
-// OpenContent returns a filehandle for subsequent access
-func (l *LoopbackCache) Open(id string) (*os.File, error) {
+func (l *LoopbackCache) open(id string, flags int) (*os.File, error) {
 	if fd, ok := l.fds.Load(id); ok {
 		// already opened, return existing fd
 		return fd.(*os.File), nil
 	}
 
-	fd, err := os.OpenFile(l.contentPath(id), os.O_CREATE|os.O_RDWR, 0600)
+	fd, err := os.OpenFile(l.contentPath(id), os.O_RDWR|flags, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +93,18 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	runtime.SetFinalizer(fd, nil)
 	l.fds.Store(id, fd)
 	return fd, nil
+}
+
+// OpenContent returns a filehandle for subsequent access
+func (l *LoopbackCache) Open(id string) (*os.File, error) {
+    return l.open(id, os.O_CREATE)
+}
+
+// Resets a file's cache
+// WARNING: this will invalidate any previous file handle
+func (l *LoopbackCache) OpenTruncate(id string) (*os.File, error) {
+    l.Close(id)
+    return l.open(id, os.O_CREATE|os.O_TRUNC)
 }
 
 func (l *LoopbackCache) Close(id string) {

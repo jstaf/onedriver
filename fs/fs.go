@@ -513,11 +513,19 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	ctx.Info().Msg(
 		"Not using cached item due to file hash mismatch, fetching content from API.",
 	)
+
+    fd, err = f.content.OpenTruncate(id);
+    if err != nil {
+		ctx.Error().Err(err).Msg("Could not reset file cache.")
+		return fuse.EIO
+    }
+
 	size, err := graph.GetItemContentStream(id, f.auth, fd)
 	if err != nil {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
+
 	inode.DriveItem.Size = size
 	return fuse.OK
 }
