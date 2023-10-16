@@ -123,6 +123,15 @@ Arch/Manjaro/EndeavourOS users can install onedriver from the
 Post-installation, you can start onedriver either via the `onedriver-launcher` 
 desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 
+### Gentoo
+
+Gentoo users can install onedriver from [this ebuild overlay](https://github.com/foopsss/Ebuilds) provided by a user.
+If you don't want to add user-hosted overlays to your system you may copy the
+ebuild for the latest version to a local overlay, which can be created by following
+the instructions available in the [Gentoo Wiki](https://wiki.gentoo.org/wiki/Creating_an_ebuild_repository).
+
+Make sure to carefully review the ebuild for the package before installing it
+
 ## Multiple drives and starting OneDrive on login via systemd
 
 **Note:** You can also set this up through the GUI via the `onedriver-launcher`
