@@ -122,8 +122,10 @@ func GetItemContent(id string, auth *Auth) ([]byte, uint64, error) {
 	return buf.Bytes(), uint64(n), err
 }
 
-// GetItemContentStream is the same as GetItemContent, but writes data to an output
-// reader
+// GetItemContentStream is the same as GetItemContent, but writes data to an
+// output reader. This function assumes a brand-new io.Writer is used, so
+// "output" must be truncated if there is content already in the io.Writer
+// prior to use.
 func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, error) {
 	// determine the size of the item
 	item, err := GetItem(id, auth)

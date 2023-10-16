@@ -513,8 +513,11 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	ctx.Info().Msg(
 		"Not using cached item due to file hash mismatch, fetching content from API.",
 	)
+	// explicitly purge existing file content
+	fd.Seek(0, 0)
+	fd.Truncate(0)
 	size, err := graph.GetItemContentStream(id, f.auth, fd)
-	if err != nil {
+	if err != nil || !inode.VerifyChecksum(graph.QuickXORHashStream(fd)) {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
@@ -761,6 +764,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 			Uint64("newSize", size).
 			Msg("")
 		fd, _ := f.content.Open(i.DriveItem.ID)
+		// the unix syscall does not update the seek position, so neither should we
 		fd.Truncate(int64(size))
 		i.DriveItem.Size = size
 		i.hasChanges = true
