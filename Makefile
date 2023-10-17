@@ -1,4 +1,4 @@
-.PHONY: all, test, srpm, rpm, dsc, changes, deb, clean, install, uninstall
+.PHONY: all, test, test-init, srpm, rpm, dsc, changes, deb, clean, install, uninstall
 
 # autocalculate software/package versions
 VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
@@ -117,6 +117,13 @@ onedriver_$(VERSION)-$(RELEASE)_amd64.deb: onedriver_$(VERSION)-$(RELEASE).dsc
 # a large text file for us to test upload sessions with. #science
 dmel.fa:
 	curl ftp://ftp.ensemblgenomes.org/pub/metazoa/release-42/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.22.dna.chromosome.X.fa.gz | zcat > $@
+
+
+# setup tests for the first time on a new computer
+test-init: onedriver
+	go install github.com/rakyll/gotest@latest
+	mkdir -p mount/
+	$< -a mount/	
 
 
 # For offline tests, the test binary is built online, then network access is
