@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -513,11 +514,25 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 	ctx.Info().Msg(
 		"Not using cached item due to file hash mismatch, fetching content from API.",
 	)
-	size, err := graph.GetItemContentStream(id, f.auth, fd)
+
+	// write to tempfile first to ensure our download is good
+	tempID := "temp-" + id
+	temp, err := f.content.Open(tempID)
 	if err != nil {
+		ctx.Error().Err(err).Msg("Failed to create tempfile for download.")
+		return fuse.EIO
+	}
+	defer f.content.Delete(tempID)
+
+	// replace content only on a match
+	size, err := graph.GetItemContentStream(id, f.auth, temp)
+	if err != nil || !inode.VerifyChecksum(graph.QuickXORHashStream(temp)) {
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
+	fd.Seek(0, 0)
+	fd.Truncate(0)
+	io.Copy(fd, temp)
 	inode.DriveItem.Size = size
 	return fuse.OK
 }
@@ -761,6 +776,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 			Uint64("newSize", size).
 			Msg("")
 		fd, _ := f.content.Open(i.DriveItem.ID)
+		// the unix syscall does not update the seek position, so neither should we
 		fd.Truncate(int64(size))
 		i.DriveItem.Size = size
 		i.hasChanges = true

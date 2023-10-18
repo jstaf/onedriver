@@ -15,9 +15,11 @@ func SHA256Hash(data *[]byte) string {
 	return strings.ToUpper(fmt.Sprintf("%x", sha256.Sum256(*data)))
 }
 
-func SHA256HashStream(reader io.Reader) string {
+func SHA256HashStream(reader io.ReadSeeker) string {
+	reader.Seek(0, 0)
 	hash := sha256.New()
 	io.Copy(hash, reader)
+	reader.Seek(0, 0)
 	return strings.ToUpper(fmt.Sprintf("%x", hash.Sum(nil)))
 }
 
@@ -28,9 +30,11 @@ func SHA1Hash(data *[]byte) string {
 }
 
 // SHA1HashStream hashes the contents of a stream.
-func SHA1HashStream(reader io.Reader) string {
+func SHA1HashStream(reader io.ReadSeeker) string {
+	reader.Seek(0, 0)
 	hash := sha1.New()
 	io.Copy(hash, reader)
+	reader.Seek(0, 0)
 	return strings.ToUpper(fmt.Sprintf("%x", hash.Sum(nil)))
 }
 
@@ -43,9 +47,11 @@ func QuickXORHash(data *[]byte) string {
 }
 
 // QuickXORHashStream hashes a stream.
-func QuickXORHashStream(reader io.Reader) string {
+func QuickXORHashStream(reader io.ReadSeeker) string {
+	reader.Seek(0, 0)
 	hash := quickxorhash.New()
 	io.Copy(hash, reader)
+	reader.Seek(0, 0)
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
 }
 
@@ -56,8 +62,6 @@ func (d *DriveItem) VerifyChecksum(checksum string) bool {
 	if len(checksum) == 0 || d.File == nil {
 		return false
 	}
-	// all checksums are converted to upper to avoid casing issues from whatever
-	// the API decides to return at this point in time.
 	return strings.EqualFold(d.File.Hashes.QuickXorHash, checksum)
 }
 

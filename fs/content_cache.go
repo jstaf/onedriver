@@ -2,6 +2,7 @@ package fs
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,15 +28,15 @@ func (l *LoopbackCache) contentPath(id string) string {
 	return filepath.Join(l.directory, id)
 }
 
-// GetContent reads a file's content from disk.
+// Get reads a file's content from disk.
 func (l *LoopbackCache) Get(id string) []byte {
-	content, _ := os.ReadFile(l.contentPath(id))
+	content, _ := ioutil.ReadFile(l.contentPath(id))
 	return content
 }
 
 // InsertContent writes file content to disk in a single bulk insert.
 func (l *LoopbackCache) Insert(id string, content []byte) error {
-	return os.WriteFile(l.contentPath(id), content, 0600)
+	return ioutil.WriteFile(l.contentPath(id), content, 0600)
 }
 
 // InsertStream inserts a stream of data
@@ -47,12 +48,13 @@ func (l *LoopbackCache) InsertStream(id string, reader io.Reader) (int64, error)
 	return io.Copy(fd, reader)
 }
 
-// DeleteContent deletes content from disk.
+// Delete closes the fd AND deletes content from disk.
 func (l *LoopbackCache) Delete(id string) error {
+	l.Close(id)
 	return os.Remove(l.contentPath(id))
 }
 
-// MoveContent moves content from one ID to another
+// Move moves content from one ID to another
 func (l *LoopbackCache) Move(oldID string, newID string) error {
 	return os.Rename(l.contentPath(oldID), l.contentPath(newID))
 }
@@ -75,7 +77,7 @@ func (l *LoopbackCache) HasContent(id string) bool {
 	return err == nil
 }
 
-// OpenContent returns a filehandle for subsequent access
+// Open returns a filehandle for subsequent access
 func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	if fd, ok := l.fds.Load(id); ok {
 		// already opened, return existing fd
@@ -96,6 +98,7 @@ func (l *LoopbackCache) Open(id string) (*os.File, error) {
 	return fd, nil
 }
 
+// Close closes the currently open fd
 func (l *LoopbackCache) Close(id string) {
 	if fd, ok := l.fds.Load(id); ok {
 		file := fd.(*os.File)

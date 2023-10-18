@@ -2,6 +2,7 @@ package graph
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"testing"
 
@@ -66,4 +67,17 @@ func TestQuickXORHashReader(t *testing.T) {
 	reader := bytes.NewReader(content)
 	actual := QuickXORHashStream(reader)
 	assert.Equal(t, expected, actual)
+}
+
+func TestHashSeekPosition(t *testing.T) {
+	tmp, err := os.CreateTemp("", "onedriverHashTest")
+	if err != nil {
+		t.Error(err)
+	}
+	content := []byte("some test content")
+	io.Copy(tmp, bytes.NewBuffer(content))
+
+	assert.Equal(t, QuickXORHash(&content), QuickXORHashStream(tmp))
+	assert.Equal(t, SHA1Hash(&content), SHA1HashStream(tmp))
+	assert.Equal(t, SHA256Hash(&content), SHA256HashStream(tmp))
 }
