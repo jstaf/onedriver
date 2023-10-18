@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.14.0
+Version:       0.14.1
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -71,6 +71,9 @@ cp pkg/resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Wed Oct 18 2023 Jeff Stafford <jeff.stafford@protonmail.com> - 0.14.1
+- Fixes a bug with file corruption in some scenarios from version 0.14.0.
+
 * Fri Jul 14 2023 Jeff Stafford <jeff.stafford@protonmail.com> - 0.14.0
 - We now use quickxorhash checksums for both personal and business accounts.
 - The cache for file contents has been moved out of boltdb and onto the local filesystem.

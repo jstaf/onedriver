@@ -530,6 +530,7 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		ctx.Error().Err(err).Msg("Failed to fetch remote content.")
 		return fuse.EREMOTEIO
 	}
+	temp.Seek(0, 0) // being explicit, even though already done in hashstream func
 	fd.Seek(0, 0)
 	fd.Truncate(0)
 	io.Copy(fd, temp)
