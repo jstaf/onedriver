@@ -126,7 +126,7 @@ desktop app, or via the command line: `onedriver /path/to/mount/onedrive/at/`.
 ### Gentoo
 
 Gentoo users can install onedriver from
-[this ebuild overlay](https://github.com/foopsss/Ebuilds) provided by a user. If
+[this ebuild overlay](https://github.com/foopsss/gentoo-overlay) provided by a user. If
 you don't want to add user-hosted overlays to your system you may copy the
 ebuild for the latest version to a local overlay, which can be created by
 following the instructions available in the
