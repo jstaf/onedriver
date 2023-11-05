@@ -62,10 +62,16 @@ func LoadConfig(path string) *Config {
 }
 
 // Write config to a file
-func (c Config) WriteConfig(path string) {
+func (c Config) WriteConfig(path string) error {
 	out, err := yaml.Marshal(c)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not marshal config!")
+		return err
 	}
-	ioutil.WriteFile(path, out, 0600)
+	os.MkdirAll(filepath.Dir(path), 0700)
+	err = ioutil.WriteFile(path, out, 0600)
+	if err != nil {
+		log.Error().Err(err).Msg("Could not write config to disk.")
+	}
+	return err
 }

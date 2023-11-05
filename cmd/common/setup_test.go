@@ -10,6 +10,7 @@ import (
 
 func TestMain(m *testing.M) {
 	os.Chdir("../..")
+	os.RemoveAll("tmp")
 	f, _ := os.OpenFile("fusefs_tests.log", os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0644)
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f, TimeFormat: "15:04:05"})

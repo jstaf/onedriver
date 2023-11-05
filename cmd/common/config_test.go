@@ -40,3 +40,9 @@ func TestLoadNonexistentConfig(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, ".cache/onedriver"), conf.CacheDir)
 	assert.Equal(t, "debug", conf.LogLevel)
 }
+
+func TestWriteConfig(t *testing.T) {
+	t.Parallel()
+	conf := LoadConfig(filepath.Join(configTestDir, "config-test.yml"))
+	assert.NoError(t, conf.WriteConfig("tmp/nested/config.yml"))
+}
