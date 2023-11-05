@@ -3,7 +3,7 @@
 # - debug - Log all operations that modify a file or directory.
 # - info - Log "big" operations like uploads and downloads.
 # - warn - These are warnings. Usually not a problem.
-# - error - Things that onedriver doesn't like, but can continue running 
+# - error - Things that onedriver doesn't like, but can continue running
 #          (can possibly result in file corruption or inability to do something).
 # - fatal - Only log errors that kill the program (this log level is not recommended).
 log: debug
@@ -17,6 +17,6 @@ cacheDir: ~/.cache/onedriver
 # default values.
 #auth:
 #  clientID: "3470c3fa-bc10-45ab-a0a9-2d30836485d1"
-#	 codeURL: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+#  codeURL: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 #  tokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 #  redirectURL: "https://login.live.com/oauth20_desktop.srf"
