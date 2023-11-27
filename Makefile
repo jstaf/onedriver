@@ -43,7 +43,7 @@ install: onedriver onedriver-launcher
 	cp pkg/resources/onedriver.svg /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver.png /usr/share/icons/onedriver/
 	cp pkg/resources/onedriver-128.png /usr/share/icons/onedriver/
-	cp pkg/resources/onedriver.desktop /usr/share/applications/
+	cp pkg/resources/onedriver-launcher.desktop /usr/share/applications/
 	cp pkg/resources/onedriver@.service /etc/systemd/user/
 	gzip -c pkg/resources/onedriver.1 > /usr/share/man/man1/onedriver.1.gz
 	mandb
@@ -54,7 +54,7 @@ uninstall:
 		/usr/bin/onedriver \
 		/usr/bin/onedriver-launcher \
 		/etc/systemd/user/onedriver@.service \
-		/usr/share/applications/onedriver.desktop \
+		/usr/share/applications/onedriver-launcher.desktop \
 		/usr/share/man/man1/onedriver.1.gz
 	rm -rf /usr/share/icons/onedriver
 	mandb
