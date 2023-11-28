@@ -134,6 +134,14 @@ following the instructions available in the
 
 Make sure to carefully review the ebuild for the package before installing it
 
+### NixOS/NixPkgs
+
+NixOS and Nix users can install onedriver from
+[the unstable channel](https://search.nixos.org/packages?channel=unstable&query=onedriver)
+either by adding the package to their system's configuration (if they are using
+NixOS) or by installing it manually via `nix-env -iA unstable.onedriver`.
+
+
 ## Multiple drives and starting OneDrive on login via systemd
 
 **Note:** You can also set this up through the GUI via the `onedriver-launcher`
