@@ -2,7 +2,11 @@
 package common
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"regexp"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -34,4 +38,28 @@ func StringToLevel(input string) zerolog.Level {
 // LogLevels returns the available logging levels
 func LogLevels() []string {
 	return []string{"trace", "debug", "info", "warn", "error", "fatal"}
+}
+
+// TemplateXDGVolumeInfo returns
+func TemplateXDGVolumeInfo(name string) string {
+	xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", name)
+	if _, err := os.Stat("/usr/share/icons/onedriver/onedriver.png"); err == nil {
+		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver/onedriver.png\n"
+	}
+	return xdgVolumeInfo
+}
+
+// GetXDGVolumeInfoName returns the name of the drive according to whatever the
+// user has named it.
+func GetXDGVolumeInfoName(path string) (string, error) {
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	regex := regexp.MustCompile("Name=(.*)")
+	name := regex.FindString(string(contents))
+	if len(name) < 5 {
+		return "", errors.New("could not find \"Name=\" key")
+	}
+	return name[5:], nil
 }
