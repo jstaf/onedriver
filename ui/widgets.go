@@ -42,11 +42,18 @@ func Dialog(msg string, messageType gtk.MessageType, parentWindow gtk.IWindow) {
 
 // CancelDialog creates a "Continue?" style message, and returns what the user
 // selected
-func CancelDialog(title string, parentWindow gtk.IWindow) bool {
-	dialog, _ := gtk.DialogNewWithButtons(title, parentWindow, gtk.DIALOG_MODAL,
-		[]interface{}{"Cancel", gtk.RESPONSE_CANCEL},
-		[]interface{}{"Continue", gtk.RESPONSE_ACCEPT},
+func CancelDialog(parentWindow gtk.IWindow, primaryText, secondaryText string) bool {
+	dialog := gtk.MessageDialogNew(
+		parentWindow,
+		gtk.DIALOG_MODAL,
+		gtk.MESSAGE_WARNING,
+		gtk.BUTTONS_OK_CANCEL,
+		"",
 	)
+	dialog.SetMarkup(primaryText)
+	if secondaryText != "" {
+		dialog.FormatSecondaryMarkup(secondaryText)
+	}
 	defer dialog.Destroy()
-	return dialog.Run() == gtk.RESPONSE_ACCEPT
+	return dialog.Run() == gtk.RESPONSE_OK
 }
