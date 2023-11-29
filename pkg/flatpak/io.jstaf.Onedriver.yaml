@@ -1,0 +1,105 @@
+app-id: io.jsaf.Onedriver
+runtime: org.gnome.Platform
+runtime-version: "45"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+
+finish-args:
+  - --talk-name=org.freedesktop.Notifications
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-run/gvfsd
+  - --filesystem=~/.config/systemd/user/
+  - --share=network
+  - --socket=session-bus
+  - --socket=fallback-x11
+  - --filesystem=~/.config/systemd/user/
+
+command: onedriver.sh
+modules:
+  - name: onedriver-app
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/golang/bin
+      env:
+        - GOBIN=/app/bin
+        - GOROOT=/usr/lib/sdk/golang
+        - GO111MODULE=on
+        - GOPATH=/run/build/onedriver/onedriver:/usr/lib/sdk/golang
+      build-args:
+        - --share=network
+        - --filesystem=~/.config/systemd/user/
+    build-commands:
+      - mkdir -p ~/.config/systemd/user/
+      - install -Dm755 -t ~/.config/systemd/user/ onedriver@.service
+      - make onedriver -j8
+      - install -Dm755 -t /app/bin/ onedriver
+    sources:
+      - type: git
+        url: https://github.com/jstaf/onedriver.git
+        tag: v0.14.1
+      - type: file
+        path: service/onedriver@.service
+      - type: patch
+        path: patch/0001-add-individual-builds.patch
+
+  - name: onedriver-launcher
+    config-opts:
+      - --with-systemdsystemunitdir=/app/lib/systemd/system
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/golang/bin
+      env:
+        - GOBIN=/app/bin
+        - GOROOT=/usr/lib/sdk/golang
+        - GO111MODULE=on
+        - GOPATH=/run/build/onedriver/onedriver:/usr/lib/sdk/golang
+      build-args:
+        - --share=network
+    sources:
+      - type: git
+        url: https://github.com/jstaf/onedriver.git
+        tag: v0.14.1
+      - type: file
+        path: icons/io.jsaf.Onedriver-16.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-24.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-32.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-48.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-64.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-128.png
+      - type: file
+        path: icons/io.jsaf.Onedriver-256.png
+      - type: file
+        path: io.jsaf.Onedriver.desktop
+      - type: file
+        path: onedriver.sh
+      - type: file
+        path: service/onedriver@.service
+      - type: patch
+        path: patch/0001-add-individual-builds.patch
+
+    build-commands:
+      - go get -u os/user
+      - go get -u github.com/gotk3/gotk3/gtk
+      - go get -u github.com/godbus/dbus/v5
+      - go get -u github.com/jstaf/onedriver/ui
+      - go get -u github.com/jstaf/onedriver/cmd/common
+      - go get -u github.com/jstaf/onedriver/cmd/onedriver
+      - go get -u github.com/jstaf/onedriver/cmd/onedriver-launcher
+      - make -j8 
+      - ls -l
+      - mkdir -p /app/bin
+      - mkdir -p /app/share/icons/hicolor/
+      - mkdir -p /app/share/icons/hicolor/128x128/apps/
+      - install -Dm755 -t /app/bin/ ./onedriver-launcher
+      - install -Dm755 -t /app/bin/ onedriver.sh
+      - install -Dm 644 -t /app/share/applications io.jsaf.Onedriver.desktop
+      - |
+        for icon in 16 24 32 48 64 128 256; do
+          install -Dm 644 io.jsaf.Onedriver-$icon.png /app/share/icons/hicolor/${icon}x${icon}/apps/io.jsaf.Onedriver.png
+        done
