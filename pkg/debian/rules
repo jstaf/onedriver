@@ -30,7 +30,7 @@ override_dh_auto_install:
 	install -D -m 0644 pkg/resources/onedriver.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.png
 	install -D -m 0644 pkg/resources/onedriver-128.png $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver-128.png
 	install -D -m 0644 pkg/resources/onedriver.svg $$(pwd)/debian/onedriver/usr/share/icons/onedriver/onedriver.svg
-	install -D -m 0644 pkg/resources/onedriver.desktop $$(pwd)/debian/onedriver/usr/share/applications/onedriver.desktop
+	install -D -m 0644 pkg/resources/onedriver-launcher.desktop $$(pwd)/debian/onedriver/usr/share/applications/onedriver-launcher.desktop
 	install -D -m 0644 pkg/resources/onedriver@.service $$(pwd)/debian/onedriver/usr/lib/systemd/user/onedriver@.service
 	install -D -m 0644 pkg/resources/onedriver.1.gz $$(pwd)/debian/onedriver/usr/share/man/man1/onedriver.1.gz
 
