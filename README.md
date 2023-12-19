@@ -94,8 +94,8 @@ sudo dnf install onedriver
 OpenSUSE users need to add the COPR repo either for Leap or Tumbleweed
 
 ```bash
-# Leap 15.3
-sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-leap-15.3/jstaf-onedriver-opensuse-leap-15.3.repo onedriver
+# Leap 15.4
+sudo zypper addrepo -g -r https://copr.fedorainfracloud.org/coprs/jstaf/onedriver/repo/opensuse-leap-15.4/jstaf-onedriver-opensuse-leap-15.4.repo onedriver
 sudo zypper --gpg-auto-import-keys refresh
 sudo zypper install onedriver
 
