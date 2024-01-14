@@ -180,7 +180,7 @@ mkdir mount
 ls -l mount
 
 # unmount the filesystem
-fusermount -uz mount
+fusermount3 -uz mount
 # you can also just "ctrl-c" onedriver to unmount it
 ```
 
@@ -231,7 +231,7 @@ filesystem" indicates that your computer is currently offline.)
 
 If the filesystem appears to hang or "freeze" indefinitely, its possible the
 fileystem has crashed. To resolve this, just restart the program by unmounting
-and remounting things via the GUI or by running `fusermount -uz $MOUNTPOINT` on
+and remounting things via the GUI or by running `fusermount3 -uz $MOUNTPOINT` on
 the command-line.
 
 If you really want to go back to a clean slate, onedriver can be completely

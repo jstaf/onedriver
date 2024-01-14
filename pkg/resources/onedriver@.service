@@ -3,7 +3,7 @@ Description=onedriver
 
 [Service]
 ExecStart=/usr/bin/onedriver %f
-ExecStopPost=/usr/bin/fusermount -uz /%I
+ExecStopPost=/usr/bin/fusermount3 -uz /%I
 Restart=on-abnormal
 RestartSec=3
 RestartForceExitStatus=2

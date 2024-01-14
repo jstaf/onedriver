@@ -143,7 +143,7 @@ test: onedriver onedriver-launcher dmel.fa
 # will literally purge everything: all built artifacts, all logs, all tests,
 # all files tests depend on, all auth tokens... EVERYTHING
 clean:
-	fusermount -uz mount/ || true
+	fusermount3 -uz mount/ || true
 	rm -f *.db *.rpm *.deb *.dsc *.changes *.build* *.upload *.xz filelist.txt .commit
 	rm -f *.log *.fa *.gz *.test vgcore.* onedriver onedriver-headless onedriver-launcher .auth_tokens.json
 	rm -rf util-linux-*/ onedriver-*/ vendor/ build/
