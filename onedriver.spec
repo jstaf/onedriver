@@ -16,7 +16,7 @@ BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
 BuildRequires: webkit2gtk3-devel
-Requires: fuse
+Requires: fuse3
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and

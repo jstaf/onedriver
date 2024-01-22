@@ -115,7 +115,7 @@ It's possible that there may be a deadlock or segfault that I haven't caught in
 my tests. If this happens, the onedriver filesystem and subsequent ops may hang
 indefinitely (ops will hang while the kernel waits for the dead onedriver 
 process to respond). When this happens, you can cleanly unmount the filesystem 
-with: \fBfusermount -uz $MOUNTPOINT\fR
+with: \fBfusermount3 -uz $MOUNTPOINT\fR
 
 
 In the event that you want to reset onedriver completely (wipe all local state)

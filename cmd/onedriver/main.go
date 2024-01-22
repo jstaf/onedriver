@@ -138,7 +138,7 @@ func main() {
 	})
 	if err != nil {
 		log.Fatal().Err(err).Msgf("Mount failed. Is the mountpoint already in use? "+
-			"(Try running \"fusermount -uz %s\")\n", mountpoint)
+			"(Try running \"fusermount3 -uz %s\")\n", mountpoint)
 	}
 
 	// setup signal handler for graceful unmount on signals like sigint

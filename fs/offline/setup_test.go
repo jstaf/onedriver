@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-uz", mountLoc).Run()
+	exec.Command("fusermount3", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 
 	auth = graph.Authenticate(graph.AuthConfig{}, ".auth_tokens.json", false)
@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 
 	if server.Unmount() != nil {
 		log.Error().Msg("Failed to unmount test fuse server, attempting lazy unmount")
-		exec.Command("fusermount", "-zu", "mount").Run()
+		exec.Command("fusermount3", "-zu", "mount").Run()
 	}
 	fmt.Println("Successfully unmounted fuse server!")
 	os.Exit(code)

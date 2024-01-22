@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 	os.Chdir("..")
 	// attempt to unmount regardless of what happens (in case previous tests
 	// failed and didn't clean themselves up)
-	exec.Command("fusermount", "-uz", mountLoc).Run()
+	exec.Command("fusermount3", "-uz", mountLoc).Run()
 	os.Mkdir(mountLoc, 0755)
 	// wipe all cached data from previous tests
 	os.RemoveAll(testDBLoc)
@@ -116,7 +116,7 @@ func TestMain(m *testing.M) {
 	// unmount
 	if server.Unmount() != nil {
 		log.Error().Msg("Failed to unmount test fuse server, attempting lazy unmount")
-		exec.Command("fusermount", "-zu", "mount").Run()
+		exec.Command("fusermount3", "-zu", "mount").Run()
 	}
 	fmt.Println("Successfully unmounted fuse server!")
 	os.Exit(code)
