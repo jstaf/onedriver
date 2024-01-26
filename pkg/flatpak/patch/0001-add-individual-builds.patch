@@ -1,0 +1,22 @@
+From 54dcf1725e4712182b7275e150c9e1830426bc80 Mon Sep 17 00:00:00 2001
+From: "Charles K. Neimog" <charlesneimog@outlook.com>
+Date: Tue, 28 Nov 2023 19:27:46 -0300
+Subject: [PATCH] add individual builds
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 95179de..dcd02f6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-.PHONY: all, test, test-init, srpm, rpm, dsc, changes, deb, clean, install, uninstall
++.PHONY: all, onedriver, onedriver-launcher, onedriver-headless, test, test-init, srpm, rpm, dsc, changes, deb, clean, install, uninstall
+ 
+ # autocalculate software/package versions
+ VERSION := $(shell grep Version onedriver.spec | sed 's/Version: *//g')
+-- 
+2.43.0
+
