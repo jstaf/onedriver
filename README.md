@@ -33,7 +33,9 @@ account to Linux with onedriver, and call it a day.
 **Microsoft OneDrive works on Linux.**
 
 Getting started with your files on OneDrive is as easy as running:
-`onedriver /path/to/mount/onedrive/at` (there's also a helpful GUI!).
+`onedriver /path/to/mount/onedrive/at` (there's also a helpful GUI!). To get a
+list of all the arguments onedriver can be run with you can read the manual page
+by typing `man onedriver` or get a quick summary with `onedriver --help`.
 
 ## Key features
 
@@ -140,7 +142,6 @@ NixOS and Nix users can install onedriver from
 [the unstable channel](https://search.nixos.org/packages?channel=unstable&query=onedriver)
 either by adding the package to their system's configuration (if they are using
 NixOS) or by installing it manually via `nix-env -iA unstable.onedriver`.
-
 
 ## Multiple drives and starting OneDrive on login via systemd
 
