@@ -143,8 +143,6 @@ NixOS and Nix users can install onedriver from
 either by adding the package to their system's configuration (if they are using
 NixOS) or by installing it manually via `nix-env -iA unstable.onedriver`.
 
-
-
 ## Multiple drives and starting OneDrive on login via systemd
 
 **Note:** You can also set this up through the GUI via the `onedriver-launcher`
