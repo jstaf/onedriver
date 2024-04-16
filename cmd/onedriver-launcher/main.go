@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 	"unsafe"
 
 	"github.com/coreos/go-systemd/v22/unit"
@@ -59,6 +58,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	// loading config can emit an unformatted log message, so we do this first
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+
 	// command line options override config options
 	config := common.LoadConfig(*configPath)
 	if *cacheDir != "" {
@@ -68,7 +70,6 @@ func main() {
 		config.LogLevel = *logLevel
 	}
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
 
 	log.Info().Msgf("onedriver-launcher %s", common.Version())
@@ -313,9 +314,70 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	if accountName != "" {
 		accountLabel, _ := gtk.LabelNew(accountName)
 		popoverBox.Add(accountLabel)
-		separator, _ := gtk.SeparatorMenuItemNew()
-		popoverBox.Add(separator)
 	}
+	// rename the mount by rewriting the .xdg-volume-info file
+	renameMountpointEntry, _ := gtk.EntryNew()
+	renameMountpointEntry.SetTooltipText("Change the label that your file browser uses for this drive")
+	renameMountpointEntry.SetText(driveName)
+	// runs on enter
+	renameMountpointEntry.Connect("activate", func(entry *gtk.Entry) {
+		newName, err := entry.GetText()
+		ctx := log.With().
+			Str("signal", "clicked").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Str("oldName", driveName).
+			Str("newName", newName).
+			Logger()
+		if err != nil {
+			ctx.Error().Err(err).Msg("Failed to get new drive name.")
+			return
+		}
+		if driveName == newName {
+			ctx.Info().Msg("New name is same as old name, ignoring.")
+			return
+		}
+		ctx.Info().
+			Msg("Renaming mount.")
+		popover.GrabFocus()
+		entry.SetProgressFraction(0.1)
+		entry.SetCanDefault(false)
+		defer entry.SetCanDefault(true)
+		defer entry.SetProgressFraction(0)
+
+		err = systemd.UnitSetActive(unitName, true)
+		if err != nil {
+			ctx.Error().Err(err).Msg("Failed to start mount for rename.")
+			return
+		}
+		mountToggle.SetActive(true)
+
+		if ui.PollUntilAvail(mount, -1) {
+			entry.SetProgressFraction(0.25)
+			xdgVolumeInfo := common.TemplateXDGVolumeInfo(newName)
+			driveName = newName
+			//FIXME why does this not work???
+			err = ioutil.WriteFile(filepath.Join(mount, ".xdg-volume-info"), []byte(xdgVolumeInfo), 0644)
+			if err != nil {
+				ctx.Error().Err(err).Msg("Failed to write new mount name.")
+				return
+			}
+			entry.SetProgressFraction(0.5)
+		} else {
+			ctx.Error().Err(err).Msg("Mount never became ready.")
+		}
+		// update label in UI now
+		label.SetMarkup(fmt.Sprintf("%s <span style=\"italic\" weight=\"light\">(%s)</span>    ",
+			newName, tildePath,
+		))
+
+		ui.Dialog("Drive rename will take effect on next filesystem start.", gtk.MESSAGE_INFO, nil)
+		ctx.Info().Msg("Drive rename will take effect on next filesystem start.")
+	})
+	popoverBox.Add(renameMountpointEntry)
+
+	separator, _ := gtk.SeparatorMenuItemNew()
+	popoverBox.Add(separator)
 
 	// create a button to enable/disable the mountpoint
 	unitEnabledBtn, _ := gtk.CheckButtonNewWithLabel(" Start drive on login")
@@ -342,48 +404,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 		}
 	})
 	popoverBox.PackStart(unitEnabledBtn, false, true, 0)
-
-	// rename the mount by rewriting the .xdg-volume-info file
-	renameMountpointBtn, _ := gtk.ModelButtonNew()
-	renameMountpointBtn.SetLabel("Change display name")
-	renameMountpointBtn.SetTooltipText("Change the label that your file browser uses for this drive")
-	renameMountpointBtn.Connect("clicked", func(button *gtk.ModelButton) {
-		newName := "test drive" //TODO get the new drive name
-		ctx := log.With().
-			Str("signal", "clicked").
-			Str("mount", mount).
-			Str("unitName", unitName).
-			Str("name", newName).
-			Logger()
-		ctx.Info().
-			Msg("Renaming mount.")
-		err := systemd.UnitSetActive(unitName, true)
-		if err != nil {
-			ctx.Error().Err(err).Msg("Failed to rename mount.")
-			return
-		}
-		mountToggle.SetActive(true)
-
-		if ui.PollUntilAvail(mount, -1) {
-			xdgVolumeInfo := common.TemplateXDGVolumeInfo(newName)
-			err = ioutil.WriteFile(filepath.Join(mount, ".xdg-volume-info"), []byte(xdgVolumeInfo), 0644)
-			if err != nil {
-				ctx.Error().Err(err).Msg("Failed to rename mount.")
-			}
-		} else {
-			ctx.Error().Err(err).Msg("Mount never became ready.")
-		}
-		// update label in UI now
-		label.SetMarkup(fmt.Sprintf("%s <span style=\"italic\" weight=\"light\">(%s)</span>    ",
-			newName, tildePath,
-		))
-		// and reset the drive again so people's file browsers actually pick it up
-		ctx.Info().Msg("Remounting drive to ensure file browser gets the new name.")
-		systemd.UnitSetActive(unitName, false)
-		time.Sleep(100 * time.Millisecond) // probably unnecessary
-		systemd.UnitSetActive(unitName, true)
-	})
-	popoverBox.PackStart(renameMountpointBtn, false, true, 0)
 
 	// button to delete the mount
 	deleteMountpointBtn, _ := gtk.ModelButtonNew()
