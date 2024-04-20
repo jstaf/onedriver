@@ -340,10 +340,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 		ctx.Info().
 			Msg("Renaming mount.")
 		popover.GrabFocus()
-		entry.SetProgressFraction(0.1)
-		entry.SetCanDefault(false)
-		defer entry.SetCanDefault(true)
-		defer entry.SetProgressFraction(0)
 
 		err = systemd.UnitSetActive(unitName, true)
 		if err != nil {
@@ -353,7 +349,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 		mountToggle.SetActive(true)
 
 		if ui.PollUntilAvail(mount, -1) {
-			entry.SetProgressFraction(0.25)
 			xdgVolumeInfo := common.TemplateXDGVolumeInfo(newName)
 			driveName = newName
 			//FIXME why does this not work???
@@ -362,7 +357,6 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 				ctx.Error().Err(err).Msg("Failed to write new mount name.")
 				return
 			}
-			entry.SetProgressFraction(0.5)
 		} else {
 			ctx.Error().Err(err).Msg("Mount never became ready.")
 		}
