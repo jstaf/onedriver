@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"unsafe"
@@ -57,6 +58,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	// loading config can emit an unformatted log message, so we do this first
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
+
 	// command line options override config options
 	config := common.LoadConfig(*configPath)
 	if *cacheDir != "" {
@@ -66,7 +70,6 @@ func main() {
 		config.LogLevel = *logLevel
 	}
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 	zerolog.SetGlobalLevel(common.StringToLevel(config.LogLevel))
 
 	log.Info().Msgf("onedriver-launcher %s", common.Version())
@@ -242,77 +245,37 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	escapedMount := unit.UnitNamePathEscape(mount)
 	unitName := systemd.TemplateUnit(systemd.OnedriverServiceTemplate, escapedMount)
 
-	var label *gtk.Label
-	tildePath := ui.EscapeHome(mount)
-	accountName, err := ui.GetAccountName(config.CacheDir, escapedMount)
+	driveName, err := common.GetXDGVolumeInfoName(filepath.Join(mount, ".xdg-volume-info"))
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("mountpoint", mount).
-			Msg("Could not determine acccount name.")
-		label, _ = gtk.LabelNew(tildePath)
-	} else {
+			Msg("Could not determine user-specified acccount name.")
+	}
+
+	tildePath := ui.EscapeHome(mount)
+	accountName, err := ui.GetAccountName(config.CacheDir, escapedMount)
+	label, _ := gtk.LabelNew("")
+	if driveName != "" {
+		// we have a user-assigned name for the user's drive
+		label.SetMarkup(fmt.Sprintf("%s <span style=\"italic\" weight=\"light\">(%s)</span>    ",
+			driveName, tildePath,
+		))
+	} else if err == nil {
+		// fs isn't mounted, so just use user principal name from AAD
 		label, _ = gtk.LabelNew("")
 		label.SetMarkup(fmt.Sprintf("%s <span style=\"italic\" weight=\"light\">(%s)</span>    ",
 			accountName, tildePath,
 		))
+	} else {
+		// something went wrong and all we have is the mountpoint name
+		log.Error().
+			Err(err).
+			Str("mountpoint", mount).
+			Msg("Could not determine user principal name.")
+		label, _ = gtk.LabelNew(tildePath)
 	}
 	box.PackStart(label, false, false, 5)
-
-	// create a button to delete the mountpoint
-	deleteMountpointBtn, _ := gtk.ButtonNewFromIconName("user-trash-symbolic", gtk.ICON_SIZE_BUTTON)
-	deleteMountpointBtn.SetTooltipText("Remove OneDrive account from local computer")
-	deleteMountpointBtn.Connect("clicked", func() {
-		log.Trace().
-			Str("signal", "clicked").
-			Str("mount", mount).
-			Str("unitName", unitName).
-			Msg("Request to delete mount.")
-
-		if ui.CancelDialog("Remove mountpoint?", nil) {
-			log.Info().
-				Str("signal", "clicked").
-				Str("mount", mount).
-				Str("unitName", unitName).
-				Msg("Deleting mount.")
-			systemd.UnitSetEnabled(unitName, false)
-			systemd.UnitSetActive(unitName, false)
-
-			cachedir, _ := os.UserCacheDir()
-			os.RemoveAll(fmt.Sprintf("%s/onedriver/%s/", cachedir, escapedMount))
-
-			row.Destroy()
-		}
-	})
-	box.PackEnd(deleteMountpointBtn, false, false, 0)
-
-	// create a button to enable/disable the mountpoint
-	unitEnabledBtn, _ := gtk.ToggleButtonNew()
-	enabledImg, _ := gtk.ImageNewFromIconName("object-select-symbolic", gtk.ICON_SIZE_BUTTON)
-	unitEnabledBtn.SetImage(enabledImg)
-	unitEnabledBtn.SetTooltipText("Start mountpoint on login")
-	enabled, err := systemd.UnitIsEnabled(unitName)
-	if err == nil {
-		unitEnabledBtn.SetActive(enabled)
-	} else {
-		log.Error().Err(err).Msg("Error checking unit enabled state.")
-	}
-	unitEnabledBtn.Connect("toggled", func() {
-		log.Info().
-			Str("signal", "toggled").
-			Str("mount", mount).
-			Str("unitName", unitName).
-			Bool("enabled", unitEnabledBtn.GetActive()).
-			Msg("Changing systemd unit enabled state.")
-		err := systemd.UnitSetEnabled(unitName, unitEnabledBtn.GetActive())
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("unit", unitName).
-				Msg("Could not change systemd unit enabled state.")
-		}
-	})
-	box.PackEnd(unitEnabledBtn, false, false, 0)
 
 	// a switch to start/stop the mountpoint
 	mountToggle, _ := gtk.SwitchNew()
@@ -339,6 +302,140 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 				Msg("Could not change systemd unit active state.")
 		}
 	})
+
+	mountpointSettingsBtn, _ := gtk.MenuButtonNew()
+	icon, _ := gtk.ImageNewFromIconName("emblem-system-symbolic", gtk.ICON_SIZE_BUTTON)
+	mountpointSettingsBtn.SetImage(icon)
+	popover, _ := gtk.PopoverNew(mountpointSettingsBtn)
+	mountpointSettingsBtn.SetPopover(popover)
+	popover.SetBorderWidth(8)
+	popoverBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 5)
+
+	if accountName != "" {
+		accountLabel, _ := gtk.LabelNew(accountName)
+		popoverBox.Add(accountLabel)
+	}
+	// rename the mount by rewriting the .xdg-volume-info file
+	renameMountpointEntry, _ := gtk.EntryNew()
+	renameMountpointEntry.SetTooltipText("Change the label that your file browser uses for this drive")
+	renameMountpointEntry.SetText(driveName)
+	// runs on enter
+	renameMountpointEntry.Connect("activate", func(entry *gtk.Entry) {
+		newName, err := entry.GetText()
+		ctx := log.With().
+			Str("signal", "clicked").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Str("oldName", driveName).
+			Str("newName", newName).
+			Logger()
+		if err != nil {
+			ctx.Error().Err(err).Msg("Failed to get new drive name.")
+			return
+		}
+		if driveName == newName {
+			ctx.Info().Msg("New name is same as old name, ignoring.")
+			return
+		}
+		ctx.Info().
+			Msg("Renaming mount.")
+		popover.GrabFocus()
+
+		err = systemd.UnitSetActive(unitName, true)
+		if err != nil {
+			ctx.Error().Err(err).Msg("Failed to start mount for rename.")
+			return
+		}
+		mountToggle.SetActive(true)
+
+		if ui.PollUntilAvail(mount, -1) {
+			xdgVolumeInfo := common.TemplateXDGVolumeInfo(newName)
+			driveName = newName
+			//FIXME why does this not work???
+			err = ioutil.WriteFile(filepath.Join(mount, ".xdg-volume-info"), []byte(xdgVolumeInfo), 0644)
+			if err != nil {
+				ctx.Error().Err(err).Msg("Failed to write new mount name.")
+				return
+			}
+		} else {
+			ctx.Error().Err(err).Msg("Mount never became ready.")
+		}
+		// update label in UI now
+		label.SetMarkup(fmt.Sprintf("%s <span style=\"italic\" weight=\"light\">(%s)</span>    ",
+			newName, tildePath,
+		))
+
+		ui.Dialog("Drive rename will take effect on next filesystem start.", gtk.MESSAGE_INFO, nil)
+		ctx.Info().Msg("Drive rename will take effect on next filesystem start.")
+	})
+	popoverBox.Add(renameMountpointEntry)
+
+	separator, _ := gtk.SeparatorMenuItemNew()
+	popoverBox.Add(separator)
+
+	// create a button to enable/disable the mountpoint
+	unitEnabledBtn, _ := gtk.CheckButtonNewWithLabel(" Start drive on login")
+	unitEnabledBtn.SetTooltipText("Start this drive automatically when you login")
+	enabled, err := systemd.UnitIsEnabled(unitName)
+	if err == nil {
+		unitEnabledBtn.SetActive(enabled)
+	} else {
+		log.Error().Err(err).Msg("Error checking unit enabled state.")
+	}
+	unitEnabledBtn.Connect("toggled", func() {
+		log.Info().
+			Str("signal", "toggled").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Bool("enabled", unitEnabledBtn.GetActive()).
+			Msg("Changing systemd unit enabled state.")
+		err := systemd.UnitSetEnabled(unitName, unitEnabledBtn.GetActive())
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("unit", unitName).
+				Msg("Could not change systemd unit enabled state.")
+		}
+	})
+	popoverBox.PackStart(unitEnabledBtn, false, true, 0)
+
+	// button to delete the mount
+	deleteMountpointBtn, _ := gtk.ModelButtonNew()
+	deleteMountpointBtn.SetLabel("Remove drive")
+	deleteMountpointBtn.SetTooltipText("Remove OneDrive account from local computer")
+	deleteMountpointBtn.Connect("clicked", func(button *gtk.ModelButton) {
+		log.Trace().
+			Str("signal", "clicked").
+			Str("mount", mount).
+			Str("unitName", unitName).
+			Msg("Request to delete drive.")
+
+		if ui.CancelDialog(nil, "<span weight=\"bold\">Remove drive?</span>",
+			"This will remove all data for this drive from your local computer. "+
+				"It can also be used to \"reset\" the drive to its original state.") {
+			log.Info().
+				Str("signal", "clicked").
+				Str("mount", mount).
+				Str("unitName", unitName).
+				Msg("Deleting mount.")
+			systemd.UnitSetEnabled(unitName, false)
+			systemd.UnitSetActive(unitName, false)
+
+			cachedir, _ := os.UserCacheDir()
+			os.RemoveAll(fmt.Sprintf("%s/onedriver/%s/", cachedir, escapedMount))
+
+			row.Destroy()
+		}
+	})
+	popoverBox.PackStart(deleteMountpointBtn, false, true, 0)
+
+	// ok show everything in the mount settings menu
+	popoverBox.ShowAll()
+	popover.Add(popoverBox)
+	popover.SetPosition(gtk.POS_BOTTOM)
+
+	// add all widgets to row in the right order
+	box.PackEnd(mountpointSettingsBtn, false, false, 0)
 	box.PackEnd(mountToggle, false, false, 0)
 
 	// name is used by "row-activated" callback
@@ -388,7 +485,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 		oldPath, _ := button.GetLabel()
 		oldPath = ui.UnescapeHome(oldPath)
 		path := ui.DirChooser("Select an empty directory to use for storage")
-		if !ui.CancelDialog("Remount all drives?", settingsWindow) {
+		if !ui.CancelDialog(settingsWindow, "Remount all drives?", "") {
 			return
 		}
 		log.Warn().

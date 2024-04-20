@@ -12,11 +12,11 @@ jobs:
           - personal
           - business
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.18"
+          go-version: "1.19"
 
       - name: Install apt dependencies
         run: |
@@ -33,7 +33,7 @@ jobs:
             libreoffice
           sudo rm /usr/local/bin/aws  # whyyy
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
@@ -63,12 +63,12 @@ jobs:
           # cannot run systemd tests here because github actions runners don't have dbus setup +
           # if CGO is on, the UI tests will take foreverrrrr
           bash cgo-helper.sh
-          CGO_ENABLED=0 gotest -v -covermode=count -coverpkg=./ui/... -coverprofile=ui.coverage ./ui
-          gotest -v -covermode=count -coverpkg=./cmd/common -coverprofile=common.coverage ./cmd/common
-          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=quickxorhash.coverage ./fs/graph/quickxorhash
-          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
-          gotest -v -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
-          go test -c -covermode=count -coverpkg=./fs/... ./fs/offline
+          CGO_ENABLED=0 gotest -v -tags=glib_2_64 -covermode=count -coverpkg=./ui/... -coverprofile=ui.coverage ./ui
+          gotest -v -tags=glib_2_64 -covermode=count -coverpkg=./cmd/common -coverprofile=common.coverage ./cmd/common
+          gotest -v -tags=glib_2_64 -covermode=count -coverpkg=./fs/... -coverprofile=quickxorhash.coverage ./fs/graph/quickxorhash
+          gotest -v -tags=glib_2_64 -covermode=count -coverpkg=./fs/... -coverprofile=graph.coverage ./fs/graph
+          gotest -v -tags=glib_2_64 -covermode=count -coverpkg=./fs/... -coverprofile=fs.coverage ./fs
+          go test -c -tags=glib_2_64 -covermode=count -coverpkg=./fs/... ./fs/offline
           sudo unshare -n -S $(id -u) -G $(id -g) ./offline.test -test.v -test.coverprofile=offline.coverage
 
       - name: Copy new auth tokens to S3
@@ -92,7 +92,7 @@ jobs:
         if: always()
 
       - name: Send test coverage to Coveralls
-        uses: coverallsapp/github-action@v1.1.2
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: coverage.lcov
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Coveralls finished
-        uses: coverallsapp/github-action@v1.1.2
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.github_token }}
           parallel-finished: true

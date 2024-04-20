@@ -166,11 +166,7 @@ func xdgVolumeInfo(filesystem *fs.Filesystem, auth *graph.Auth) {
 		log.Error().Err(err).Msg("Could not create .xdg-volume-info")
 		return
 	}
-
-	xdgVolumeInfo := fmt.Sprintf("[Volume Info]\nName=%s\n", user.UserPrincipalName)
-	if _, err := os.Stat("/usr/share/icons/onedriver/onedriver.png"); err == nil {
-		xdgVolumeInfo += "IconFile=/usr/share/icons/onedriver/onedriver.png\n"
-	}
+	xdgVolumeInfo := common.TemplateXDGVolumeInfo(user.UserPrincipalName)
 
 	// just upload directly and shove it in the cache
 	// (since the fs isn't mounted yet)
