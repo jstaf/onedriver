@@ -115,6 +115,25 @@ func isNameRestricted(name string) bool {
 	return disallowedRexp.FindStringIndex(name) != nil
 }
 
+// makeattr is a convenience function to create a set of filesystem attrs for
+// use with syscalls that use or modify attrs.
+func (f *Filesystem) makeAttr(i *Inode) fuse.Attr {
+	mtime := i.ModTime()
+	return fuse.Attr{
+		Ino:   i.NodeID(),
+		Size:  i.Size(),
+		Nlink: i.NLink(),
+		Ctime: mtime,
+		Mtime: mtime,
+		Atime: mtime,
+		Mode:  i.Mode(),
+		Owner: fuse.Owner{
+			Uid: f.uid,
+			Gid: f.gid,
+		},
+	}
+}
+
 // Statfs returns information about the filesystem. Mainly useful for checking
 // quotas and storage limits.
 func (f *Filesystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) fuse.Status {
@@ -180,7 +199,7 @@ func (f *Filesystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string
 	newInode.mode = in.Mode | fuse.S_IFDIR
 
 	out.NodeId = f.InsertChild(id, newInode)
-	out.Attr = newInode.makeAttr()
+	out.Attr = f.makeAttr(newInode)
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
 	return fuse.OK
@@ -305,7 +324,7 @@ func (f *Filesystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *f
 		return fuse.EIO
 	}
 	entryOut.NodeId = entry.Ino
-	entryOut.Attr = inode.makeAttr()
+	entryOut.Attr = f.makeAttr(inode)
 	entryOut.SetAttrTimeout(timeout)
 	entryOut.SetEntryTimeout(timeout)
 	return fuse.OK
@@ -369,7 +388,7 @@ func (f *Filesystem) Lookup(cancel <-chan struct{}, in *fuse.InHeader, name stri
 	}
 
 	out.NodeId = child.NodeID()
-	out.Attr = child.makeAttr()
+	out.Attr = f.makeAttr(child)
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
 	return fuse.OK
@@ -412,7 +431,7 @@ func (f *Filesystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string
 		Str("mode", Octal(in.Mode)).
 		Msg("Creating inode.")
 	out.NodeId = f.InsertChild(parentID, inode)
-	out.Attr = inode.makeAttr()
+	out.Attr = f.makeAttr(inode)
 	out.SetAttrTimeout(timeout)
 	out.SetEntryTimeout(timeout)
 	return fuse.OK
@@ -721,7 +740,7 @@ func (f *Filesystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fu
 		Str("path", inode.Path()).
 		Msg("")
 
-	out.Attr = inode.makeAttr()
+	out.Attr = f.makeAttr(inode)
 	out.SetTimeout(timeout)
 	return fuse.OK
 }
@@ -784,7 +803,7 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	}
 
 	i.Unlock()
-	out.Attr = i.makeAttr()
+	out.Attr = f.makeAttr(i)
 	out.SetTimeout(timeout)
 	return fuse.OK
 }

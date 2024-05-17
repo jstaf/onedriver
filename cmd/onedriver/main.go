@@ -58,6 +58,10 @@ func main() {
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging. "+
 		"This logs communication between onedriver and the kernel.")
+	allowOther := flag.BoolP("allow-other", "", false,
+		"Allow access to the mount point for other users.")
+	uid := flag.Uint32P("uid", "", uint32(os.Getuid()), "Owner uid of the mount point.")
+	gid := flag.Uint32P("gid", "", uint32(os.Getgid()), "Owner gid of the mount point.")
 	help := flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
 	flag.Parse()
@@ -123,13 +127,15 @@ func main() {
 	// create the filesystem
 	log.Info().Msgf("onedriver %s", common.Version())
 	auth := graph.Authenticate(config.AuthConfig, authPath, *headless)
-	filesystem := fs.NewFilesystem(auth, cachePath)
+	filesystem := fs.NewFilesystem(auth, cachePath, fs.OptionOwner(*uid, *gid))
 	go filesystem.DeltaLoop(10 * time.Minute)
 	xdgVolumeInfo(filesystem, auth)
 
 	server, err := fuse.NewServer(filesystem, mountpoint, &fuse.MountOptions{
 		Name:          "onedriver",
 		FsName:        "onedriver",
+		DirectMount:   true,
+		AllowOther:    *allowOther,
 		DisableXAttrs: true,
 		MaxBackground: 1024,
 		Debug:         *debugOn,
