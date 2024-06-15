@@ -9,6 +9,7 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
+	github.com/yousong/socketio-go v0.0.0-20240617013649-619c2edcd15b
 	go.etcd.io/bbolt v1.3.6
 	gopkg.in/yaml.v3 v3.0.1
 )

@@ -21,13 +21,14 @@ import (
 type Filesystem struct {
 	fuse.RawFileSystem
 
-	metadata  sync.Map
-	db        *bolt.DB
-	content   *LoopbackCache
-	auth      *graph.Auth
-	root      string // the id of the filesystem's root item
-	deltaLink string
-	uploads   *UploadManager
+	metadata             sync.Map
+	db                   *bolt.DB
+	content              *LoopbackCache
+	auth                 *graph.Auth
+	root                 string // the id of the filesystem's root item
+	deltaLink            string
+	subscribeChangesLink string
+	uploads              *UploadManager
 
 	sync.RWMutex
 	offline    bool
@@ -164,6 +165,7 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 		// using token=latest because we don't care about existing items - they'll
 		// be downloaded on-demand by the cache
 		fs.deltaLink = "/me/drive/root/delta?token=latest"
+		fs.subscribeChangesLink = "/me/drive/root/subscriptions/socketIo"
 	}
 
 	// deltaloop is started manually

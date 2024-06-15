@@ -126,7 +126,7 @@ func main() {
 	log.Info().Msgf("onedriver %s", common.Version())
 	auth := graph.Authenticate(config.AuthConfig, authPath, *headless)
 	filesystem := fs.NewFilesystem(auth, cachePath)
-	go filesystem.DeltaLoop(30 * time.Second)
+	go filesystem.DeltaLoop(10 * time.Minute)
 	xdgVolumeInfo(filesystem, auth)
 
 	server, err := fuse.NewServer(filesystem, mountpoint, &fuse.MountOptions{
