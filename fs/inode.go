@@ -3,7 +3,6 @@ package fs
 import (
 	"encoding/json"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -209,26 +208,6 @@ func (i *Inode) HasChildren() bool {
 	i.RLock()
 	defer i.RUnlock()
 	return len(i.children) > 0
-}
-
-// makeattr is a convenience function to create a set of filesystem attrs for
-// use with syscalls that use or modify attrs.
-func (i *Inode) makeAttr() fuse.Attr {
-	mtime := i.ModTime()
-	return fuse.Attr{
-		Ino:   i.NodeID(),
-		Size:  i.Size(),
-		Nlink: i.NLink(),
-		Ctime: mtime,
-		Mtime: mtime,
-		Atime: mtime,
-		Mode:  i.Mode(),
-		// whatever user is running the filesystem is the owner
-		Owner: fuse.Owner{
-			Uid: uint32(os.Getuid()),
-			Gid: uint32(os.Getgid()),
-		},
-	}
 }
 
 // IsDir returns if it is a directory (true) or file (false).
