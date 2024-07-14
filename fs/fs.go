@@ -706,6 +706,10 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		Uint64("nodeID", in.NodeId).
 		Msg("")
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
+
+	// grab a lock to prevent a race condition closing an opened file prior to its use (use after free segfault)
+	inode.Lock()
+	defer inode.Unlock()
 	f.content.Close(id)
 	return 0
 }
