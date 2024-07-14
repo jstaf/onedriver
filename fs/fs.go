@@ -506,7 +506,11 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		ctx.Info().Msg("Found content in cache.")
 
 		// we check size ourselves in case the API file sizes are WRONG (it happens)
-		st, _ := fd.Stat()
+		st, err := fd.Stat()
+		if err != nil {
+			ctx.Error().Err(err).Msg("Could not fetch file stats.")
+			return fuse.EIO
+		}
 		inode.DriveItem.Size = uint64(st.Size())
 		return fuse.OK
 	}
