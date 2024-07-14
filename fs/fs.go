@@ -482,6 +482,13 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	ctx.Debug().Msg("")
 
+	// we have something on disk-
+	// verify content against what we're supposed to have
+	inode.Lock()
+	defer inode.Unlock()
+	// stay locked until end to prevent multiple Opens() from competing for
+	// downloads of the same file.
+
 	// try grabbing from disk
 	fd, err := f.content.Open(id)
 	if err != nil {
@@ -493,13 +500,6 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		// just use whatever's present if we're the only ones who have it
 		return fuse.OK
 	}
-
-	// we have something on disk-
-	// verify content against what we're supposed to have
-	inode.Lock()
-	defer inode.Unlock()
-	// stay locked until end to prevent multiple Opens() from competing for
-	// downloads of the same file.
 
 	if inode.VerifyChecksum(graph.QuickXORHashStream(fd)) {
 		// disk content is only used if the checksums match
