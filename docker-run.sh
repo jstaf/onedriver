@@ -7,6 +7,7 @@ if [ -z "$(docker images -q onedriver 2> /dev/null)" ]; then
   docker build -t onedriver .
 fi
 MOUNT="${MOUNTPOINT:-"$HOME/Onedrive"}"
+echo Mounting at $MOUNT
 mkdir -p $MOUNT
 docker run -it \
            -v $MOUNT:/mount:rw,rshared \
