@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-# TODO: Remove compose, separate into docker-run.sh and docker-compose-run.sh?
+# Build and run in Docker. Run with privileges for FUSE and interactively for login.
+# Mount at $MOUNTPOINT on host, defaults to ~/Onedrive
 
-MOUNTPOINT=$MOUNTPOINT docker compose up --detach
-docker compose exec onedriver /build/onedriver --no-browser /mount/
-# If exits, clean up container
-MOUNTPOINT=$MOUNTPOINT docker compose down
+set -e
+if [ -z "$(docker images -q onedriver 2> /dev/null)" ]; then
+  docker build -t onedriver .
+fi
+MOUNT="${MOUNTPOINT:-"$HOME/Onedrive"}"
+mkdir -p $MOUNT
+docker run -it \
+           -v $MOUNT:/mount:rw,rshared \
+           --device /dev/fuse \
+           --cap-add SYS_ADMIN \
+           --security-opt apparmor:unconfined \
+           --restart unless-stopped \
+           onedriver

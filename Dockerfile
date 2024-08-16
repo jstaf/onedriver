@@ -1,12 +1,16 @@
 FROM golang:bookworm 
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install build-essential gcc pkg-config libwebkit2gtk-4.0-dev libjson-glib-dev -y
+RUN apt update && apt -y install build-essential fuse 
 
-WORKDIR /
+RUN groupadd onedriver
 RUN useradd -ms /bin/bash onedriver
+VOLUME [ "/home/onedriver/.cache/onedriver" ]
 RUN mkdir /mount && chown onedriver:onedriver -R /mount
 
 USER onedriver
 WORKDIR /build
 COPY --chown=onedriver:onedriver . .
+RUN make onedriver-headless
+
+ENTRYPOINT [ "/build/onedriver-headless", "--no-browser", "/mount/" ]
