@@ -482,6 +482,13 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 
 	ctx.Debug().Msg("")
 
+	// we have something on disk-
+	// verify content against what we're supposed to have
+	inode.Lock()
+	defer inode.Unlock()
+	// stay locked until end to prevent multiple Opens() from competing for
+	// downloads of the same file.
+
 	// try grabbing from disk
 	fd, err := f.content.Open(id)
 	if err != nil {
@@ -494,19 +501,16 @@ func (f *Filesystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Ope
 		return fuse.OK
 	}
 
-	// we have something on disk-
-	// verify content against what we're supposed to have
-	inode.Lock()
-	defer inode.Unlock()
-	// stay locked until end to prevent multiple Opens() from competing for
-	// downloads of the same file.
-
 	if inode.VerifyChecksum(graph.QuickXORHashStream(fd)) {
 		// disk content is only used if the checksums match
 		ctx.Info().Msg("Found content in cache.")
 
 		// we check size ourselves in case the API file sizes are WRONG (it happens)
-		st, _ := fd.Stat()
+		st, err := fd.Stat()
+		if err != nil {
+			ctx.Error().Err(err).Msg("Could not fetch file stats.")
+			return fuse.EIO
+		}
 		inode.DriveItem.Size = uint64(st.Size())
 		return fuse.OK
 	}
@@ -702,6 +706,10 @@ func (f *Filesystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status
 		Uint64("nodeID", in.NodeId).
 		Msg("")
 	f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
+
+	// grab a lock to prevent a race condition closing an opened file prior to its use (use after free segfault)
+	inode.Lock()
+	defer inode.Unlock()
 	f.content.Close(id)
 	return 0
 }
