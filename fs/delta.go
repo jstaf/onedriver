@@ -15,6 +15,11 @@ import (
 // called as a goroutine
 func (f *Filesystem) DeltaLoop(interval time.Duration) {
 	log.Trace().Msg("Starting delta goroutine.")
+
+	subsc := newSubscription(f.subscribeChanges)
+	go subsc.Start()
+	defer subsc.Stop()
+
 	for { // eva
 		// get deltas
 		log.Trace().Msg("Fetching deltas from server.")
@@ -63,6 +68,7 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			f.SerializeAll()
 		}
 
+		waitDur := interval
 		if pollSuccess {
 			f.Lock()
 			if f.offline {
@@ -76,10 +82,14 @@ func (f *Filesystem) DeltaLoop(interval time.Duration) {
 			})
 
 			// wait until next interval
-			time.Sleep(interval)
 		} else {
 			// shortened duration while offline
-			time.Sleep(2 * time.Second)
+			waitDur = 2 * time.Second
+		}
+
+		select {
+		case <-time.After(waitDur):
+		case <-subsc.C:
 		}
 	}
 }

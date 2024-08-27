@@ -1,13 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -60,6 +58,10 @@ func main() {
 	versionFlag := flag.BoolP("version", "v", false, "Display program version.")
 	debugOn := flag.BoolP("debug", "d", false, "Enable FUSE debug logging. "+
 		"This logs communication between onedriver and the kernel.")
+	allowOther := flag.BoolP("allow-other", "", false,
+		"Allow access to the mount point for other users.")
+	uid := flag.Uint32P("uid", "", uint32(os.Getuid()), "Owner uid of the mount point.")
+	gid := flag.Uint32P("gid", "", uint32(os.Getgid()), "Owner gid of the mount point.")
 	help := flag.BoolP("help", "h", false, "Displays this help message.")
 	flag.Usage = usage
 	flag.Parse()
@@ -125,13 +127,15 @@ func main() {
 	// create the filesystem
 	log.Info().Msgf("onedriver %s", common.Version())
 	auth := graph.Authenticate(config.AuthConfig, authPath, *headless)
-	filesystem := fs.NewFilesystem(auth, cachePath)
-	go filesystem.DeltaLoop(30 * time.Second)
+	filesystem := fs.NewFilesystem(auth, cachePath, fs.OptionOwner(*uid, *gid))
+	go filesystem.DeltaLoop(10 * time.Minute)
 	xdgVolumeInfo(filesystem, auth)
 
 	server, err := fuse.NewServer(filesystem, mountpoint, &fuse.MountOptions{
 		Name:          "onedriver",
 		FsName:        "onedriver",
+		DirectMount:   true,
+		AllowOther:    *allowOther,
 		DisableXAttrs: true,
 		MaxBackground: 1024,
 		Debug:         *debugOn,
@@ -152,35 +156,4 @@ func main() {
 		Str("mountpoint", absMountPath).
 		Msg("Serving filesystem.")
 	server.Serve()
-}
-
-// xdgVolumeInfo createx .xdg-volume-info for a nice little onedrive logo in the
-// corner of the mountpoint and shows the account name in the nautilus sidebar
-func xdgVolumeInfo(filesystem *fs.Filesystem, auth *graph.Auth) {
-	if child, _ := filesystem.GetPath("/.xdg-volume-info", auth); child != nil {
-		return
-	}
-	log.Info().Msg("Creating .xdg-volume-info")
-	user, err := graph.GetUser(auth)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not create .xdg-volume-info")
-		return
-	}
-	xdgVolumeInfo := common.TemplateXDGVolumeInfo(user.UserPrincipalName)
-
-	// just upload directly and shove it in the cache
-	// (since the fs isn't mounted yet)
-	resp, err := graph.Put(
-		graph.ResourcePath("/.xdg-volume-info")+":/content",
-		auth,
-		strings.NewReader(xdgVolumeInfo),
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to write .xdg-volume-info")
-	}
-	root, _ := filesystem.GetPath("/", auth) // cannot fail
-	inode := fs.NewInode(".xdg-volume-info", 0644, root)
-	if json.Unmarshal(resp, &inode) == nil {
-		filesystem.InsertID(inode.ID(), inode)
-	}
 }

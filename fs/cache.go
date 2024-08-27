@@ -21,13 +21,17 @@ import (
 type Filesystem struct {
 	fuse.RawFileSystem
 
-	metadata  sync.Map
-	db        *bolt.DB
-	content   *LoopbackCache
-	auth      *graph.Auth
-	root      string // the id of the filesystem's root item
-	deltaLink string
-	uploads   *UploadManager
+	uid uint32
+	gid uint32
+
+	metadata             sync.Map
+	db                   *bolt.DB
+	content              *LoopbackCache
+	auth                 *graph.Auth
+	root                 string // the id of the filesystem's root item
+	deltaLink            string
+	subscribeChangesLink string
+	uploads              *UploadManager
 
 	sync.RWMutex
 	offline    bool
@@ -50,8 +54,17 @@ var (
 // so we can tell what format the db has
 const fsVersion = "1"
 
+type Option func(fs *Filesystem)
+
+func OptionOwner(uid, gid uint32) Option {
+	return func(fs *Filesystem) {
+		fs.uid = uid
+		fs.gid = gid
+	}
+}
+
 // NewFilesystem creates a new filesystem
-func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
+func NewFilesystem(auth *graph.Auth, cacheDir string, opts ...Option) *Filesystem {
 	// prepare cache directory
 	if _, err := os.Stat(cacheDir); err != nil {
 		if err = os.Mkdir(cacheDir, 0700); err != nil {
@@ -102,11 +115,18 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 
 	// ok, ready to start fs
 	fs := &Filesystem{
+		// default: whatever user is running the filesystem is the owner
+		uid: uint32(os.Getuid()),
+		gid: uint32(os.Getgid()),
+
 		RawFileSystem: fuse.NewDefaultRawFileSystem(),
 		content:       content,
 		db:            db,
 		auth:          auth,
 		opendirs:      make(map[uint64][]*Inode),
+	}
+	for _, opt := range opts {
+		opt(fs)
 	}
 
 	rootItem, err := graph.GetItem("root", auth)
@@ -164,6 +184,7 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 		// using token=latest because we don't care about existing items - they'll
 		// be downloaded on-demand by the cache
 		fs.deltaLink = "/me/drive/root/delta?token=latest"
+		fs.subscribeChangesLink = "/me/drive/root/subscriptions/socketIo"
 	}
 
 	// deltaloop is started manually
