@@ -1,0 +1,12 @@
+[Unit]
+Description=onedriver
+
+[Service]
+ExecStart=~/.local/share/flatpak/app/io.github.Onedriver/x86_64/master/active/files/bin/onedriver %f
+ExecStopPost=/usr/bin/fusermount -uz /%I
+Restart=on-abnormal
+RestartSec=3
+RestartForceExitStatus=2
+
+[Install]
+WantedBy=default.target
