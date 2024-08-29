@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 	"github.com/rs/zerolog/log"
 )
 
