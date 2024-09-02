@@ -79,6 +79,18 @@ other OneDrive clients:
 
 ## Quick start
 
+### Debian/Ubuntu
+
+Users of Debian (soon available via backports for Debian 12) and Ubuntu 24.04 or later
+are advised to use the official package. 
+
+Debian: https://packages.debian.org/onedriver
+Ubuntu: https://packages.ubuntu.com/onedriver
+
+```
+apt install onedriver
+```
+
 ### Fedora/CentOS/RHEL
 
 Users on Fedora/CentOS/RHEL systems are recommended to install onedriver from
