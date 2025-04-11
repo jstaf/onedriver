@@ -4,56 +4,66 @@
 package ui
 
 import (
-	"os"
+    "os"
+    "context"
 
-	"github.com/gotk3/gotk3/gtk"
+    "github.com/diamondburned/gotk4/pkg/gtk/v4"
+    "github.com/diamondburned/gotk4/pkg/glib/v2"
 )
 
-// DirChooser is used to pick a directory
-func DirChooser(title string) string {
-	chooser, _ := gtk.FileChooserNativeDialogNew(title, nil,
-		gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER, "Select", "Cancel")
-	homedir, _ := os.UserHomeDir()
-	chooser.SetCurrentFolder(homedir)
+// DirChooser is used to pick a directory with better error handling
+func DirChooser(title string, parent *gtk.Window) string {
+    chooser := gtk.NewFileChooserNative(
+        title, 
+        parent,
+        gtk.FileChooserActionSelectFolder, 
+        "Select", 
+        "Cancel",
+    )
+    
+    homedir, err := os.UserHomeDir()
+    if err == nil {
+        chooser.SetCurrentFolder(glib.NewFilePath(homedir))
+    }
 
-	var directory string
-	chooser.Connect("response", func() {
-		directory = chooser.GetFilename()
-	})
+    var directory string
+    chooser.Connect("response", func() {
+        directory = chooser.GetFile().GetPath()
+    })
 
-	if chooser.Run() == int(gtk.RESPONSE_ACCEPT) {
-		return directory
-	}
-	return ""
+    if chooser.Run() == int(gtk.ResponseAccept) {
+        return directory
+    }
+    return ""
 }
 
 // Dialog creates a popup message
 func Dialog(msg string, messageType gtk.MessageType, parentWindow gtk.IWindow) {
-	messageDialog := gtk.MessageDialogNew(
-		parentWindow,
-		gtk.DIALOG_DESTROY_WITH_PARENT,
-		messageType,
-		gtk.BUTTONS_CLOSE,
-		msg,
-	)
-	messageDialog.Run()
-	messageDialog.Destroy()
+    messageDialog := gtk.NewMessageDialog(
+        parentWindow,
+        gtk.DialogDestroyWithParent,
+        messageType,
+        gtk.ButtonsClose,
+        msg,
+    )
+    messageDialog.Run()
+    messageDialog.Destroy()
 }
 
 // CancelDialog creates a "Continue?" style message, and returns what the user
 // selected
 func CancelDialog(parentWindow gtk.IWindow, primaryText, secondaryText string) bool {
-	dialog := gtk.MessageDialogNew(
-		parentWindow,
-		gtk.DIALOG_MODAL,
-		gtk.MESSAGE_WARNING,
-		gtk.BUTTONS_OK_CANCEL,
-		"",
-	)
-	dialog.SetMarkup(primaryText)
-	if secondaryText != "" {
-		dialog.FormatSecondaryMarkup(secondaryText)
-	}
-	defer dialog.Destroy()
-	return dialog.Run() == gtk.RESPONSE_OK
+    dialog := gtk.NewMessageDialog(
+        parentWindow,
+        gtk.DialogModal,
+        gtk.MessageWarning,
+        gtk.ButtonsOkCancel,
+        "",
+    )
+    dialog.SetMarkup(primaryText)
+    if secondaryText != "" {
+        dialog.FormatSecondaryMarkup(secondaryText)
+    }
+    defer dialog.Destroy()
+    return dialog.Run() == gtk.ResponseOk
 }
