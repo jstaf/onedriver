@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.19"
+          go-version: "1.21.x"
 
       - name: Install apt dependencies
         run: |
@@ -105,7 +105,7 @@ jobs:
     name: Complete Coveralls run
     needs: test
     if: always()
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Coveralls finished
         uses: coverallsapp/github-action@v2
