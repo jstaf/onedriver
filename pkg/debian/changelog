@@ -1,3 +1,11 @@
+onedriver (0.14.2-1) noble; urgency=low
+
+  * Port to libwebkit2gtk-4.1 and libsoup3, as onedriver was not building on newer distros.
+  * cgo-helper was simplified to reject libwebkit2gtk-4.0.
+
+ -- Henrique Cesar Ulbrich <devel@upsec.com.br> Tue, 30 Dec 2025 01:00 -0300
+
+
 onedriver (0.14.1-1) jammy; urgency=low
 
   * Fixes a bug with file corruption in some scenarios from version 0.14.0.
