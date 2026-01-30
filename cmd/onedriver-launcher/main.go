@@ -304,7 +304,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	})
 
 	mountpointSettingsBtn, _ := gtk.MenuButtonNew()
-	icon, _ := gtk.ImageNewFromIconName("emblem-system-symbolic", gtk.ICON_SIZE_BUTTON)
+	icon, _ := gtk.ImageNewFromIconName("applications-system-symbolic", gtk.ICON_SIZE_BUTTON)
 	mountpointSettingsBtn.SetImage(icon)
 	popover, _ := gtk.PopoverNew(mountpointSettingsBtn)
 	mountpointSettingsBtn.SetPopover(popover)
