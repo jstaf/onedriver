@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.14.1
+Version:       0.15.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
