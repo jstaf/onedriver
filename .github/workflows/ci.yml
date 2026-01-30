@@ -24,14 +24,13 @@ jobs:
           sudo apt install \
             gcc \
             pkg-config \
-            libwebkit2gtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
             libjson-glib-dev \
             make \
             wget \
             rpm \
             awscli \
             libreoffice
-          sudo rm /usr/local/bin/aws  # whyyy
 
       - uses: actions/cache@v4
         with:
