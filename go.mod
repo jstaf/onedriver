@@ -1,11 +1,11 @@
 module github.com/jstaf/onedriver
 
 require (
+	dario.cat/mergo v1.0.0
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/godbus/dbus/v5 v5.0.6
 	github.com/gotk3/gotk3 v0.6.3
 	github.com/hanwen/go-fuse/v2 v2.4.2
-	github.com/imdario/mergo v0.3.13
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0

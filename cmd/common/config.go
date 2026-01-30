@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 	"github.com/jstaf/onedriver/fs/graph"
 	"github.com/jstaf/onedriver/ui"
 	"github.com/rs/zerolog/log"
