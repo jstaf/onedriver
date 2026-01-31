@@ -2,7 +2,7 @@ package fs
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,7 +35,7 @@ func TestMode(t *testing.T) {
 	}
 
 	fname := "/onedriver_tests/test_mode.txt"
-	require.NoError(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	require.NoError(t, os.WriteFile("mount"+fname, []byte("test"), 0644))
 
 	var err error
 	for i := 0; i < 10; i++ {
@@ -65,7 +65,7 @@ func TestIsDir(t *testing.T) {
 	}
 
 	fname := "/onedriver_tests/test_is_dir.txt"
-	require.NoError(t, ioutil.WriteFile("mount"+fname, []byte("test"), 0644))
+	require.NoError(t, os.WriteFile("mount"+fname, []byte("test"), 0644))
 
 	assert.Eventually(t, func() bool {
 		item, err := graph.GetItemPath(fname, auth)
@@ -84,7 +84,7 @@ func TestIsDir(t *testing.T) {
 func TestFilenameEscape(t *testing.T) {
 	t.Parallel()
 	fname := `.~lock.libreoffice-test.docx#`
-	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(TestDir, fname), []byte("argl bargl"), 0644))
 
 	// make sure it made it to the server
 	assert.Eventually(t, func() bool {

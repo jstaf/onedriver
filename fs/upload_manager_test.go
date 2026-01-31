@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -85,7 +85,7 @@ func TestRepeatedUploads(t *testing.T) {
 
 	// test setup
 	fname := filepath.Join(TestDir, "repeated_upload.txt")
-	require.NoError(t, ioutil.WriteFile(fname, []byte("initial content"), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte("initial content"), 0644))
 	var inode *Inode
 	require.Eventually(t, func() bool {
 		inode, _ = fs.GetPath("/onedriver_tests/repeated_upload.txt", auth)
@@ -94,7 +94,7 @@ func TestRepeatedUploads(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		uploadme := []byte(fmt.Sprintf("iteration: %d", i))
-		require.NoError(t, ioutil.WriteFile(fname, uploadme, 0644))
+		require.NoError(t, os.WriteFile(fname, uploadme, 0644))
 
 		time.Sleep(5 * time.Second)
 

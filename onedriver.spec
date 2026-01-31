@@ -15,10 +15,8 @@ BuildRequires: golang >= 1.17.0
 BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
-%if 0%{?rhel} && 0%{?rhel} < 10
+%if 0%{?suse_version} || 0%{?rhel} && 0%{?rhel} < 10
 BuildRequires: webkit2gtk3-devel
-%elif 0%{?suse_version}
-BuildRequires: webkit2gtk4-devel
 %else
 BuildRequires: webkit2gtk4.1-devel
 %endif

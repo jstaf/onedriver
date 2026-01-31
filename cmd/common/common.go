@@ -4,7 +4,6 @@ package common
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
 
@@ -52,7 +51,7 @@ func TemplateXDGVolumeInfo(name string) string {
 // GetXDGVolumeInfoName returns the name of the drive according to whatever the
 // user has named it.
 func GetXDGVolumeInfoName(path string) (string, error) {
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
