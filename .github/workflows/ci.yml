@@ -3,7 +3,7 @@ on: push
 jobs:
   test:
     name: Run tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.19"
+          go-version: "1.25"
 
       - name: Install apt dependencies
         run: |
@@ -24,14 +24,12 @@ jobs:
           sudo apt install \
             gcc \
             pkg-config \
-            libwebkit2gtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
             libjson-glib-dev \
             make \
             wget \
             rpm \
-            awscli \
             libreoffice
-          sudo rm /usr/local/bin/aws  # whyyy
 
       - uses: actions/cache@v4
         with:
@@ -73,8 +71,8 @@ jobs:
 
       - name: Copy new auth tokens to S3
         run: |
-          /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
-          /usr/bin/aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
+          aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+          aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -88,7 +86,7 @@ jobs:
         if: always()
 
       - name: Convert coverage to lcov
-        uses: jandelgado/gcov2lcov-action@v1.0.5
+        uses: jandelgado/gcov2lcov-action@v1.2.0
         if: always()
 
       - name: Send test coverage to Coveralls
@@ -105,7 +103,7 @@ jobs:
     name: Complete Coveralls run
     needs: test
     if: always()
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Coveralls finished
         uses: coverallsapp/github-action@v2

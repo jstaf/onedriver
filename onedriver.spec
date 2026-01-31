@@ -1,5 +1,5 @@
 Name:          onedriver
-Version:       0.14.1
+Version:       0.15.0
 Release:       1%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
@@ -15,7 +15,7 @@ BuildRequires: golang >= 1.17.0
 BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
-BuildRequires: webkit2gtk3-devel
+BuildRequires: webkit2gtk4.1-devel
 Requires: fuse3
 
 %description
@@ -71,6 +71,12 @@ cp pkg/resources/%{name}.1.gz %{buildroot}/usr/share/man/man1
 %attr(644, root, root) /usr/share/man/man1/%{name}.1.gz
 
 %changelog
+* Fri Jan 30 2026 Jeff Stafford <jeff.stafford@protonmail.com> - 0.15.0
+- Slight refresh of the onedriver UI to look nicer.
+- Fix an authentication bug (Microsoft changed the auth format and I was using a
+  regex to parse the token when I shouldn't have been).
+- Update to webkit2gtk-4.1 (what all major distros are using now).
+
 * Wed Oct 18 2023 Jeff Stafford <jeff.stafford@protonmail.com> - 0.14.1
 - Fixes a bug with file corruption in some scenarios from version 0.14.0.
 

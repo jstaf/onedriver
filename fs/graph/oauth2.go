@@ -2,13 +2,11 @@ package graph
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -158,13 +156,13 @@ func getAuthCodeHeadless(a AuthConfig, accountName string) string {
 
 // parseAuthCode is used to parse the auth code out of the redirect the server gives us
 // after successful authentication
-func parseAuthCode(url string) (string, error) {
-	rexp := regexp.MustCompile("code=([a-zA-Z0-9-_.])+")
-	code := rexp.FindString(url)
-	if len(code) == 0 {
-		return "", errors.New("invalid auth code")
+func parseAuthCode(authURL string) (string, error) {
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		return "", err
 	}
-	return code[5:], nil
+	params := parsed.Query()
+	return params.Get("code"), nil
 }
 
 // Exchange an auth code for a set of access tokens (returned as a new Auth struct).

@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const version = "0.14.1"
+const version = "0.15.0"
 
 var commit string
 
