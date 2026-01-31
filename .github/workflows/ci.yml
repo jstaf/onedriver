@@ -71,8 +71,8 @@ jobs:
 
       - name: Copy new auth tokens to S3
         run: |
-          /usr/bin/aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
-          /usr/bin/aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
+          aws s3 cp .auth_tokens.json s3://fusefs-travis/$ACCOUNT_TYPE/
+          aws s3 cp fusefs_tests.log s3://fusefs-travis/$ACCOUNT_TYPE/
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -86,7 +86,7 @@ jobs:
         if: always()
 
       - name: Convert coverage to lcov
-        uses: jandelgado/gcov2lcov-action@v1.0.5
+        uses: jandelgado/gcov2lcov-action@v1.2.0
         if: always()
 
       - name: Send test coverage to Coveralls
