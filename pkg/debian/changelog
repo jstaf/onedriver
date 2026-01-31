@@ -1,4 +1,4 @@
-onedriver (0.15.0-1) noble; urgency=low
+onedriver (0.15.0-4) noble; urgency=low
 
   * Slight refresh of the onedriver UI to look nicer.
   * Fix an authentication bug (Microsoft changed the auth format and I was
