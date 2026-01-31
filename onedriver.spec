@@ -1,6 +1,6 @@
 Name:          onedriver
 Version:       0.15.0
-Release:       1%{?dist}
+Release:       2%{?dist}
 Summary:       A native Linux filesystem for Microsoft Onedrive
 
 License:       GPL-3.0-or-later
@@ -15,7 +15,13 @@ BuildRequires: golang >= 1.17.0
 BuildRequires: git
 BuildRequires: gcc
 BuildRequires: pkg-config
+%if 0%{?rhel} && 0%{?rhel} < 10
+BuildRequires: webkit2gtk3-devel
+%elif 0%{?amzn}
+BuildRequires: webkit2gtk3-devel
+%else
 BuildRequires: webkit2gtk4.1-devel
+%endif
 Requires: fuse3
 
 %description
