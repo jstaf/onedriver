@@ -9,16 +9,10 @@ import (
 )
 
 func TestAuthCodeFormat(t *testing.T) {
-	// arbitrary regext test
-	code, err := parseAuthCode("codecode=asd-965198osATYjfb._knlwoieurow*sdjf")
-	assert.NoError(t, err)
-	assert.Equal(t, "asd-965198osATYjfb._knlwoieurow", code,
-		"Auth code parser did not succeed against arbitrary character test.")
-
 	// faked personal auth code
-	code, err = parseAuthCode("https://login.live.com/oauth20_desktop.srf?code=M.R3_BAY.abcd526-817f-d8e9-590c-1227b45c7be2&lc=4105")
+	code, err := parseAuthCode("https://login.live.com/oauth20_desktop.srf?code=M.R3_BAY.abcd526-817f-*!$d8e9-590c-1227b45c7be2&lc=4105")
 	assert.NoError(t, err)
-	assert.Equal(t, "M.R3_BAY.abcd526-817f-d8e9-590c-1227b45c7be2", code,
+	assert.Equal(t, "M.R3_BAY.abcd526-817f-*!$d8e9-590c-1227b45c7be2", code,
 		"Personal auth code did not match expected result.")
 
 	// faked business auth code
