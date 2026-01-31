@@ -6,7 +6,6 @@ package fs
 import (
 	"bufio"
 	"bytes"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +23,7 @@ import (
 // the offline versions of this test.
 func TestReaddir(t *testing.T) {
 	t.Parallel()
-	files, err := ioutil.ReadDir("mount")
+	files, err := os.ReadDir("mount")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,8 +122,8 @@ func TestReadWrite(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "write.txt")
 	content := "my hands are typing words\n"
-	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
-	read, err := ioutil.ReadFile(fname)
+	require.NoError(t, os.WriteFile(fname, []byte(content), 0644))
+	read, err := os.ReadFile(fname)
 	require.NoError(t, err)
 	assert.Equal(t, content, string(read), "File content was not correct.")
 }
@@ -134,7 +133,7 @@ func TestReadWrite(t *testing.T) {
 func TestWriteOffset(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "main.c")
-	require.NoError(t, ioutil.WriteFile(fname,
+	require.NoError(t, os.WriteFile(fname,
 		[]byte(`#include <stdio.h>
 
 int main(int argc, char **argv) {
@@ -149,7 +148,7 @@ func TestRenameMove(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "rename.txt")
 	dname := filepath.Join(TestDir, "new-destination-name.txt")
-	require.NoError(t, ioutil.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte("hopefully renames work\n"), 0644))
 	require.NoError(t, os.Rename(fname, dname))
 	st, err := os.Stat(dname)
 	require.NoError(t, err)
@@ -169,10 +168,10 @@ func TestCopy(t *testing.T) {
 	fname := filepath.Join(TestDir, "copy-start.txt")
 	dname := filepath.Join(TestDir, "copy-end.txt")
 	content := "and copies too!\n"
-	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte(content), 0644))
 	require.NoError(t, exec.Command("cp", fname, dname).Run())
 
-	read, err := ioutil.ReadFile(fname)
+	read, err := os.ReadFile(fname)
 	require.NoError(t, err)
 	assert.Equal(t, content, string(read), "File content was not correct.")
 }
@@ -245,7 +244,7 @@ tortor. In tempus lacinia est, nec gravida ipsum viverra sed. In vel felis
 vitae odio pulvinar egestas. Sed ullamcorper, nulla non molestie dictum,
 massa lectus mattis dolor, in volutpat nulla lectus id neque.`
 	fname := filepath.Join(TestDir, "midfile.txt")
-	require.NoError(t, ioutil.WriteFile(fname, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte(content), 0644))
 
 	file, _ := os.OpenFile(fname, os.O_RDWR, 0644)
 	defer file.Close()
@@ -289,12 +288,12 @@ func TestUnlink(t *testing.T) {
 // issues with OneDrive's case-insensitivity.
 func TestNTFSIsABadFilesystem(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
+	require.NoError(t, os.WriteFile(filepath.Join(TestDir, "case-sensitive.txt"),
 		[]byte("NTFS is bad"), 0644))
-	require.NoError(t, ioutil.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
+	require.NoError(t, os.WriteFile(filepath.Join(TestDir, "CASE-SENSITIVE.txt"),
 		[]byte("yep"), 0644))
 
-	content, err := ioutil.ReadFile(filepath.Join(TestDir, "Case-Sensitive.TXT"))
+	content, err := os.ReadFile(filepath.Join(TestDir, "Case-Sensitive.TXT"))
 	require.NoError(t, err)
 	require.Equal(t, "yep", string(content), "Did not find expected output.")
 }
@@ -318,19 +317,19 @@ func TestNTFSIsABadFilesystem2(t *testing.T) {
 func TestNTFSIsABadFilesystem3(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "original_NAME.txt")
-	ioutil.WriteFile(fname, []byte("original"), 0644)
+	os.WriteFile(fname, []byte("original"), 0644)
 
 	// should work
 	secondName := filepath.Join(TestDir, "new_name.txt")
-	require.NoError(t, ioutil.WriteFile(secondName, []byte("new"), 0644))
+	require.NoError(t, os.WriteFile(secondName, []byte("new"), 0644))
 	require.NoError(t, os.Rename(secondName, fname))
-	contents, err := ioutil.ReadFile(fname)
+	contents, err := os.ReadFile(fname)
 	require.NoError(t, err)
 	require.Equal(t, "new", string(contents), "Contents did not match expected output.")
 
 	// should fail
 	thirdName := filepath.Join(TestDir, "new_name2.txt")
-	require.NoError(t, ioutil.WriteFile(thirdName, []byte("this rename should work"), 0644))
+	require.NoError(t, os.WriteFile(thirdName, []byte("this rename should work"), 0644))
 	err = os.Rename(thirdName, filepath.Join(TestDir, "original_name.txt"))
 	require.NoError(t, err, "Rename failed.")
 
@@ -342,7 +341,7 @@ func TestNTFSIsABadFilesystem3(t *testing.T) {
 // storing case for filenames at all
 func TestChildrenAreCasedProperly(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ioutil.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(TestDir, "CASE-check.txt"), []byte("yep"), 0644))
 	stdout, err := exec.Command("ls", TestDir).Output()
 	if err != nil {
@@ -362,7 +361,7 @@ func TestEchoWritesToFile(t *testing.T) {
 	out, err := exec.Command("bash", "-c", "echo bagels > "+fname).CombinedOutput()
 	require.NoError(t, err, out)
 
-	content, err := ioutil.ReadFile(fname)
+	content, err := os.ReadFile(fname)
 	require.NoError(t, err)
 	if !bytes.Contains(content, []byte("bagels")) {
 		t.Fatalf("Populating a file via 'echo' failed. Got: \"%s\", wanted \"bagels\"\n", content)
@@ -403,7 +402,7 @@ func TestNoQuestionMarks(t *testing.T) {
 func TestGIOTrash(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(TestDir, "trash_me.txt")
-	require.NoError(t, ioutil.WriteFile(fname, []byte("i should be trashed"), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte("i should be trashed"), 0644))
 
 	out, err := exec.Command("gio", "trash", fname).CombinedOutput()
 	if err != nil {
@@ -430,7 +429,7 @@ func TestListChildrenPaging(t *testing.T) {
 	// the delta thread
 	items, err := graph.GetItemChildrenPath("/onedriver_tests/paging", auth)
 	require.NoError(t, err)
-	files, err := ioutil.ReadDir(filepath.Join(TestDir, "paging"))
+	files, err := os.ReadDir(filepath.Join(TestDir, "paging"))
 	require.NoError(t, err)
 	if len(files) < 201 {
 		if len(items) < 201 {
@@ -449,7 +448,7 @@ func TestLibreOfficeSavePattern(t *testing.T) {
 	t.Parallel()
 	content := []byte("This will break things.")
 	fname := filepath.Join(TestDir, "libreoffice.txt")
-	require.NoError(t, ioutil.WriteFile(fname, content, 0644))
+	require.NoError(t, os.WriteFile(fname, content, 0644))
 
 	out, err := exec.Command(
 		"libreoffice",

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -181,7 +181,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 		return nil, -1, err
 	}
 	defer resp.Body.Close()
-	response, _ := ioutil.ReadAll(resp.Body)
+	response, _ := io.ReadAll(resp.Body)
 	return response, resp.StatusCode, nil
 }
 

@@ -2,7 +2,6 @@ package fs
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,13 +29,13 @@ func (l *LoopbackCache) contentPath(id string) string {
 
 // Get reads a file's content from disk.
 func (l *LoopbackCache) Get(id string) []byte {
-	content, _ := ioutil.ReadFile(l.contentPath(id))
+	content, _ := os.ReadFile(l.contentPath(id))
 	return content
 }
 
 // InsertContent writes file content to disk in a single bulk insert.
 func (l *LoopbackCache) Insert(id string, content []byte) error {
-	return ioutil.WriteFile(l.contentPath(id), content, 0600)
+	return os.WriteFile(l.contentPath(id), content, 0600)
 }
 
 // InsertStream inserts a stream of data

@@ -3,7 +3,6 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,7 @@ func PollUntilAvail(mountpoint string, timeout int) bool {
 
 // MountpointIsValid returns if the mountpoint exists and nothing is in it.
 func MountpointIsValid(mountpoint string) bool {
-	dirents, err := ioutil.ReadDir(mountpoint)
+	dirents, err := os.ReadDir(mountpoint)
 	if err != nil {
 		return false
 	}
@@ -44,7 +43,7 @@ func GetAccountName(cacheDir, instance string) (string, error) {
 	tokenFile := fmt.Sprintf("%s/%s/auth_tokens.json", cacheDir, instance)
 
 	var auth graph.Auth
-	data, err := ioutil.ReadFile(tokenFile)
+	data, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +63,7 @@ func GetKnownMounts(cacheDir string) []string {
 		cacheDir = filepath.Join(userCacheDir, "onedriver")
 	}
 	os.MkdirAll(cacheDir, 0700)
-	dirents, err := ioutil.ReadDir(cacheDir)
+	dirents, err := os.ReadDir(cacheDir)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Could not fetch known mountpoints.")

@@ -3,7 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -68,12 +68,12 @@ type AuthError struct {
 func (a Auth) ToFile(file string) error {
 	a.path = file
 	byteData, _ := json.Marshal(a)
-	return ioutil.WriteFile(file, byteData, 0600)
+	return os.WriteFile(file, byteData, 0600)
 }
 
 // FromFile populates an auth struct from a file
 func (a *Auth) FromFile(file string) error {
-	contents, err := ioutil.ReadFile(file)
+	contents, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (a *Auth) Refresh() {
 		}
 		defer resp.Body.Close()
 
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		json.Unmarshal(body, &a)
 		if a.ExpiresAt == oldTime {
 			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
@@ -179,7 +179,7 @@ func getAuthTokens(a AuthConfig, authCode string) *Auth {
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	var auth Auth
 	json.Unmarshal(body, &auth)
 	if auth.ExpiresAt == 0 {

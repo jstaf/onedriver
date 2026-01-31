@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -65,7 +64,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader, head
 		// the actual request failed
 		return nil, err
 	}
-	body, _ := ioutil.ReadAll(response.Body)
+	body, _ := io.ReadAll(response.Body)
 	response.Body.Close()
 
 	if response.StatusCode == 401 {
@@ -87,7 +86,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader, head
 		if err != nil {
 			return nil, err
 		}
-		body, _ = ioutil.ReadAll(response.Body)
+		body, _ = io.ReadAll(response.Body)
 		response.Body.Close()
 	}
 

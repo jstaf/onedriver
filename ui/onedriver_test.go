@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 // Can we detect a mountpoint as valid appropriately?
 func TestMountpointIsValid(t *testing.T) {
 	os.Mkdir("_test", 0755)
-	ioutil.WriteFile("_test/.example", []byte("some text\n"), 0644)
+	os.WriteFile("_test/.example", []byte("some text\n"), 0644)
 	tests := []struct {
 		mountpoint string
 		expected   bool

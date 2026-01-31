@@ -2,7 +2,6 @@ package fs
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,7 +68,7 @@ func TestUploadSession(t *testing.T) {
 func TestUploadSessionSmallFS(t *testing.T) {
 	t.Parallel()
 	data := []byte("super special data for upload test 2")
-	err := ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
+	err := os.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Second)
@@ -86,12 +85,12 @@ func TestUploadSessionSmallFS(t *testing.T) {
 
 	// upload it again to ensure uploads with an existing remote id succeed
 	data = []byte("more super special data")
-	err = ioutil.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
+	err = os.WriteFile(filepath.Join(TestDir, "uploadSessionSmallFS.txt"), data, 0644)
 	require.NoError(t, err)
 
 	time.Sleep(15 * time.Second)
 	item2, err := graph.GetItemPath("/onedriver_tests/uploadSessionSmallFS.txt", auth)
-	if err != nil || item == nil {
+	if err != nil || item2 == nil {
 		t.Fatal(err)
 	}
 
@@ -109,7 +108,7 @@ func TestUploadSessionLargeFS(t *testing.T) {
 	fname := filepath.Join(TestDir, "dmel.fa")
 	require.NoError(t, exec.Command("cp", "dmel.fa", fname).Run())
 
-	contents, err := ioutil.ReadFile(fname)
+	contents, err := os.ReadFile(fname)
 	require.NoError(t, err)
 
 	header := ">X dna:chromosome chromosome:BDGP6.22:X:1:23542271:1 REF"

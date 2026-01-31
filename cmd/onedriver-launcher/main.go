@@ -9,7 +9,6 @@ import "C"
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"unsafe"
@@ -352,7 +351,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 			xdgVolumeInfo := common.TemplateXDGVolumeInfo(newName)
 			driveName = newName
 			//FIXME why does this not work???
-			err = ioutil.WriteFile(filepath.Join(mount, ".xdg-volume-info"), []byte(xdgVolumeInfo), 0644)
+			err = os.WriteFile(filepath.Join(mount, ".xdg-volume-info"), []byte(xdgVolumeInfo), 0644)
 			if err != nil {
 				ctx.Error().Err(err).Msg("Failed to write new mount name.")
 				return

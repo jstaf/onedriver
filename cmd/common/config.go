@@ -1,7 +1,6 @@
 package common
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -35,7 +34,7 @@ func LoadConfig(path string) *Config {
 		LogLevel: "debug",
 	}
 
-	conf, err := ioutil.ReadFile(path)
+	conf, err := os.ReadFile(path)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -69,7 +68,7 @@ func (c Config) WriteConfig(path string) error {
 		return err
 	}
 	os.MkdirAll(filepath.Dir(path), 0700)
-	err = ioutil.WriteFile(path, out, 0600)
+	err = os.WriteFile(path, out, 0600)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not write config to disk.")
 	}

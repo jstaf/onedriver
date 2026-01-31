@@ -4,7 +4,6 @@ package fs
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,7 +77,7 @@ func TestDeltaRmdir(t *testing.T) {
 // file still has the correct content under the new parent.
 func TestDeltaRename(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ioutil.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(DeltaDir, "delta_rename_start"),
 		[]byte("cheesecake"),
 		0644,
@@ -96,7 +95,7 @@ func TestDeltaRename(t *testing.T) {
 	fpath := filepath.Join(DeltaDir, "delta_rename_end")
 	assert.Eventually(t, func() bool {
 		if _, err := os.Stat(fpath); err == nil {
-			content, err := ioutil.ReadFile(fpath)
+			content, err := os.ReadFile(fpath)
 			require.NoError(t, err)
 			return bytes.Contains(content, []byte("cheesecake"))
 		}
@@ -108,7 +107,7 @@ func TestDeltaRename(t *testing.T) {
 // to see if the cache picks it up.
 func TestDeltaMoveParent(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ioutil.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(DeltaDir, "delta_move_start"),
 		[]byte("carrotcake"),
 		0644,
@@ -129,7 +128,7 @@ func TestDeltaMoveParent(t *testing.T) {
 	fpath := filepath.Join(TestDir, "delta_rename_end")
 	assert.Eventually(t, func() bool {
 		if _, err := os.Stat(fpath); err == nil {
-			content, err := ioutil.ReadFile(fpath)
+			content, err := os.ReadFile(fpath)
 			require.NoError(t, err)
 			return bytes.Contains(content, []byte("carrotcake"))
 		}
@@ -141,7 +140,7 @@ func TestDeltaMoveParent(t *testing.T) {
 // to the client.
 func TestDeltaContentChangeRemote(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ioutil.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(DeltaDir, "remote_content"),
 		[]byte("the cake is a lie"),
 		0644,
@@ -167,7 +166,7 @@ func TestDeltaContentChangeRemote(t *testing.T) {
 
 	var content []byte
 	assert.Eventuallyf(t, func() bool {
-		content, err = ioutil.ReadFile(filepath.Join(DeltaDir, "remote_content"))
+		content, err = os.ReadFile(filepath.Join(DeltaDir, "remote_content"))
 		require.NoError(t, err)
 		return bytes.Equal(content, newContent)
 	}, retrySeconds, time.Second,
@@ -239,7 +238,7 @@ func TestDeltaContentChangeBoth(t *testing.T) {
 func TestDeltaBadContentInCache(t *testing.T) {
 	t.Parallel()
 	// write a file to the server and poll until it exists
-	require.NoError(t, ioutil.WriteFile(
+	require.NoError(t, os.WriteFile(
 		filepath.Join(DeltaDir, "corrupted"),
 		[]byte("correct contents"),
 		0644,
@@ -255,7 +254,7 @@ func TestDeltaBadContentInCache(t *testing.T) {
 	}, retrySeconds, time.Second)
 
 	fs.content.Insert(id, []byte("wrong contents"))
-	contents, err := ioutil.ReadFile(filepath.Join(DeltaDir, "corrupted"))
+	contents, err := os.ReadFile(filepath.Join(DeltaDir, "corrupted"))
 	require.NoError(t, err)
 	if bytes.HasPrefix(contents, []byte("wrong")) {
 		t.Fatalf("File contents were wrong! Got \"%s\", wanted \"correct contents\"",
@@ -274,7 +273,7 @@ func TestDeltaFolderDeletion(t *testing.T) {
 
 	// now poll and wait for deletion
 	assert.Eventually(t, func() bool {
-		inodes, _ := ioutil.ReadDir(DeltaDir)
+		inodes, _ := os.ReadDir(DeltaDir)
 		for _, inode := range inodes {
 			if inode.Name() == "nested" {
 				return true
@@ -316,7 +315,7 @@ func TestDeltaFolderDeletionNonEmpty(t *testing.T) {
 func TestDeltaNoModTimeUpdate(t *testing.T) {
 	t.Parallel()
 	fname := filepath.Join(DeltaDir, "mod_time_update.txt")
-	require.NoError(t, ioutil.WriteFile(fname, []byte("a pretend lockfile"), 0644))
+	require.NoError(t, os.WriteFile(fname, []byte("a pretend lockfile"), 0644))
 	finfo, err := os.Stat(fname)
 	require.NoError(t, err)
 	mtimeOriginal := finfo.ModTime()
