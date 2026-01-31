@@ -5,13 +5,13 @@ onedriver (0.15.0-1) noble; urgency=low
     using a regex to parse the token when I shouldn't have been).
   * Update to webkit2gtk-4.1 (what all distros are using now).
  
- -- Jeff Stafford <jeff.stafford@protonmail.com> Fri, 30 Jan 2026 15:30:00 -0800
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Fri, 30 Jan 2026 15:30:00 -0800
 
 onedriver (0.14.1-1) jammy; urgency=low
 
   * Fixes a bug with file corruption in some scenarios from version 0.14.0.
 
- -- Jeff Stafford <jeff.stafford@protonmail.com> Wed, 18 Oct 2023 02:00:00 -0400
+ -- Jeff Stafford <jeff.stafford@protonmail.com>  Wed, 18 Oct 2023 02:00:00 -0400
 
 onedriver (0.14.0-2) jammy; urgency=low
 
