@@ -90,8 +90,13 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 
 	header, _ := gtk.HeaderBarNew()
 	header.SetShowCloseButton(true)
-	header.SetTitle("onedriver")
+	header.SetTitle("Onedriver")
 	window.SetTitlebar(header)
+
+	err := window.SetIconFromFile("/usr/share/icons/onedriver/onedriver.svg")
+	if err != nil {
+		log.Error().Err(err).Msg("Could not find logo.")
+	}
 
 	listbox, _ := gtk.ListBoxNew()
 	window.Add(listbox)
@@ -147,7 +152,7 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 	settings, _ := gtk.ModelButtonNew()
 	settings.SetLabel("Settings")
 	settings.Connect("clicked", func(button *gtk.ModelButton) {
-		newSettingsWindow(config, configPath)
+		newSettingsDialog(config, configPath, window)
 	})
 	popoverBox.PackStart(settings, false, true, 0)
 
@@ -156,6 +161,7 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 	about.SetLabel("About")
 	about.Connect("clicked", func(button *gtk.ModelButton) {
 		aboutDialog, _ := gtk.AboutDialogNew()
+		aboutDialog.SetProgramName("Onedriver Launcher")
 		aboutDialog.SetAuthors([]string{"Jeff Stafford", "https://github.com/jstaf"})
 		aboutDialog.SetWebsite("https://github.com/jstaf/onedriver")
 		aboutDialog.SetWebsiteLabel("github.com/jstaf/onedriver")
@@ -167,6 +173,8 @@ func activateCallback(app *gtk.Application, config *common.Config, configPath st
 		} else {
 			aboutDialog.SetLogo(logo.GetPixbuf())
 		}
+		aboutDialog.SetTransientFor(window)
+		aboutDialog.Connect("response", aboutDialog.Destroy)
 		aboutDialog.Run()
 	})
 	popoverBox.PackStart(about, false, true, 0)
@@ -316,7 +324,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	}
 	// rename the mount by rewriting the .xdg-volume-info file
 	renameMountpointEntry, _ := gtk.EntryNew()
-	renameMountpointEntry.SetTooltipText("Change the label that your file browser uses for this drive")
+	renameMountpointEntry.SetTooltipText("The label that your file browser uses for this drive")
 	renameMountpointEntry.SetText(driveName)
 	// runs on enter
 	renameMountpointEntry.Connect("activate", func(entry *gtk.Entry) {
@@ -373,7 +381,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	popoverBox.Add(separator)
 
 	// create a button to enable/disable the mountpoint
-	unitEnabledBtn, _ := gtk.CheckButtonNewWithLabel(" Start drive on login")
+	unitEnabledBtn, _ := gtk.CheckButtonNewWithLabel("Start Drive on Login")
 	unitEnabledBtn.SetTooltipText("Start this drive automatically when you login")
 	enabled, err := systemd.UnitIsEnabled(unitName)
 	if err == nil {
@@ -400,7 +408,7 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 
 	// button to delete the mount
 	deleteMountpointBtn, _ := gtk.ModelButtonNew()
-	deleteMountpointBtn.SetLabel("Remove drive")
+	deleteMountpointBtn.SetLabel("Remove Drive")
 	deleteMountpointBtn.SetTooltipText("Remove OneDrive account from local computer")
 	deleteMountpointBtn.Connect("clicked", func(button *gtk.ModelButton) {
 		log.Trace().
@@ -443,16 +451,16 @@ func newMountRow(config common.Config, mount string) (*gtk.ListBoxRow, *gtk.Swit
 	return row, mountToggle
 }
 
-func newSettingsWindow(config *common.Config, configPath string) {
+func newSettingsDialog(config *common.Config, configPath string, parent gtk.IWindow) {
 	const offset = 15
 
-	settingsWindow, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	settingsWindow.SetResizable(false)
-	settingsWindow.SetTitle("Settings")
+	settingsDialog, _ := gtk.DialogNew()
+	settingsDialog.SetResizable(false)
+	settingsDialog.SetTitle("Settings")
 
 	// log level settings
 	settingsRowLog, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
-	logLevelLabel, _ := gtk.LabelNew("Log level")
+	logLevelLabel, _ := gtk.LabelNew("Log Level")
 	settingsRowLog.PackStart(logLevelLabel, false, false, 0)
 
 	logLevelSelector, _ := gtk.ComboBoxTextNew()
@@ -474,7 +482,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 
 	// cache dir settings
 	settingsRowCacheDir, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, offset)
-	cacheDirLabel, _ := gtk.LabelNew("Cache directory")
+	cacheDirLabel, _ := gtk.LabelNew("Cache Directory")
 	settingsRowCacheDir.PackStart(cacheDirLabel, false, false, 0)
 
 	cacheDirPicker, _ := gtk.ButtonNew()
@@ -484,7 +492,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 		oldPath, _ := button.GetLabel()
 		oldPath = ui.UnescapeHome(oldPath)
 		path := ui.DirChooser("Select an empty directory to use for storage")
-		if !ui.CancelDialog(settingsWindow, "Remount all drives?", "") {
+		if !ui.CancelDialog(settingsDialog, "Remount all drives?", "") {
 			return
 		}
 		log.Warn().
@@ -507,7 +515,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 			err := systemd.UnitSetActive(unitName, false)
 			if err != nil {
 				ui.Dialog("Could not disable mount: "+err.Error(),
-					gtk.MESSAGE_ERROR, settingsWindow)
+					gtk.MESSAGE_ERROR, settingsDialog)
 				log.Error().
 					Err(err).
 					Str("mount", mount).
@@ -519,7 +527,7 @@ func newSettingsWindow(config *common.Config, configPath string) {
 			err = os.Rename(filepath.Join(oldPath, mount), filepath.Join(path, mount))
 			if err != nil {
 				ui.Dialog("Could not move cache for mount: "+err.Error(),
-					gtk.MESSAGE_ERROR, settingsWindow)
+					gtk.MESSAGE_ERROR, settingsDialog)
 				log.Error().
 					Err(err).
 					Str("mount", mount).
@@ -548,10 +556,20 @@ func newSettingsWindow(config *common.Config, configPath string) {
 	settingsRowCacheDir.PackEnd(cacheDirPicker, false, false, 0)
 
 	// assemble rows
-	settingsWindowBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, offset)
-	settingsWindowBox.SetBorderWidth(offset)
-	settingsWindowBox.PackStart(settingsRowLog, true, true, 0)
-	settingsWindowBox.PackStart(settingsRowCacheDir, true, true, 0)
-	settingsWindow.Add(settingsWindowBox)
-	settingsWindow.ShowAll()
+	settingsDialogBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, offset)
+	settingsDialogBox.SetBorderWidth(offset)
+	settingsDialogBox.PackStart(settingsRowLog, true, true, 0)
+	settingsDialogBox.PackStart(settingsRowCacheDir, true, true, 0)
+
+	contentArea, err := settingsDialog.GetContentArea()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get settings dialog content area.")
+		return
+	}
+
+	contentArea.Add(settingsDialogBox)
+
+	settingsDialog.SetModal(true)
+	settingsDialog.SetTransientFor(parent)
+	settingsDialog.ShowAll()
 }
