@@ -147,7 +147,11 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, erro
 
 	// multipart download
 	var n uint64
-	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
+	// The trip count must be ceil(size/chunk). floor(size/chunk)+1 agrees with
+	// that for every size except an exact multiple of the chunk size, where it is
+	// one too many and the final request asks for a range starting at EOF - which
+	// the API answers with 416, making the item permanently unreadable.
+	for i := 0; i < int((item.Size+downloadChunkSize-1)/downloadChunkSize); i++ {
 		start := i * downloadChunkSize
 		end := start + downloadChunkSize - 1
 		log.Info().
