@@ -125,15 +125,31 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 	u.Lock()
 	// small upload sessions will also have an empty UploadURL in addition to
 	// uninitialized large file uploads.
-	nonemptyURL := u.UploadURL != ""
+	uploadURL := u.UploadURL
+	state := u.state
 	u.Unlock()
-	if nonemptyURL {
-		state := u.getState()
-		if state == uploadStarted || state == uploadErrored {
-			// dont care about result, this is purely us being polite to the server
-			go graph.Delete(u.UploadURL, auth)
-		}
+	if uploadURL != "" && (state == uploadStarted || state == uploadErrored) {
+		// dont care about result, this is purely us being polite to the server
+		go deleteUploadURL(uploadURL)
 	}
+}
+
+// deleteUploadURL deletes an upload session using its uploadUrl. graph.Delete
+// cannot be used for this, as the uploadUrl is an absolute URL and not a Graph
+// resource path. Like the chunk uploads, the request must not have an
+// Authorization header, the uploadUrl is pre-authenticated.
+func deleteUploadURL(uploadURL string) error {
+	request, err := http.NewRequest("DELETE", uploadURL, nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 // Internal method used for uploading individual chunks of a DriveItem. We have
@@ -241,7 +257,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				LastModifiedDateTime: u.ModTime,
 			},
 		})
-		resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
+		postResp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
 		if err != nil {
 			return u.setState(uploadErrored, fmt.Errorf("failed to create upload session: %w", err))
 		}
@@ -250,7 +266,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// just in case the API does something silly at a later date and overwrites
 		// a field it shouldn't.
 		tmp := UploadSession{}
-		if err = json.Unmarshal(resp, &tmp); err != nil {
+		if err = json.Unmarshal(postResp, &tmp); err != nil {
 			return u.setState(uploadErrored,
 				fmt.Errorf("could not unmarshal upload session post response: %w", err))
 		}
