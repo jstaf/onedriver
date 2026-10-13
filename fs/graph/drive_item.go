@@ -122,6 +122,24 @@ func GetItemContent(id string, auth *Auth) ([]byte, uint64, error) {
 	return buf.Bytes(), uint64(n), err
 }
 
+// size of the individual requests used for downloading large files
+const downloadChunkSize = 10 * 1024 * 1024
+
+// chunkRanges splits a file of the given size into inclusive byte ranges of at
+// most downloadChunkSize bytes. There is no empty trailing range when the size
+// is an exact multiple of the chunk size (the server answers those with a 416).
+func chunkRanges(size uint64) [][2]uint64 {
+	var ranges [][2]uint64
+	for start := uint64(0); start < size; start += downloadChunkSize {
+		end := start + downloadChunkSize - 1
+		if end >= size {
+			end = size - 1
+		}
+		ranges = append(ranges, [2]uint64{start, end})
+	}
+	return ranges
+}
+
 // GetItemContentStream is the same as GetItemContent, but writes data to an
 // output reader. This function assumes a brand-new io.Writer is used, so
 // "output" must be truncated if there is content already in the io.Writer
@@ -133,7 +151,6 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, erro
 		return 0, err
 	}
 
-	const downloadChunkSize = 10 * 1024 * 1024
 	downloadURL := fmt.Sprintf("/me/drive/items/%s/content", id)
 	if item.Size <= downloadChunkSize {
 		// simple one-shot download
@@ -147,9 +164,8 @@ func GetItemContentStream(id string, auth *Auth, output io.Writer) (uint64, erro
 
 	// multipart download
 	var n uint64
-	for i := 0; i < int(item.Size/downloadChunkSize)+1; i++ {
-		start := i * downloadChunkSize
-		end := start + downloadChunkSize - 1
+	for _, r := range chunkRanges(item.Size) {
+		start, end := r[0], r[1]
 		log.Info().
 			Str("id", item.ID).
 			Str("name", item.Name).
