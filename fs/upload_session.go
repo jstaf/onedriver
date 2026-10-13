@@ -125,15 +125,31 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 	u.Lock()
 	// small upload sessions will also have an empty UploadURL in addition to
 	// uninitialized large file uploads.
-	nonemptyURL := u.UploadURL != ""
+	uploadURL := u.UploadURL
+	state := u.state
 	u.Unlock()
-	if nonemptyURL {
-		state := u.getState()
-		if state == uploadStarted || state == uploadErrored {
-			// dont care about result, this is purely us being polite to the server
-			go graph.Delete(u.UploadURL, auth)
-		}
+	if uploadURL != "" && (state == uploadStarted || state == uploadErrored) {
+		// dont care about result, this is purely us being polite to the server
+		go deleteUploadURL(uploadURL)
 	}
+}
+
+// deleteUploadURL deletes an upload session using its uploadUrl. graph.Delete
+// cannot be used for this, as the uploadUrl is an absolute URL and not a Graph
+// resource path. Like the chunk uploads, the request must not have an
+// Authorization header, the uploadUrl is pre-authenticated.
+func deleteUploadURL(uploadURL string) error {
+	request, err := http.NewRequest("DELETE", uploadURL, nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 // Internal method used for uploading individual chunks of a DriveItem. We have

@@ -2,6 +2,8 @@ package fs
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -61,5 +63,40 @@ func TestUploadManagerRetriesDoNotStallUploads(t *testing.T) {
 			"Upload %d was never given up on and marked as modified again.", i)
 		assert.False(t, isUploadPersisted(u, inode.ID()),
 			"Upload %d was given up on but is still persisted.", i)
+	}
+}
+
+// Cancelling a started upload session must send a DELETE to its uploadUrl,
+// which is an absolute and pre-authenticated URL, without an Authorization
+// header.
+func TestUploadSessionCancelDeletesUploadURL(t *testing.T) {
+	t.Parallel()
+	type request struct {
+		method, path, authorization string
+	}
+	requests := make(chan request, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- request{r.Method, r.URL.Path, r.Header.Get("Authorization")}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	session := &UploadSession{
+		ID:        "local-cancel",
+		UploadURL: server.URL + "/upload/session-to-cancel",
+	}
+	session.setState(uploadStarted, nil)
+	session.cancel(&graph.Auth{
+		AccessToken: "should not be sent",
+		ExpiresAt:   time.Now().Add(time.Hour).Unix(),
+	})
+
+	select {
+	case r := <-requests:
+		assert.Equal(t, "DELETE", r.method)
+		assert.Equal(t, "/upload/session-to-cancel", r.path)
+		assert.Empty(t, r.authorization, "uploadUrl requests must not be authenticated")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Cancelling the upload session never reached its uploadUrl.")
 	}
 }
