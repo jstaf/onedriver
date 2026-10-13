@@ -19,3 +19,10 @@ func TestURIGetHost(t *testing.T) {
 	host = uriGetHost("http://account.live.com")
 	assert.Equal(t, "account.live.com", host, "Failed URI host without extra path")
 }
+
+func TestURIGetHostEdgeCases(t *testing.T) {
+	assert.Equal(t, "", uriGetHost(""))
+	assert.Equal(t, "", uriGetHost("/"))
+	assert.Equal(t, "a.b", uriGetHost("https://a.b/"))
+	assert.Equal(t, "login.live.com", uriGetHost("https://login.live.com/oauth20_desktop.srf?code=x"))
+}
