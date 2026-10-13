@@ -18,7 +18,6 @@ type UploadManager struct {
 	queue         chan *UploadSession
 	deletionQueue chan string
 	sessions      map[string]*UploadSession
-	inFlight      uint8 // number of sessions in flight
 	auth          *graph.Auth
 	fs            *Filesystem
 	db            *bolt.DB
@@ -49,9 +48,6 @@ func NewUploadManager(duration time.Duration, db *bolt.DB, fs *Filesystem, auth 
 			if err != nil {
 				log.Error().Err(err).Msg("Failure restoring upload sessions from disk.")
 				return err
-			}
-			if session.getState() != uploadNotStarted {
-				manager.inFlight++
 			}
 			session.cancel(auth) // uploads are currently non-resumable
 			manager.sessions[session.ID] = session
@@ -85,14 +81,27 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 			u.finishUpload(cancelID)
 
 		case <-ticker.C: // periodically start uploads, or remove them if done/failed
+			// Count the uploads in flight from the session states instead of
+			// tracking them with a counter, which could drift whenever a
+			// session was retried or replaced and eventually stop all uploads.
+			inFlight := 0
+			for _, session := range u.sessions {
+				if session.getState() == uploadStarted {
+					inFlight++
+				}
+			}
 			for _, session := range u.sessions {
 				switch session.getState() {
 				case uploadNotStarted:
 					// max active upload sessions are capped at this limit for faster
 					// uploads of individual files and also to prevent possible server-
 					// side throttling that can cause errors.
-					if u.inFlight < maxUploadsInFlight {
-						u.inFlight++
+					if inFlight < maxUploadsInFlight {
+						inFlight++
+						// mark the session as started right away, so it is
+						// counted on the next tick even if the goroutine has
+						// not run yet
+						session.setState(uploadStarted, nil)
 						go session.Upload(u.auth)
 					}
 
@@ -181,8 +190,5 @@ func (u *UploadManager) finishUpload(id string) {
 		}
 		return nil
 	})
-	if u.inFlight > 0 {
-		u.inFlight--
-	}
 	delete(u.sessions, id)
 }
