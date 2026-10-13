@@ -144,6 +144,7 @@ func (u *UploadSession) cancel(auth *graph.Auth) {
 func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, int, error) {
 	u.Lock()
 	url := u.UploadURL
+	id := u.ID
 	if url == "" {
 		u.Unlock()
 		return nil, -1, errors.New("UploadSession UploadURL cannot be empty")
@@ -172,7 +173,7 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 	// no Authorization header - it will throw a 401 if present
 	request.Header.Add("Content-Length", strconv.Itoa(int(reqChunkSize)))
 	frags := fmt.Sprintf("bytes %d-%d/%d", offset, end-1, u.Size)
-	log.Info().Str("id", u.ID).Msg("Uploading " + frags)
+	log.Info().Str("id", id).Msg("Uploading " + frags)
 	request.Header.Add("Content-Range", frags)
 
 	resp, err := client.Do(request)
@@ -189,7 +190,12 @@ func (u *UploadSession) uploadChunk(auth *graph.Auth, offset uint64) ([]byte, in
 // goroutine, or it can potentially block for a very long time. The uploadSession.error
 // field contains errors to be handled if called as a goroutine.
 func (u *UploadSession) Upload(auth *graph.Auth) error {
-	log.Info().Str("id", u.ID).Str("name", u.Name).Msg("Uploading file.")
+	// The upload manager can move the session to a new ID while it is
+	// running, read it only once.
+	u.Lock()
+	id := u.ID
+	u.Unlock()
+	log.Info().Str("id", id).Str("name", u.Name).Msg("Uploading file.")
 	u.setState(uploadStarted, nil)
 
 	var uploadPath string
@@ -199,7 +205,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// adding file modification times. We don't really care though, because
 		// after some experimentation, the Microsoft API doesn't seem to properly
 		// support these either (this is why we have to use etags).
-		if isLocalID(u.ID) {
+		if isLocalID(id) {
 			uploadPath = fmt.Sprintf(
 				"/me/drive/items/%s:/%s:/content",
 				url.PathEscape(u.ParentID),
@@ -208,7 +214,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		} else {
 			uploadPath = fmt.Sprintf(
 				"/me/drive/items/%s/content",
-				url.PathEscape(u.ID),
+				url.PathEscape(id),
 			)
 		}
 		// small files handled in this block
@@ -223,7 +229,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			return u.setState(uploadErrored, fmt.Errorf("small upload failed: %w", err))
 		}
 	} else {
-		if isLocalID(u.ID) {
+		if isLocalID(id) {
 			uploadPath = fmt.Sprintf(
 				"/me/drive/items/%s:/%s:/createUploadSession",
 				url.PathEscape(u.ParentID),
@@ -232,7 +238,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		} else {
 			uploadPath = fmt.Sprintf(
 				"/me/drive/items/%s/createUploadSession",
-				url.PathEscape(u.ID),
+				url.PathEscape(id),
 			)
 		}
 		sessionPostData, _ := json.Marshal(UploadSessionPost{
@@ -272,7 +278,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			// exit this loop unless it receives a non 5xx error or serious failure
 			for backoff := 1; status >= 500; backoff *= 2 {
 				log.Error().
-					Str("id", u.ID).
+					Str("id", id).
 					Str("name", u.Name).
 					Int("chunk", i).
 					Int("nchunks", nchunks).
@@ -300,10 +306,10 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 			// the API frequently just returns a 0-byte response for completed
 			// multipart uploads, so we manually fetch the newly updated item
 			var remotePtr *graph.DriveItem
-			if isLocalID(u.ID) {
+			if isLocalID(id) {
 				remotePtr, err = graph.GetItemChild(u.ParentID, u.Name, auth)
 			} else {
-				remotePtr, err = graph.GetItem(u.ID, auth)
+				remotePtr, err = graph.GetItem(id, auth)
 			}
 			if err == nil {
 				remote = *remotePtr
