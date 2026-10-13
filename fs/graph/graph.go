@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"time"
 
-	"dario.cat/mergo"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,6 +41,7 @@ func Request(resource string, auth *Auth, method string, content io.Reader, head
 	}
 
 	auth.Refresh()
+	token := auth.AccessToken
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	request, _ := http.NewRequest(method, GraphURL+resource, content)
@@ -73,11 +73,12 @@ func Request(resource string, auth *Auth, method string, content io.Reader, head
 		log.Warn().
 			Str("code", err.Error.Code).
 			Str("message", err.Error.Message).
-			Msg("Authentication token invalid or new app permissions required, " +
-				"forcing reauth before retrying.")
+			Msg("Authentication token invalid, forcing token renewal before retrying.")
 
-		reauth := newAuth(auth.AuthConfig, auth.path, false)
-		mergo.Merge(auth, reauth, mergo.WithOverride)
+		// Renew the tokens in place. We don't start an interactive login here
+		// (this runs in the background while the filesystem is mounted). If the
+		// refresh token is rejected too, the retry below just fails.
+		auth.refresh(token)
 		request.Header.Set("Authorization", "bearer "+auth.AccessToken)
 	}
 	if response.StatusCode >= 500 || response.StatusCode == 401 {

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"dario.cat/mergo"
@@ -43,12 +44,13 @@ type AuthConfig struct {
 // Auth represents a set of oauth2 authentication tokens
 type Auth struct {
 	AuthConfig   `json:"config"`
-	Account      string `json:"account"`
-	ExpiresIn    int64  `json:"expires_in"` // only used for parsing
-	ExpiresAt    int64  `json:"expires_at"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	path         string // auth tokens remember their path for use by Refresh()
+	Account      string    `json:"account"`
+	ExpiresIn    int64     `json:"expires_in"` // only used for parsing
+	ExpiresAt    int64     `json:"expires_at"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	path         string    // auth tokens remember their path for use by Refresh()
+	nextRetry    time.Time // don't try to renew tokens again before this (see refresh)
 }
 
 // AuthError is an authentication error from the Microsoft API. Generally we don't see
@@ -85,47 +87,112 @@ func (a *Auth) FromFile(file string) error {
 	return a.applyDefaults()
 }
 
-// Refresh auth tokens if expired.
+// serializes token renewals so concurrent requests don't all renew at once
+var refreshMu sync.Mutex
+
+// Refresh auth tokens if expired. This is safe to call from the background:
+// it never starts an interactive login. If the network is down or the server
+// is having problems, the current tokens are kept and renewal is tried again
+// later. If the server definitively rejects the refresh token, an error is
+// logged and the tokens are left alone (the user has to run
+// "onedriver --auth-only" to log in again); the filesystem keeps running from
+// its cache in the meantime.
 func (a *Auth) Refresh() {
-	if a.ExpiresAt <= time.Now().Unix() {
-		oldTime := a.ExpiresAt
-		postData := strings.NewReader("client_id=" + a.ClientID +
-			"&redirect_uri=" + a.RedirectURL +
-			"&refresh_token=" + a.RefreshToken +
-			"&grant_type=refresh_token")
-		resp, err := http.Post(a.TokenURL,
-			"application/x-www-form-urlencoded",
-			postData)
+	a.refresh("")
+}
 
-		var reauth bool
-		if err != nil {
-			if IsOffline(err) || resp == nil {
+// how long to wait before trying to renew tokens again after an error
+const refreshRetryDelay = 10 * time.Second
+
+// refresh renews the tokens in place. If usedToken is empty, this only happens
+// if the access token is past its expiry time. Otherwise the server rejected
+// usedToken, and tokens are renewed regardless of their expiry time unless
+// someone else did that already. It returns true if the server definitively
+// rejected our refresh token, which only a new login can fix.
+func (a *Auth) refresh(usedToken string) (rejected bool) {
+	refreshMu.Lock()
+	defer refreshMu.Unlock()
+
+	if usedToken == "" && a.ExpiresAt > time.Now().Unix() {
+		return false
+	}
+	if usedToken != "" && a.AccessToken != usedToken {
+		return false // already renewed by someone else
+	}
+	if time.Now().Before(a.nextRetry) {
+		return false
+	}
+
+	tokens, transient, err := postTokenRequest(a.TokenURL, url.Values{
+		"client_id":     {a.ClientID},
+		"redirect_uri":  {a.RedirectURL},
+		"refresh_token": {a.RefreshToken},
+		"grant_type":    {"refresh_token"},
+	})
+	if err != nil {
+		a.nextRetry = time.Now().Add(refreshRetryDelay)
+		if transient {
+			if IsOffline(err) {
+				// don't spam the log while offline
 				log.Trace().Err(err).Msg("Network unreachable during token renewal, ignoring.")
-				return
+			} else {
+				log.Warn().Err(err).Msg("Could not renew auth tokens, will retry later.")
 			}
-			log.Error().Err(err).Msg("Could not POST to renew tokens, forcing reauth.")
-			reauth = true
-		} else {
-			// put here so as to avoid spamming the log when offline
-			log.Info().Msg("Auth tokens expired, attempting renewal.")
+			return false
 		}
-		defer resp.Body.Close()
+		log.Error().Err(err).Msg("The server rejected our auth tokens. " +
+			"Run \"onedriver --auth-only\" to log in again.")
+		return true
+	}
 
-		body, _ := io.ReadAll(resp.Body)
-		json.Unmarshal(body, &a)
-		if a.ExpiresAt == oldTime {
-			a.ExpiresAt = time.Now().Unix() + a.ExpiresIn
+	// update in place, other holders of this *Auth need to see the new tokens
+	a.AccessToken = tokens.AccessToken
+	if tokens.RefreshToken != "" {
+		a.RefreshToken = tokens.RefreshToken
+	}
+	a.ExpiresIn = tokens.ExpiresIn
+	a.ExpiresAt = time.Now().Unix() + tokens.ExpiresIn
+	a.nextRetry = time.Time{}
+	if a.path != "" {
+		if err := a.ToFile(a.path); err != nil {
+			log.Error().Err(err).Msg("Could not save renewed auth tokens.")
 		}
+	}
+	return false
+}
 
-		if reauth || a.AccessToken == "" || a.RefreshToken == "" {
-			log.Error().
-				Bytes("response", body).
-				Int("http_code", resp.StatusCode).
-				Msg("Failed to renew access tokens. Attempting to reauthenticate.")
-			a = newAuth(a.AuthConfig, a.path, false)
-		} else {
-			a.ToFile(a.path)
+// postTokenRequest posts a form to the token endpoint. On failure, transient
+// says if trying again later might help (network problems, server errors) as
+// opposed to the server definitively refusing the request (invalid_grant etc).
+func postTokenRequest(tokenURL string, form url.Values) (tokens *Auth, transient bool, err error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post(tokenURL, "application/x-www-form-urlencoded",
+		strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, true, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var parsed Auth
+	json.Unmarshal(body, &parsed)
+	if resp.StatusCode == http.StatusOK && parsed.AccessToken != "" {
+		return &parsed, false, nil
+	}
+
+	var authErr AuthError
+	json.Unmarshal(body, &authErr)
+	err = fmt.Errorf("token endpoint returned HTTP %d: %s %s",
+		resp.StatusCode, authErr.Error, authErr.ErrorDescription)
+	switch resp.StatusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+		if authErr.Error == "temporarily_unavailable" || authErr.Error == "server_error" {
+			return nil, true, err
 		}
+		return nil, false, err
+	default:
+		// 5xx, 429, ...
+		return nil, true, err
 	}
 }
 
@@ -167,10 +234,12 @@ func parseAuthCode(authURL string) (string, error) {
 
 // Exchange an auth code for a set of access tokens (returned as a new Auth struct).
 func getAuthTokens(a AuthConfig, authCode string) *Auth {
-	postData := strings.NewReader("client_id=" + a.ClientID +
-		"&redirect_uri=" + a.RedirectURL +
-		"&code=" + authCode +
-		"&grant_type=authorization_code")
+	postData := strings.NewReader(url.Values{
+		"client_id":    {a.ClientID},
+		"redirect_uri": {a.RedirectURL},
+		"code":         {authCode},
+		"grant_type":   {"authorization_code"},
+	}.Encode())
 	resp, err := http.Post(a.TokenURL,
 		"application/x-www-form-urlencoded",
 		postData)
@@ -250,7 +319,12 @@ func Authenticate(config AuthConfig, path string, headless bool) *Auth {
 	} else {
 		// we already have tokens, no need to force a new auth flow
 		auth.FromFile(path)
-		auth.Refresh()
+		if auth.refresh("") {
+			// we are in the foreground at startup, so it is fine to ask the
+			// user to log in again here (unlike in Refresh())
+			log.Warn().Msg("Failed to renew access tokens. Attempting to reauthenticate.")
+			auth = newAuth(auth.AuthConfig, path, headless)
+		}
 	}
 	return auth
 }
