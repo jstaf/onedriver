@@ -37,6 +37,11 @@ type Filesystem struct {
 	// tracks currently open directories
 	opendirsM sync.RWMutex
 	opendirs  map[uint64][]*Inode
+
+	// content downloads currently in progress, keyed by item ID. Closed
+	// when the download finishes.
+	downloadsM sync.Mutex
+	downloads  map[string]chan struct{}
 }
 
 // boltdb buckets
@@ -107,6 +112,7 @@ func NewFilesystem(auth *graph.Auth, cacheDir string) *Filesystem {
 		db:            db,
 		auth:          auth,
 		opendirs:      make(map[uint64][]*Inode),
+		downloads:     make(map[string]chan struct{}),
 	}
 
 	rootItem, err := graph.GetItem("root", auth)
