@@ -744,6 +744,20 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 	}
 	path := i.Path()
 	isDir := i.IsDir() // holds an rlock
+
+	// A truncate on a path (no open file handle) keeps part of the existing
+	// content, so that content must be present and current first. Otherwise
+	// we would truncate an empty cache file and later upload zeros. Open
+	// does exactly this check, and is a no-op for files with local changes.
+	if size, valid := in.GetSize(); valid && size > 0 && !isDir &&
+		in.Valid&fuse.FATTR_FH == 0 && !i.HasChanges() {
+		openIn := &fuse.OpenIn{InHeader: in.InHeader, Flags: uint32(os.O_RDWR)}
+		if status := f.Open(cancel, openIn, &fuse.OpenOut{}); status != fuse.OK {
+			return status
+		}
+	}
+
+	truncated := false
 	i.Lock()
 
 	ctx := log.With().
@@ -789,9 +803,15 @@ func (f *Filesystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fu
 		fd.Truncate(int64(size))
 		i.DriveItem.Size = size
 		i.hasChanges = true
+		truncated = true
 	}
 
 	i.Unlock()
+	if truncated && in.Valid&fuse.FATTR_FH == 0 {
+		// truncate(2) on a path rather than an open file: no Flush or Fsync
+		// will follow, so queue the upload now.
+		f.Fsync(cancel, &fuse.FsyncIn{InHeader: in.InHeader})
+	}
 	out.Attr = i.makeAttr()
 	out.SetTimeout(timeout)
 	return fuse.OK

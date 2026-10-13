@@ -229,6 +229,35 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+// truncate(2) on a path to a non-zero size must keep the existing content (even
+// if it was never downloaded) and upload the result, without any open handle.
+func TestTruncateUncached(t *testing.T) {
+	t.Parallel()
+	fname := filepath.Join(TestDir, "truncate_uncached.txt")
+	remotePath := "/onedriver_tests/truncate_uncached.txt"
+	require.NoError(t, os.WriteFile(fname, []byte("0123456789"), 0644))
+
+	var item *graph.DriveItem
+	require.Eventually(t, func() bool {
+		var err error
+		item, err = graph.GetItemPath(remotePath, auth)
+		return err == nil && item != nil && item.Size == 10
+	}, retrySeconds, time.Second, "file was never uploaded")
+
+	// forget the local content, as if the file had never been opened
+	require.NoError(t, fs.content.Delete(item.ID))
+
+	require.NoError(t, os.Truncate(fname, 4))
+	local, err := os.ReadFile(fname)
+	require.NoError(t, err)
+	assert.Equal(t, "0123", string(local))
+
+	require.Eventually(t, func() bool {
+		content, _, err := graph.GetItemContent(item.ID, auth)
+		return err == nil && string(content) == "0123"
+	}, retrySeconds, time.Second, "truncated content was not uploaded")
+}
+
 // can we seek to the middle of a file and do writes there correctly?
 func TestReadWriteMidfile(t *testing.T) {
 	t.Parallel()
