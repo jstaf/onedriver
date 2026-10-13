@@ -257,7 +257,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 				LastModifiedDateTime: u.ModTime,
 			},
 		})
-		resp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
+		postResp, err := graph.Post(uploadPath, auth, bytes.NewReader(sessionPostData))
 		if err != nil {
 			return u.setState(uploadErrored, fmt.Errorf("failed to create upload session: %w", err))
 		}
@@ -266,7 +266,7 @@ func (u *UploadSession) Upload(auth *graph.Auth) error {
 		// just in case the API does something silly at a later date and overwrites
 		// a field it shouldn't.
 		tmp := UploadSession{}
-		if err = json.Unmarshal(resp, &tmp); err != nil {
+		if err = json.Unmarshal(postResp, &tmp); err != nil {
 			return u.setState(uploadErrored,
 				fmt.Errorf("could not unmarshal upload session post response: %w", err))
 		}
