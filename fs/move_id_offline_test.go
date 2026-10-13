@@ -96,6 +96,52 @@ func TestMoveIDKeepsPendingUpload(t *testing.T) {
 	}
 }
 
+// If a file is renamed or moved on the server before we learned its server ID,
+// a delta cannot match it by name and adds a second inode for it. MoveID used
+// to overwrite that inode with ours, losing the new name and parent, and left
+// the item listed twice in its parent.
+func TestMoveIDMergesInodeAddedByDelta(t *testing.T) {
+	t.Parallel()
+	f, root := newOfflineFilesystem(t, time.Hour)
+
+	dir := NewInodeDriveItem(&graph.DriveItem{
+		ID:     "offline-dir",
+		Name:   "dir",
+		Parent: &graph.DriveItemParent{ID: root.ID()},
+		Folder: &graph.Folder{},
+	})
+	f.InsertChild(root.ID(), dir)
+
+	inode := NewInode("before.txt", 0644|fuse.S_IFREG, root)
+	localID := inode.ID()
+	f.InsertID(localID, inode)
+	require.NoError(t, f.content.Insert(localID, []byte("uploaded content")))
+
+	// what applyDelta adds for the renamed and moved item
+	const serverID = "offline-server-id-rename"
+	f.InsertChild(dir.ID(), NewInodeDriveItem(&graph.DriveItem{
+		ID:     serverID,
+		Name:   "after.txt",
+		Parent: &graph.DriveItemParent{ID: dir.ID()},
+		File:   &graph.File{},
+	}))
+
+	require.NoError(t, f.MoveID(localID, serverID))
+
+	assert.Equal(t, inode, f.GetID(serverID))
+	assert.Equal(t, "after.txt", inode.Name())
+	assert.Equal(t, dir.ID(), inode.ParentID())
+	assert.Equal(t, []byte("uploaded content"), f.content.Get(serverID))
+
+	root.RLock()
+	assert.NotContains(t, root.children, localID)
+	assert.NotContains(t, root.children, serverID)
+	root.RUnlock()
+	dir.RLock()
+	assert.Equal(t, []string{serverID}, dir.children)
+	dir.RUnlock()
+}
+
 // When the upload loop notices that an upload produced a new ID, it moves the
 // item itself. It cannot use MoveID for this, which waits for the upload loop.
 func TestUploadCompletionMovesID(t *testing.T) {

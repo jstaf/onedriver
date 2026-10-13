@@ -534,19 +534,33 @@ func (f *Filesystem) moveID(oldID string, newID string) error {
 		}
 	}
 
-	// need to rename the child under the parent
-	parent := f.GetID(inode.ParentID())
-	parent.Lock()
-	for i, child := range parent.children {
-		if child == oldID {
-			parent.children[i] = newID
-			break
+	f.deleteID(oldID)
+
+	// A delta may already have added a second inode for the new ID, if the
+	// item was renamed or moved on the server before we learned its new ID
+	// and so could not be matched by name. That inode has the item's current
+	// name and parent on the server: apply them to ours and drop it.
+	if entry, exists := f.metadata.Load(newID); exists && entry.(*Inode) != inode {
+		duplicate := entry.(*Inode)
+		name := duplicate.Name()
+		parentID := duplicate.ParentID()
+		f.deleteID(newID)
+
+		inode.Lock()
+		inode.DriveItem.Name = name
+		if inode.DriveItem.Parent != nil && parentID != "" {
+			inode.DriveItem.Parent.ID = parentID
 		}
+		inode.Unlock()
+		log.Info().
+			Str("oldID", oldID).
+			Str("id", newID).
+			Str("name", name).
+			Str("parentID", parentID).
+			Msg("Item already existed under its new ID, keeping its server-side name and parent.")
 	}
-	parent.Unlock()
 
 	// now actually perform the metadata+content move
-	f.deleteID(oldID)
 	f.InsertID(newID, inode)
 	if inode.IsDir() {
 		return nil
