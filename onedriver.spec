@@ -21,6 +21,7 @@ BuildRequires: webkit2gtk3-devel
 BuildRequires: webkit2gtk4.1-devel
 %endif
 Requires: fuse3
+Requires: gstreamer1-plugins-good
 
 %description
 Onedriver is a native Linux filesystem for Microsoft Onedrive. Files and

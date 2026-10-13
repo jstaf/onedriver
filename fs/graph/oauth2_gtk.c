@@ -1,5 +1,6 @@
 #include <gtk/gtk.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <webkit2/webkit2.h>
 
@@ -11,8 +12,9 @@ char *uri_get_host(char *uri) {
         return NULL;
     }
 
-    int start = 0;
-    for (int i = 1; i < strlen(uri); i++) {
+    size_t uri_len = strlen(uri);
+    size_t start = 0;
+    for (size_t i = 1; i < uri_len; i++) {
         if (uri[i] != '/') {
             // only care about "/"
             continue;
@@ -22,9 +24,12 @@ char *uri_get_host(char *uri) {
             // we're at the the "//" in "https://"
             start = i + 1;
         } else if (start > 0) {
-            int len = i - start;
-            char *host = malloc(len);
-            strncpy(host, uri + start, len);
+            size_t len = i - start;
+            char *host = malloc(len + 1);
+            if (!host) {
+                return NULL;
+            }
+            memcpy(host, uri + start, len);
             host[len] = '\0';
             return host;
         }
@@ -48,7 +53,8 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                                          GTlsCertificate *certificate,
                                          GTlsCertificateFlags errors,
                                          gpointer user_data) {
-    char *reason;
+    char reason_buf[256];
+    const char *reason;
     switch (errors) {
     case 0:
         reason = "No error - There was no error verifying the certificate.";
@@ -81,10 +87,11 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
                  "the certificate.";
         break;
     default:
-        snprintf(reason, 256,
+        snprintf(reason_buf, sizeof(reason_buf),
                  "Multiple failures (%d) - There were multiple errors during certificate "
                  "verification.",
                  errors);
+        reason = reason_buf;
         break;
     }
 
@@ -93,8 +100,9 @@ static gboolean web_view_load_failed_tls(WebKitWebView *web_view, char *failing_
     // something is up with Fedora 35's verification of this particular cert,
     // so we specifically only allow G_TLS_CERTIFICATE_GENERIC_ERROR for only this cert.
     char *host = uri_get_host(failing_uri);
-    if (errors & G_TLS_CERTIFICATE_GENERIC_ERROR &&
-        strncmp("account.live.com", host, 17) == 0) {
+    gboolean is_account_host = host && strncmp("account.live.com", host, 17) == 0;
+    free(host);
+    if (errors & G_TLS_CERTIFICATE_GENERIC_ERROR && is_account_host) {
         WebKitWebContext *context = webkit_web_view_get_context(web_view);
         // allow these failing domains from the webpage and reload
         webkit_web_context_allow_tls_certificate_for_host(context, certificate,
