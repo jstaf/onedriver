@@ -113,8 +113,21 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 							Str("name", session.Name).
 							Err(session).
 							Int("retries", session.retries).
-							Msg("Upload session failed too many times, cancelling session.")
+							Msg("Upload session failed too many times, cancelling session. " +
+								"Local changes were not uploaded, they will be uploaded " +
+								"again the next time the file is flushed.")
 						u.finishUpload(session.ID)
+
+						// hasChanges was cleared when the upload was queued. Set it
+						// again so the file does not look like it is in sync with
+						// the server, and the next Flush or Fsync queues a new
+						// upload of the content that never made it.
+						if inode := u.fs.GetID(session.ID); inode != nil {
+							inode.Lock()
+							inode.hasChanges = true
+							inode.Unlock()
+						}
+						continue
 					}
 
 					log.Warn().
