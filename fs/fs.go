@@ -668,6 +668,10 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		Logger()
 	ctx.Debug().Msg("")
 	if inode.HasChanges() {
+		// reserve the upload before clearing hasChanges, otherwise the delta
+		// loop could briefly see neither local changes nor a pending upload
+		// and overwrite our content with the server's
+		f.uploads.reserveUpload(id)
 		inode.Lock()
 		inode.hasChanges = false
 
@@ -681,7 +685,7 @@ func (f *Filesystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) fuse.Status
 		inode.DriveItem.File.Hashes.QuickXorHash = graph.QuickXORHashStream(fd)
 		inode.Unlock()
 
-		if err := f.uploads.QueueUpload(inode); err != nil {
+		if err := f.uploads.queueReservedUpload(inode, id); err != nil {
 			ctx.Error().Err(err).Msg("Error creating upload session.")
 			return fuse.EREMOTEIO
 		}

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jstaf/onedriver/fs/conflict"
 	"github.com/jstaf/onedriver/fs/graph"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
 )
@@ -162,6 +164,7 @@ func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
 
 	// does the item exist locally? if not, add the delta to the cache under the
 	// appropriate parent
+	prevID := "" // local ID the item was tracked under before this delta, if any
 	if local == nil {
 		// check if we don't have it here first
 		local, _ = f.GetChild(parentID, name, nil)
@@ -171,6 +174,7 @@ func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
 				Str("localID", localID).
 				Msg("Local item already exists under different ID.")
 			if isLocalID(localID) {
+				prevID = localID
 				if err := f.MoveID(localID, id); err != nil {
 					ctx.Error().
 						Str("localID", localID).
@@ -209,32 +213,178 @@ func (f *Filesystem) applyDelta(delta *graph.DriveItem) error {
 	// actually modifies remotely is the actual file data, so we simply accept
 	// the remote metadata changes that do not deal with the file's content
 	// changing.
-	if delta.ModTimeUnix() > local.ModTime() && !delta.ETagIsMatch(local.ETag) {
-		sameContent := false
-		if !delta.IsDir() && delta.File != nil {
-			local.RLock()
-			sameContent = local.VerifyChecksum(delta.File.Hashes.QuickXorHash)
-			local.RUnlock()
-		}
+	local.RLock()
+	localETag := local.DriveItem.ETag
+	localModTime := local.DriveItem.ModTimeUnix()
+	local.RUnlock()
+	if delta.ETagIsMatch(localETag) {
+		ctx.Trace().Str("delta", "skip").Msg("Skipping, no changes relative to local state.")
+		return nil
+	}
 
-		if !sameContent {
-			//TODO check if local has changes and rename the server copy if so
+	if delta.IsDir() {
+		// folders have no content to lose, just accept newer remote metadata
+		if delta.ModTimeUnix() > localModTime {
 			ctx.Info().Str("delta", "overwrite").
-				Msg("Overwriting local item, no local changes to preserve.")
-			// update modtime, hashes, purge any local content in memory
+				Msg("Overwriting local folder metadata with server version.")
 			local.Lock()
-			defer local.Unlock()
 			local.DriveItem.ModTime = delta.ModTime
 			local.DriveItem.Size = delta.Size
 			local.DriveItem.ETag = delta.ETag
-			// the rest of these are harmless when this is a directory
-			// as they will be null anyways
-			local.DriveItem.File = delta.File
-			local.hasChanges = false
+			local.Unlock()
 			return nil
 		}
+		ctx.Trace().Str("delta", "skip").Msg("Skipping, no changes relative to local state.")
+		return nil
+	}
+
+	// Files: content hashes, not modification times, decide what happens. The
+	// local copy may have pending changes that must never be overwritten.
+	ids := []string{id, prevID}
+	remoteHash := ""
+	if delta.File != nil {
+		remoteHash = delta.File.Hashes.QuickXorHash
+	}
+	local.RLock()
+	localHash := ""
+	if local.DriveItem.File != nil {
+		localHash = local.DriveItem.File.Hashes.QuickXorHash
+	}
+	localChanges := local.hasChanges
+	local.RUnlock()
+	localChanges = localChanges || f.uploads.IsUploadPending(ids...)
+
+	action := conflict.Resolve(remoteHash, localHash, localChanges, f.uploads.UploadedHashes(ids...))
+	if action == conflict.Overwrite && !f.overwriteFromDelta(local, delta, ids, ctx) {
+		// local was modified while we were deciding, re-evaluate as changed
+		action = conflict.Resolve(remoteHash, localHash, true, f.uploads.UploadedHashes(ids...))
+	}
+
+	switch action {
+	case conflict.Overwrite:
+		return nil
+	case conflict.Conflict:
+		ctx.Warn().
+			Str("delta", "conflict").
+			Str("localHash", localHash).
+			Str("remoteHash", remoteHash).
+			Msg("Conflict detected: item changed on server while local changes " +
+				"are not yet uploaded. Keeping local version, saving server " +
+				"version as a conflict copy.")
+		if err := f.createConflictCopy(delta, ctx); err != nil {
+			ctx.Error().Err(err).Str("delta", "conflict").
+				Msg("Could not create conflict copy of server version! The " +
+					"local version will still be uploaded, the overwritten server " +
+					"version can only be recovered from OneDrive's version history.")
+			return err
+		}
+		// remember that we have seen (and preserved) this server version
+		local.Lock()
+		local.DriveItem.ETag = delta.ETag
+		local.Unlock()
+		return nil
+	case conflict.Unknown:
+		ctx.Warn().Str("delta", "conflict").
+			Msg("Item changed on server but has no content hash to compare " +
+				"against, keeping local changes and not overwriting them.")
+		return nil
 	}
 
 	ctx.Trace().Str("delta", "skip").Msg("Skipping, no changes relative to local state.")
 	return nil
+}
+
+// overwriteFromDelta replaces a local file's metadata with the server's and
+// invalidates its cached content so the new version gets downloaded on next
+// open. Returns false (and changes nothing) if the local item has changes or
+// a pending upload, which is re-checked here under the inode lock.
+func (f *Filesystem) overwriteFromDelta(local *Inode, delta *graph.DriveItem, ids []string, ctx zerolog.Logger) bool {
+	local.Lock()
+	defer local.Unlock()
+	// lock order: inode -> upload manager (the upload manager never takes
+	// inode locks while holding its own)
+	if local.hasChanges || f.uploads.IsUploadPending(ids...) {
+		return false
+	}
+	ctx.Info().Str("delta", "overwrite").
+		Msg("Overwriting local item, no local changes to preserve.")
+	local.DriveItem.ModTime = delta.ModTime
+	local.DriveItem.Size = delta.Size
+	local.DriveItem.ETag = delta.ETag
+	local.DriveItem.File = delta.File
+	// Open() would also notice the hash mismatch and re-download, but drop the
+	// stale content now. Files that are currently open keep their fd and get
+	// refreshed by the checksum check on the next Open().
+	if id := local.DriveItem.ID; !f.content.IsOpen(id) && f.content.HasContent(id) {
+		ctx.Debug().Str("delta", "overwrite").Msg("Invalidating cached content.")
+		f.content.Delete(id)
+	}
+	return true
+}
+
+// createConflictCopy preserves the server version of a file as a new local
+// item under a conflict name (which is then uploaded). The original item keeps
+// its ID and local content, so its pending upload will replace the server
+// version - upload sessions do not send an If-Match header and use
+// conflictBehavior=replace, so this cannot fail on an eTag mismatch.
+func (f *Filesystem) createConflictCopy(delta *graph.DriveItem, ctx zerolog.Logger) error {
+	if delta.File == nil || delta.File.Hashes.QuickXorHash == "" {
+		return errors.New("server item has no content hash")
+	}
+	parentID := delta.Parent.ID
+
+	// pick a name that is not already taken in the parent folder
+	host := conflict.Hostname()
+	now := time.Now()
+	var name string
+	for n := 1; ; n++ {
+		name = conflict.Name(delta.Name, host, now, n)
+		if child, _ := f.GetChild(parentID, name, f.auth); child == nil {
+			break
+		}
+		if n >= 100 {
+			return errors.New("could not find a free conflict name")
+		}
+	}
+
+	item := *delta
+	item.ID = localID()
+	item.Name = name
+	item.ETag = ""
+	item.Deleted = nil
+	parent := *delta.Parent
+	item.Parent = &parent
+	file := *delta.File
+	item.File = &file
+	if item.ModTime == nil {
+		item.ModTime = &now
+	}
+	copyInode := NewInodeDriveItem(&item)
+
+	// download the server version into the cache under the new ID
+	fd, err := f.content.Open(item.ID)
+	if err != nil {
+		return err
+	}
+	size, err := graph.GetItemContentStream(delta.ID, f.auth, fd)
+	if err != nil {
+		f.content.Delete(item.ID)
+		return err
+	}
+	if !copyInode.VerifyChecksum(graph.QuickXORHashStream(fd)) {
+		// most likely the server copy changed again since the delta (possibly
+		// our own upload landed first)
+		f.content.Delete(item.ID)
+		return errors.New("downloaded server version did not match delta checksum")
+	}
+	f.content.Close(item.ID)
+	copyInode.DriveItem.Size = size
+
+	f.InsertChild(parentID, copyInode)
+	ctx.Warn().
+		Str("delta", "conflict").
+		Str("conflictName", name).
+		Str("conflictID", item.ID).
+		Msg("Saved server version as conflict copy, uploading it.")
+	return f.uploads.QueueUpload(copyInode)
 }

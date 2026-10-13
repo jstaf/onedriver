@@ -51,6 +51,7 @@ type UploadSession struct {
 	QuickXORHash       string    `json:"quickxorhash,omitempty"`
 	ModTime            time.Time `json:"modTime,omitempty"`
 	retries            int
+	reservedID         string // ID reserved via UploadManager.reserveUpload
 
 	sync.Mutex
 	UploadURL string `json:"uploadUrl"`
