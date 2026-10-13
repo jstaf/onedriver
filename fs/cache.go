@@ -313,9 +313,16 @@ func (f *Filesystem) InsertChild(parentID string, child *Inode) uint64 {
 	return f.InsertID(id, child)
 }
 
-// DeleteID deletes an item from the cache, and removes it from its parent. Must
-// be called before InsertID if being used to rename/move an item.
+// DeleteID deletes an item from the cache, removes it from its parent and
+// cancels any pending upload of it. Must be called before InsertID if being
+// used to rename/move an item.
 func (f *Filesystem) DeleteID(id string) {
+	f.deleteID(id)
+	f.uploads.CancelUpload(id)
+}
+
+// deleteID is DeleteID without cancelling the item's uploads.
+func (f *Filesystem) deleteID(id string) {
 	if inode := f.GetID(id); inode != nil {
 		parent := f.GetID(inode.ParentID())
 		parent.Lock()
@@ -331,7 +338,6 @@ func (f *Filesystem) DeleteID(id string) {
 		parent.Unlock()
 	}
 	f.metadata.Delete(id)
-	f.uploads.CancelUpload(id)
 }
 
 // GetChild fetches a named child of an item. Wraps GetChildrenID.
@@ -506,8 +512,18 @@ func (f *Filesystem) InsertPath(key string, auth *graph.Auth, inode *Inode) (uin
 }
 
 // MoveID moves an item to a new ID name. Also responsible for handling the
-// actual overwrite of the item's IDInternal field
+// actual overwrite of the item's IDInternal field. A pending upload of the item
+// is moved to the new ID as well, it must not be cancelled: it can contain
+// local changes that have not been uploaded yet.
 func (f *Filesystem) MoveID(oldID string, newID string) error {
+	if f.uploads != nil && oldID != newID {
+		f.uploads.MoveUpload(oldID, newID)
+	}
+	return f.moveID(oldID, newID)
+}
+
+// moveID is MoveID without moving the item's uploads.
+func (f *Filesystem) moveID(oldID string, newID string) error {
 	inode := f.GetID(oldID)
 	if inode == nil {
 		// It may have already been renamed. This is not an error. We assume
@@ -518,19 +534,33 @@ func (f *Filesystem) MoveID(oldID string, newID string) error {
 		}
 	}
 
-	// need to rename the child under the parent
-	parent := f.GetID(inode.ParentID())
-	parent.Lock()
-	for i, child := range parent.children {
-		if child == oldID {
-			parent.children[i] = newID
-			break
+	f.deleteID(oldID)
+
+	// A delta may already have added a second inode for the new ID, if the
+	// item was renamed or moved on the server before we learned its new ID
+	// and so could not be matched by name. That inode has the item's current
+	// name and parent on the server: apply them to ours and drop it.
+	if entry, exists := f.metadata.Load(newID); exists && entry.(*Inode) != inode {
+		duplicate := entry.(*Inode)
+		name := duplicate.Name()
+		parentID := duplicate.ParentID()
+		f.deleteID(newID)
+
+		inode.Lock()
+		inode.DriveItem.Name = name
+		if inode.DriveItem.Parent != nil && parentID != "" {
+			inode.DriveItem.Parent.ID = parentID
 		}
+		inode.Unlock()
+		log.Info().
+			Str("oldID", oldID).
+			Str("id", newID).
+			Str("name", name).
+			Str("parentID", parentID).
+			Msg("Item already existed under its new ID, keeping its server-side name and parent.")
 	}
-	parent.Unlock()
 
 	// now actually perform the metadata+content move
-	f.DeleteID(oldID)
 	f.InsertID(newID, inode)
 	if inode.IsDir() {
 		return nil

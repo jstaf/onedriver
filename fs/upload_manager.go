@@ -17,6 +17,7 @@ var bucketUploads = []byte("uploads")
 type UploadManager struct {
 	queue         chan *UploadSession
 	deletionQueue chan string
+	moveQueue     chan moveRequest
 	sessions      map[string]*UploadSession
 	inFlight      uint8 // number of sessions in flight
 	auth          *graph.Auth
@@ -24,11 +25,18 @@ type UploadManager struct {
 	db            *bolt.DB
 }
 
+// moveRequest asks the upload loop to move an item's upload to a new ID.
+type moveRequest struct {
+	oldID, newID string
+	done         chan struct{}
+}
+
 // NewUploadManager creates a new queue/thread for uploads
 func NewUploadManager(duration time.Duration, db *bolt.DB, fs *Filesystem, auth *graph.Auth) *UploadManager {
 	manager := UploadManager{
 		queue:         make(chan *UploadSession),
 		deletionQueue: make(chan string, 1000), // FIXME - why does this chan need to be buffered now???
+		moveQueue:     make(chan moveRequest),
 		sessions:      make(map[string]*UploadSession),
 		auth:          auth,
 		db:            db,
@@ -84,6 +92,10 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 		case cancelID := <-u.deletionQueue: // remove uploads for deleted items
 			u.finishUpload(cancelID)
 
+		case req := <-u.moveQueue: // an item's ID changed
+			u.moveUpload(req.oldID, req.newID)
+			close(req.done)
+
 		case <-ticker.C: // periodically start uploads, or remove them if done/failed
 			for _, session := range u.sessions {
 				switch session.getState() {
@@ -125,11 +137,16 @@ func (u *UploadManager) uploadLoop(duration time.Duration) {
 
 					// ID changed during upload, move to new ID
 					if session.OldID != session.ID {
-						err := u.fs.MoveID(session.OldID, session.ID)
+						// Filesystem.MoveID would wait for this goroutine,
+						// move the session here. This also sets its OldID to
+						// the new ID.
+						oldID := session.OldID
+						u.moveUpload(oldID, session.ID)
+						err := u.fs.moveID(oldID, session.ID)
 						if err != nil {
 							log.Error().
 								Str("id", session.ID).
-								Str("oldID", session.OldID).
+								Str("oldID", oldID).
 								Str("name", session.Name).
 								Err(err).
 								Msg("Could not move inode to new ID!")
@@ -166,6 +183,43 @@ func (u *UploadManager) QueueUpload(inode *Inode) error {
 // CancelUpload is used to kill any pending uploads for a session
 func (u *UploadManager) CancelUpload(id string) {
 	u.deletionQueue <- id
+}
+
+// MoveUpload moves any pending upload of an item to a new ID, for instance
+// when a local ID is replaced with the ID the item got on the server. The
+// upload is kept rather than cancelled, and targets the item by its new ID
+// from then on. Blocks until the upload loop has moved it, must not be called
+// from the upload loop itself.
+func (u *UploadManager) MoveUpload(oldID, newID string) {
+	req := moveRequest{oldID: oldID, newID: newID, done: make(chan struct{})}
+	u.moveQueue <- req
+	<-req.done
+}
+
+// moveUpload implements MoveUpload, only called from the upload loop.
+func (u *UploadManager) moveUpload(oldID, newID string) {
+	session, exists := u.sessions[oldID]
+	if !exists || oldID == newID {
+		return
+	}
+	if _, taken := u.sessions[newID]; taken {
+		// a session queued under the new ID is newer than this one
+		u.finishUpload(oldID)
+		return
+	}
+
+	delete(u.sessions, oldID)
+	session.Lock()
+	session.ID = newID
+	session.OldID = newID
+	session.Unlock()
+	u.sessions[newID] = session
+	contents, _ := json.Marshal(session)
+	u.db.Batch(func(tx *bolt.Tx) error {
+		b, _ := tx.CreateBucketIfNotExists(bucketUploads)
+		b.Delete([]byte(oldID))
+		return b.Put([]byte(newID), contents)
+	})
 }
 
 // finishUpload is an internal method that gets called when a session is
